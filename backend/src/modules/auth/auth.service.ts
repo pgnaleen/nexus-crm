@@ -19,6 +19,9 @@ interface TokenPair {
   refreshToken: string;
 }
 
+const LOGIN_LOCKOUT_THRESHOLD = 5;
+const LOGIN_LOCKOUT_DURATION_MS = 15 * 60 * 1000;
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -45,14 +48,22 @@ export class AuthService {
       throw new UnauthorizedException("Invalid credentials");
     }
 
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      throw new UnauthorizedException("Too many failed attempts. Try again in a few minutes.");
+    }
+
     const passwordMatches = await bcrypt.compare(dto.password, user.passwordHash);
     if (!passwordMatches) {
       user.loggingAttempts += 1;
+      if (user.loggingAttempts >= LOGIN_LOCKOUT_THRESHOLD) {
+        user.lockedUntil = new Date(Date.now() + LOGIN_LOCKOUT_DURATION_MS);
+      }
       await this.userRepo.save(user);
       throw new UnauthorizedException("Invalid credentials");
     }
 
     user.loggingAttempts = 0;
+    user.lockedUntil = undefined;
     user.lastLoggingAt = new Date();
     await this.userRepo.save(user);
 

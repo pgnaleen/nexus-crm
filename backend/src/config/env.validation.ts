@@ -14,4 +14,7 @@ export const envValidationSchema = Joi.object({
   JWT_ACCESS_EXPIRES_IN: Joi.string().default("15m"),
   JWT_REFRESH_SECRET: Joi.string().required(),
   JWT_REFRESH_EXPIRES_IN: Joi.string().default("7d"),
+
+  // Comma-separated list of allowed origins for cookie-credentialed requests.
+  CORS_ORIGIN: Joi.string().default("http://localhost:3000"),
 });

@@ -13,7 +13,13 @@ async function bootstrap() {
   });
 
   app.use(cookieParser());
-  app.enableCors({ origin: true, credentials: true });
+  // origin:true (reflect any requester) + credentials:true would let any
+  // website make authenticated cross-origin requests using a logged-in
+  // victim's cookies. Restrict to an explicit allow-list instead.
+  const corsOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:3000")
+    .split(",")
+    .map((origin) => origin.trim());
+  app.enableCors({ origin: corsOrigins, credentials: true });
   app.setGlobalPrefix("api");
   app.useGlobalPipes(
     new ValidationPipe({

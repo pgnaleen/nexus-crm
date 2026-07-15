@@ -47,6 +47,9 @@ export class User extends TenantOwnedEntity {
   @Column({ type: "int", default: 0 })
   loggingAttempts!: number;
 
+  @Column({ type: "timestamptz", nullable: true })
+  lockedUntil?: Date;
+
   @Column({ default: false })
   mustChangePassword!: boolean;
 
