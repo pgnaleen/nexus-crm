@@ -707,6 +707,56 @@ body {
   color: var(--color-danger);
 }
 
+/* Role permissions dialog */
+
+.dialog-loading {
+  display: flex;
+  justify-content: center;
+  padding: 32px 0;
+}
+
+.permissions-list {
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.permissions-group {
+  margin-bottom: 16px;
+}
+
+.permissions-group-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-muted);
+}
+
+.permissions-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 13.5px;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.permissions-checkbox-row input {
+  cursor: pointer;
+}
+
+.permissions-platform-tag {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: #eef1fb;
+  color: var(--color-brand);
+}
+
 /* Dialog */
 
 .dialog-overlay {

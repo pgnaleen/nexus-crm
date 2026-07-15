@@ -10,6 +10,9 @@ export const PERMISSIONS = {
   USERS_DISABLE: "users:disable",
 
   RBAC_MANAGE: "rbac:manage",
+  RBAC_CREATE: "rbac:create",
+  RBAC_UPDATE: "rbac:update",
+  RBAC_DELETE: "rbac:delete",
 
   COMPANIES_CREATE: "companies:create",
   COMPANIES_READ: "companies:read",

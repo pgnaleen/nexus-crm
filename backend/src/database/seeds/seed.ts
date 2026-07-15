@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import * as bcrypt from "bcrypt";
 import * as dotenv from "dotenv";
-import { PERMISSIONS, RbacRiskLevel, TenantStatus, UserStatus } from "@orelia/common";
+import { PERMISSIONS, RbacRiskLevel, SYSTEM_TENANT_SLUG, TenantStatus, UserStatus } from "@orelia/common";
 import { RbacResource } from "../../modules/rbac/entities/rbac-resource.entity";
 import { RbacRole } from "../../modules/rbac/entities/rbac-role.entity";
 import { RbacRoleResourceMap } from "../../modules/rbac/entities/rbac-role-resource-map.entity";
@@ -56,7 +56,6 @@ const PLATFORM_ONLY_PERMISSIONS: string[] = [
   PERMISSIONS.TENANTS_DELETE,
 ];
 
-const SYSTEM_TENANT_SLUG = "system";
 const SYSTEM_TENANT_PLAN_NAME = "Enterprise";
 const SUPER_ADMIN_ROLE_NAME = "Super Admin";
 const ADMIN_USERNAME = "admin";
