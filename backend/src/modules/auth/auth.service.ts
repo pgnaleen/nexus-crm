@@ -1,0 +1,168 @@
+import { createHash, randomBytes } from "node:crypto";
+import { AuthSessionResponse, UserStatus } from "@orelia/common";
+import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { JwtService } from "@nestjs/jwt";
+import { InjectRepository } from "@nestjs/typeorm";
+import * as bcrypt from "bcrypt";
+import { Repository } from "typeorm";
+import { RbacService } from "../rbac/rbac.service";
+import { Tenant } from "../tenants/entities/tenant.entity";
+import { RefreshToken } from "../users/entities/refresh-token.entity";
+import { User } from "../users/entities/user.entity";
+import { LoginDto } from "./dto/login.dto";
+import type { AuthenticatedUser } from "./types/authenticated-user";
+import { parseDurationToMs } from "./util/duration";
+
+interface TokenPair {
+  accessToken: string;
+  refreshToken: string;
+}
+
+@Injectable()
+export class AuthService {
+  constructor(
+    // Auth resolves the tenant explicitly from the login payload, before any
+    // session/tenant context exists — the one legitimate place raw repositories
+    // are used instead of BaseTenantRepository (which requires an established
+    // tenant context that doesn't exist yet at login time).
+    @InjectRepository(User) private readonly userRepo: Repository<User>,
+    @InjectRepository(Tenant) private readonly tenantRepo: Repository<Tenant>,
+    @InjectRepository(RefreshToken) private readonly refreshTokenRepo: Repository<RefreshToken>,
+    private readonly rbacService: RbacService,
+    private readonly jwtService: JwtService,
+    private readonly config: ConfigService,
+  ) {}
+
+  async login(dto: LoginDto): Promise<{ session: AuthSessionResponse } & TokenPair> {
+    const tenant = await this.tenantRepo.findOneBy({ slug: dto.tenantSlug });
+    if (!tenant) {
+      throw new UnauthorizedException("Invalid credentials");
+    }
+
+    const user = await this.userRepo.findOneBy({ tenantId: tenant.id, username: dto.username });
+    if (!user || user.status !== UserStatus.Active) {
+      throw new UnauthorizedException("Invalid credentials");
+    }
+
+    const passwordMatches = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!passwordMatches) {
+      user.loggingAttempts += 1;
+      await this.userRepo.save(user);
+      throw new UnauthorizedException("Invalid credentials");
+    }
+
+    user.loggingAttempts = 0;
+    user.lastLoggingAt = new Date();
+    await this.userRepo.save(user);
+
+    return this.issueSession(user, tenant);
+  }
+
+  async refresh(rawRefreshToken: string | undefined): Promise<{ session: AuthSessionResponse } & TokenPair> {
+    if (!rawRefreshToken) {
+      throw new UnauthorizedException("Missing refresh token");
+    }
+
+    const tokenHash = this.hashToken(rawRefreshToken);
+    const existing = await this.refreshTokenRepo.findOneBy({ tokenHash });
+    if (!existing || existing.revokedAt || existing.expiresAt < new Date()) {
+      throw new UnauthorizedException("Refresh token is invalid or expired");
+    }
+
+    existing.revokedAt = new Date();
+    await this.refreshTokenRepo.save(existing);
+
+    const [user, tenant] = await Promise.all([
+      this.userRepo.findOneByOrFail({ id: existing.userId }),
+      this.tenantRepo.findOneByOrFail({ id: existing.tenantId }),
+    ]);
+
+    return this.issueSession(user, tenant);
+  }
+
+  async logout(rawRefreshToken: string | undefined): Promise<void> {
+    if (!rawRefreshToken) {
+      return;
+    }
+    const tokenHash = this.hashToken(rawRefreshToken);
+    await this.refreshTokenRepo.update({ tokenHash }, { revokedAt: new Date() });
+  }
+
+  async getSession(userId: string): Promise<AuthSessionResponse> {
+    const user = await this.userRepo.findOneByOrFail({ id: userId });
+    const tenant = await this.tenantRepo.findOneByOrFail({ id: user.tenantId });
+    const [roles, permissions] = await Promise.all([
+      this.rbacService.getRoleNamesForUser(user.id),
+      this.rbacService.getPermissionsForUser(user.id),
+    ]);
+    return this.toSession(user, tenant, roles, permissions);
+  }
+
+  private async issueSession(user: User, tenant: Tenant): Promise<{ session: AuthSessionResponse } & TokenPair> {
+    const [roles, permissions] = await Promise.all([
+      this.rbacService.getRoleNamesForUser(user.id),
+      this.rbacService.getPermissionsForUser(user.id),
+    ]);
+
+    const payload: AuthenticatedUser = { sub: user.id, tenantId: tenant.id, roles };
+    const accessToken = this.jwtService.sign(payload, {
+      secret: this.config.get<string>("JWT_ACCESS_SECRET"),
+      expiresIn: this.config.get<string>("JWT_ACCESS_EXPIRES_IN"),
+    });
+
+    const refreshToken = randomBytes(48).toString("hex");
+    const refreshExpiresIn = this.config.get<string>("JWT_REFRESH_EXPIRES_IN")!;
+    await this.refreshTokenRepo.save(
+      this.refreshTokenRepo.create({
+        userId: user.id,
+        tenantId: tenant.id,
+        tokenHash: this.hashToken(refreshToken),
+        expiresAt: new Date(Date.now() + parseDurationToMs(refreshExpiresIn)),
+      }),
+    );
+
+    return { session: this.toSession(user, tenant, roles, permissions), accessToken, refreshToken };
+  }
+
+  private toSession(
+    user: User,
+    tenant: Tenant,
+    roles: string[],
+    permissions: string[],
+  ): AuthSessionResponse {
+    return {
+      user: {
+        id: user.id,
+        tenantId: user.tenantId,
+        username: user.username,
+        displayName: user.displayName,
+        status: user.status,
+        loggingEmail: user.loggingEmail,
+        lastLoggingAt: user.lastLoggingAt ? user.lastLoggingAt.toISOString() : null,
+        mustChangePassword: user.mustChangePassword,
+      },
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        tagline: tenant.tagline ?? null,
+        planId: tenant.planId,
+        status: tenant.status,
+        industryId: tenant.industryId ?? null,
+        phoneNo: tenant.phoneNo ?? null,
+        contactEmail: tenant.contactEmail ?? null,
+        billingEmail: tenant.billingEmail ?? null,
+        address: tenant.address ?? null,
+        trialEnds: tenant.trialEnds ?? null,
+        notes: tenant.notes ?? null,
+      },
+      roles,
+      permissions,
+    };
+  }
+
+  private hashToken(token: string): string {
+    return createHash("sha256").update(token).digest("hex");
+  }
+}

@@ -1,0 +1,6 @@
+export * from "./auth.contracts";
+export * from "./deal-stages.contracts";
+export * from "./deals.contracts";
+export * from "./companies.contracts";
+export * from "./contacts.contracts";
+export * from "./tenants.contracts";

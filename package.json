@@ -1,0 +1,24 @@
+{
+  "name": "orelia",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -n common,backend,frontend -c blue,green,magenta \"pnpm --filter @orelia/common dev\" \"pnpm --filter @orelia/backend dev\" \"pnpm --filter @orelia/frontend dev\"",
+    "build": "pnpm --filter @orelia/common build && pnpm --filter @orelia/backend build && pnpm --filter @orelia/frontend build",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "typecheck": "pnpm -r run typecheck",
+    "migration:generate": "pnpm --filter @orelia/backend migration:generate",
+    "migration:run": "pnpm --filter @orelia/backend migration:run",
+    "migration:revert": "pnpm --filter @orelia/backend migration:revert",
+    "migration:check": "pnpm --filter @orelia/backend migration:check",
+    "seed": "pnpm --filter @orelia/backend seed"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
