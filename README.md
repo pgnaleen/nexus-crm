@@ -33,7 +33,7 @@ Everything runs in Docker — you do **not** need Node or pnpm installed on your
    docker compose up --build
    ```
 
-   This starts three containers: `postgres`, `backend` (NestJS, port 3001), `frontend` (Next.js, port 3000). The first run installs all dependencies inside the containers — this can take a few minutes. Leave this running in its own terminal.
+   This starts `postgres`, a one-shot `setup` container (installs all workspace dependencies and builds `common` — this can take a few minutes on the first run, and it's supposed to exit once done, that's not an error), then `backend` (NestJS, port 3001) and `frontend` (Next.js, port 3000). Leave this running in its own terminal.
 
 4. **Run the database migrations** (in a second terminal, once the containers are up):
 
@@ -93,8 +93,29 @@ Since dependencies live only inside Docker's named volumes (not on your host fil
 
 ## Rebuilding `common` after a shared-type change
 
-`common` is built once when the containers start, not watched continuously. If you change something in `common/src/` and don't see it reflected in `backend`/`frontend`, rebuild it manually:
+`common` is built once by the `setup` service when the stack starts, not watched continuously. If you change something in `common/src/` and don't see it reflected in `backend`/`frontend`, rebuild it manually:
 
 ```bash
 docker compose exec backend pnpm --filter @orelia/common build
+```
+
+## Troubleshooting
+
+**`Bind for 0.0.0.0:3001 failed: port is already allocated`**
+Something's already using that port — usually a leftover container from an earlier attempt. Run:
+```bash
+docker compose down
+docker compose up --build
+```
+If it still happens, check `docker ps -a` for another container (from this project or something else) holding port 3000/3001/5432.
+
+**`no configuration file provided: not found`**
+You ran `docker compose ...` from the wrong folder. It only works from inside `nexus-crm/` (where `docker-compose.yml` lives) — `cd nexus-crm` first.
+
+**`ERR_PNPM_ENOENT ... copyfile ... .pnpm-store ...`**
+This was a real race condition on a fresh clone (two containers running `pnpm install` into the same store at once) — fixed by the dedicated `setup` service described above, which both `backend` and `frontend` now wait to *finish* before starting. If you still hit it (e.g. on an old checkout from before this fix), run:
+```bash
+docker compose down
+rm -rf .pnpm-store
+docker compose up --build
 ```

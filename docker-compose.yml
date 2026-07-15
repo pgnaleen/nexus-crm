@@ -15,12 +15,33 @@ services:
       timeout: 5s
       retries: 10
 
+  # One-shot: installs workspace deps and builds `common` exactly once, into
+  # the shared node_modules volumes. backend/frontend wait for this to fully
+  # *complete* (not just start) before running their own dev command — running
+  # `pnpm install` concurrently from two containers against the same shared
+  # .pnpm-store/node_modules volumes is a real race condition on a cold
+  # (empty) store: one container extracts a package while the other tries to
+  # copy it out and finds it missing. Only shows up on a fresh clone, since a
+  # store that's already warm from earlier runs never hits it.
+  setup:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    working_dir: /app
+    command: sh -c "pnpm install && pnpm --filter @orelia/common build"
+    volumes:
+      - .:/app
+      - root_node_modules:/app/node_modules
+      - common_node_modules:/app/common/node_modules
+      - backend_node_modules:/app/backend/node_modules
+      - frontend_node_modules:/app/frontend/node_modules
+
   backend:
     build:
       context: .
       dockerfile: Dockerfile.dev
     working_dir: /app
-    command: sh -c "pnpm install && pnpm --filter @orelia/common build && pnpm --filter @orelia/backend dev"
+    command: sh -c "pnpm --filter @orelia/backend dev"
     env_file:
       - .env
     ports:
@@ -33,13 +54,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      setup:
+        condition: service_completed_successfully
 
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.dev
     working_dir: /app
-    command: sh -c "pnpm install && pnpm --filter @orelia/common build && pnpm --filter @orelia/frontend dev"
+    command: sh -c "pnpm --filter @orelia/frontend dev"
     environment:
       NODE_ENV: development
       # Browser-side fetches (client components) — reaches the backend via the
@@ -59,7 +82,10 @@ services:
       - common_node_modules:/app/common/node_modules
       - frontend_node_modules:/app/frontend/node_modules
     depends_on:
-      - backend
+      setup:
+        condition: service_completed_successfully
+      backend:
+        condition: service_started
 
 volumes:
   pgdata:
