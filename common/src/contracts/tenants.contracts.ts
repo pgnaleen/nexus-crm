@@ -6,7 +6,8 @@ export interface PublicTenantResponse {
   slug: string;
 }
 
-export interface TenantResponse {
+/** List-view shape — only what the Tenants table itself renders/filters on. No contact/billing fields. */
+export interface TenantSummaryResponse {
   id: string;
   name: string;
   slug: string;
@@ -15,6 +16,10 @@ export interface TenantResponse {
   planName: string;
   industryId: string | null;
   industryName: string | null;
+}
+
+/** Full record — served only by GET /tenants/:id, gated separately from the list. */
+export interface TenantResponse extends TenantSummaryResponse {
   tagline: string | null;
   phoneNo: string | null;
   contactEmail: string | null;

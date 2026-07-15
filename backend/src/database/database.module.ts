@@ -18,7 +18,7 @@ import { SnakeNamingStrategy } from "typeorm-naming-strategies";
         synchronize: false,
         namingStrategy: new SnakeNamingStrategy(),
         autoLoadEntities: true,
-        logging: config.get<string>("NODE_ENV") !== "production",
+        logging: config.get<boolean>("DB_LOGGING"),
       }),
     }),
   ],

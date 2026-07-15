@@ -63,7 +63,7 @@ export function AccountMenu({ tenantName, userDisplayName, tenantSlug }: Account
             <div className="account-menu-name">{userDisplayName}</div>
             <div className="account-menu-tenant">{tenantName}</div>
           </div>
-          <button type="button" className="account-menu-item" onClick={handleLogout} style={{ color: "var(--color-danger)", fontWeight: 500 }}>
+          <button type="button" className="account-menu-item account-menu-item-logout" onClick={handleLogout}>
             Log out
           </button>
         </div>

@@ -37,7 +37,7 @@ export class RbacController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission(PERMISSIONS.RBAC_MANAGE)
+  @RequirePermission([PERMISSIONS.RBAC_VIEW, PERMISSIONS.RBAC_UPDATE])
   @Get("roles/:id/resources")
   async getRoleResourceIds(@Param("id", ParseUUIDPipe) id: string): Promise<string[]> {
     await this.rbacService.findRoleOrFail(id);

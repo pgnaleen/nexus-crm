@@ -9,6 +9,10 @@ export const envValidationSchema = Joi.object({
   DB_USER: Joi.string().required(),
   DB_PASSWORD: Joi.string().required(),
   DB_NAME: Joi.string().required(),
+  // Off by default — raw SQL logging is a deliberate opt-in for debugging a
+  // specific query, not the default terminal experience. The [HTTP] request
+  // logger (RequestLoggerMiddleware) covers day-to-day route/data visibility.
+  DB_LOGGING: Joi.boolean().default(false),
 
   JWT_ACCESS_SECRET: Joi.string().required(),
   JWT_ACCESS_EXPIRES_IN: Joi.string().default("15m"),

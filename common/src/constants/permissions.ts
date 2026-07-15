@@ -1,5 +1,6 @@
 export const PERMISSIONS = {
   TENANTS_MANAGE: "tenants:manage",
+  TENANTS_VIEW: "tenants:view",
   TENANTS_CREATE: "tenants:create",
   TENANTS_UPDATE: "tenants:update",
   TENANTS_DELETE: "tenants:delete",
@@ -10,6 +11,7 @@ export const PERMISSIONS = {
   USERS_DISABLE: "users:disable",
 
   RBAC_MANAGE: "rbac:manage",
+  RBAC_VIEW: "rbac:view",
   RBAC_CREATE: "rbac:create",
   RBAC_UPDATE: "rbac:update",
   RBAC_DELETE: "rbac:delete",

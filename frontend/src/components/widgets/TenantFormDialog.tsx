@@ -1,16 +1,18 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   IndustryResponse,
   PlanResponse,
   TenantResponse,
   TenantStatus,
+  TenantSummaryResponse,
 } from "@orelia/common";
-import { createTenant, updateTenant } from "@/lib/api/tenants";
+import { createTenant, getTenant, updateTenant } from "@/lib/api/tenants";
 import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
+import { Spinner } from "@/components/ui/Spinner";
 import { TextField } from "@/components/ui/TextField";
 import { EmailField } from "@/components/ui/EmailField";
 import { PhoneField } from "@/components/ui/PhoneField";
@@ -49,7 +51,7 @@ function toFormState(tenant?: TenantResponse): FormState {
 
 interface TenantFormDialogProps {
   mode: "create" | "edit";
-  tenant?: TenantResponse;
+  tenant?: TenantSummaryResponse;
   plans: PlanResponse[];
   industries: IndustryResponse[];
   onClose: () => void;
@@ -57,10 +59,31 @@ interface TenantFormDialogProps {
 }
 
 export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onSaved }: TenantFormDialogProps) {
-  const [values, setValues] = useState<FormState>(() => toFormState(tenant));
+  const [values, setValues] = useState<FormState>(() => toFormState());
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(mode === "edit");
+
+  useEffect(() => {
+    if (mode !== "edit" || !tenant) return;
+    let cancelled = false;
+    setIsLoadingDetail(true);
+    getTenant(tenant.id)
+      .then((full) => {
+        if (!cancelled) setValues(toFormState(full));
+      })
+      .catch(() => {
+        if (!cancelled) setFormError("Failed to load tenant details");
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingDetail(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, tenant?.id]);
 
   function setField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setValues((current) => ({ ...current, [field]: value }));
@@ -130,6 +153,12 @@ export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onS
       <form onSubmit={handleSubmit}>
         {formError && <p className="field-error">{formError}</p>}
 
+        {isLoadingDetail ? (
+          <div className="dialog-loading">
+            <Spinner size={28} />
+          </div>
+        ) : (
+        <>
         <div className="field-row">
           <TextField
             label="Name *"
@@ -236,12 +265,14 @@ export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onS
             onChange={(e) => setField("address", e.target.value)}
           />
         </div>
+        </>
+        )}
 
         <div className="dialog-actions">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>
-          <Button type="submit" isLoading={isSaving}>
+          <Button type="submit" isLoading={isSaving} disabled={isLoadingDetail}>
             {mode === "create" ? "Create tenant" : "Save changes"}
           </Button>
         </div>

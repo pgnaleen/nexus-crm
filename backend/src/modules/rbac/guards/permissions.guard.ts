@@ -12,7 +12,7 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredPermission = this.reflector.getAllAndOverride<string | undefined>(
+    const requiredPermission = this.reflector.getAllAndOverride<string | string[] | undefined>(
       PERMISSION_KEY,
       [context.getHandler(), context.getClass()],
     );
@@ -26,9 +26,10 @@ export class PermissionsGuard implements CanActivate {
       throw new ForbiddenException("Not authenticated");
     }
 
+    const required = Array.isArray(requiredPermission) ? requiredPermission : [requiredPermission];
     const permissions = await this.rbacService.getPermissionsForUser(userId);
-    if (!permissions.includes(requiredPermission)) {
-      throw new ForbiddenException(`Missing required permission: ${requiredPermission}`);
+    if (!required.some((permission) => permissions.includes(permission))) {
+      throw new ForbiddenException(`Missing required permission: ${required.join(" or ")}`);
     }
 
     return true;

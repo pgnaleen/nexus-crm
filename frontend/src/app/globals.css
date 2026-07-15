@@ -264,7 +264,6 @@ body {
   gap: 10px;
   width: 100%;
   padding: 10px 12px;
-  margin-top: 24px;
   border-radius: 10px;
   border: none;
   background: none;
@@ -1465,4 +1464,284 @@ body {
   text-align: center;
   color: var(--color-text-muted);
   font-size: 14px;
+}
+
+/* ── Advanced Permissions Dialog ────────────────────────────── */
+
+.permissions-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 16px 0;
+  gap: 16px;
+  background: #f8fafc;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
+.permissions-search {
+  display: flex;
+  align-items: center;
+  position: relative;
+  flex: 1;
+}
+
+.permissions-search svg {
+  position: absolute;
+  left: 12px;
+  color: var(--color-text-muted);
+}
+
+.permissions-search input {
+  width: 100%;
+  padding: 8px 12px 8px 36px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.permissions-search input:focus {
+  outline: none;
+  border-color: var(--color-brand);
+}
+
+.permissions-filters-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.permissions-filter-select {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+  cursor: pointer;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.permissions-filter-select:focus {
+  border-color: var(--color-brand);
+}
+
+.permissions-clear-all {
+  background: none;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-danger);
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.permissions-clear-all:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.permissions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding-right: 8px;
+  margin-bottom: 24px;
+}
+
+.permissions-group {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.permissions-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f8fafc;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.permissions-group-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.permissions-group-count {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.permissions-group-items {
+  padding: 8px 0;
+  background: #fff;
+}
+
+.permissions-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-text);
+  transition: background 0.15s;
+}
+
+.permissions-checkbox-row:hover {
+  background: #f8fafc;
+}
+
+.permissions-platform-tag {
+  font-size: 10px;
+  background: #eef2ff;
+  color: #4f46e5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.permissions-risk-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-left: auto;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.permissions-risk-tag--low {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.permissions-risk-tag--medium {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.permissions-risk-tag--high {
+  background: #fff1f2;
+  color: #e11d48;
+}
+
+.permissions-risk-tag--critical {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.permissions-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 40px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px dashed var(--color-border);
+}
+
+.account-menu-item-logout {
+  background-color: var(--color-danger) !important;
+  color: #ffffff !important;
+  font-weight: 500;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.account-menu-item-logout:hover {
+  background-color: #dc2626 !important;
+  color: #ffffff !important;
+  opacity: 0.9;
+}
+
+/* ── Interactive Table Rows ─────────────────────────────────── */
+
+.interactive-row {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.interactive-row:hover {
+  background-color: #f1f5f9;
+}
+
+.interactive-row:hover td {
+  background-color: #f1f5f9;
+}
+
+/* ── Role Details Dialog (read-only) ───────────────────────── */
+
+.role-details-meta {
+  display: flex;
+  gap: 32px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.role-details-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.role-details-meta-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+}
+
+.role-details-meta-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.role-details-grid {
+  max-height: 55vh;
+}
+
+.role-details-group-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--color-text);
+}
+
+.permissions-view-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.role-details-check {
+  color: #059669;
+  font-weight: 700;
+  font-size: 13px;
 }

@@ -4,6 +4,7 @@ import {
   PlanResponse,
   PublicTenantResponse,
   TenantResponse,
+  TenantSummaryResponse,
 } from "@orelia/common";
 import {
   Body,
@@ -38,9 +39,9 @@ export class TenantsController {
   @UseGuards(PermissionsGuard)
   @RequirePermission(PERMISSIONS.TENANTS_MANAGE)
   @Get()
-  async findAll(): Promise<TenantResponse[]> {
+  async findAll(): Promise<TenantSummaryResponse[]> {
     const tenants = await this.tenantsService.findAll();
-    return tenants.map((tenant) => this.toResponse(tenant));
+    return tenants.map((tenant) => this.toSummaryResponse(tenant));
   }
 
   @UseGuards(PermissionsGuard)
@@ -57,6 +58,16 @@ export class TenantsController {
   async findAllIndustries(): Promise<IndustryResponse[]> {
     const industries = await this.tenantsService.findAllIndustries();
     return industries.map((industry) => ({ id: industry.id, name: industry.name }));
+  }
+
+  // Must be declared after the "plans"/"industries" literal routes above —
+  // Nest/Express matches routes in registration order, so a ":id" route
+  // registered first would swallow those literal paths as an id value.
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.TENANTS_VIEW, PERMISSIONS.TENANTS_UPDATE])
+  @Get(":id")
+  async findOne(@Param("id", ParseUUIDPipe) id: string): Promise<TenantResponse> {
+    return this.toResponse(await this.tenantsService.findOneOrFail(id));
   }
 
   @UseGuards(PermissionsGuard)
@@ -86,7 +97,7 @@ export class TenantsController {
     return { success: true };
   }
 
-  private toResponse(tenant: Tenant): TenantResponse {
+  private toSummaryResponse(tenant: Tenant): TenantSummaryResponse {
     return {
       id: tenant.id,
       name: tenant.name,
@@ -96,6 +107,12 @@ export class TenantsController {
       planName: tenant.plan?.name ?? "—",
       industryId: tenant.industryId ?? null,
       industryName: tenant.industry?.name ?? null,
+    };
+  }
+
+  private toResponse(tenant: Tenant): TenantResponse {
+    return {
+      ...this.toSummaryResponse(tenant),
       tagline: tenant.tagline ?? null,
       phoneNo: tenant.phoneNo ?? null,
       contactEmail: tenant.contactEmail ?? null,

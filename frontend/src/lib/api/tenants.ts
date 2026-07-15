@@ -1,6 +1,10 @@
 import type { CreateTenantRequest, TenantResponse, UpdateTenantRequest } from "@orelia/common";
 import { apiFetch } from "./client";
 
+export function getTenant(id: string): Promise<TenantResponse> {
+  return apiFetch<TenantResponse>(`/tenants/${id}`);
+}
+
 export function createTenant(payload: CreateTenantRequest): Promise<TenantResponse> {
   return apiFetch<TenantResponse>("/tenants", {
     method: "POST",

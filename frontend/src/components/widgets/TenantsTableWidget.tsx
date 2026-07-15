@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { PERMISSIONS } from "@orelia/common";
-import type { IndustryResponse, PlanResponse, TenantResponse } from "@orelia/common";
+import type { IndustryResponse, PlanResponse, TenantResponse, TenantSummaryResponse } from "@orelia/common";
 import { deleteTenant } from "@/lib/api/tenants";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -14,13 +14,13 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { AlertDialog } from "@/components/ui/AlertDialog";
 
 interface TenantsTableWidgetProps {
-  tenants: TenantResponse[];
+  tenants: TenantSummaryResponse[];
   plans: PlanResponse[];
   industries: IndustryResponse[];
   permissions: string[];
 }
 
-type DialogState = { mode: "create" } | { mode: "edit" | "view"; tenant: TenantResponse } | null;
+type DialogState = { mode: "create" } | { mode: "edit" | "view"; tenant: TenantSummaryResponse } | null;
 
 export function TenantsTableWidget({
   tenants: initialTenants,
@@ -34,9 +34,10 @@ export function TenantsTableWidget({
   const [search, setSearch] = useState("");
   const [planFilter, setPlanFilter] = useState("");
   const [industryFilter, setIndustryFilter] = useState("");
-  const [tenantToDelete, setTenantToDelete] = useState<TenantResponse | null>(null);
+  const [tenantToDelete, setTenantToDelete] = useState<TenantSummaryResponse | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const canView = permissions.includes(PERMISSIONS.TENANTS_VIEW);
   const canCreate = permissions.includes(PERMISSIONS.TENANTS_CREATE);
   const canUpdate = permissions.includes(PERMISSIONS.TENANTS_UPDATE);
   const canDelete = permissions.includes(PERMISSIONS.TENANTS_DELETE);
@@ -51,7 +52,7 @@ export function TenantsTableWidget({
     return true;
   });
 
-  function initiateDelete(tenant: TenantResponse) {
+  function initiateDelete(tenant: TenantSummaryResponse) {
     setTenantToDelete(tenant);
   }
 
@@ -170,7 +171,11 @@ export function TenantsTableWidget({
           </thead>
           <tbody>
             {filteredTenants.map((tenant) => (
-              <tr key={tenant.id}>
+              <tr
+                key={tenant.id}
+                className={canView ? "interactive-row" : undefined}
+                onClick={canView ? () => setDialogState({ mode: "view", tenant }) : undefined}
+              >
                 <td>{tenant.name}</td>
                 <td>{tenant.slug}</td>
                 <td>{tenant.planName}</td>
@@ -180,20 +185,15 @@ export function TenantsTableWidget({
                 </td>
                 {showActionsColumn && (
                   <td className="table-actions">
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      aria-label={`View ${tenant.name}`}
-                      onClick={() => setDialogState({ mode: "view", tenant })}
-                    >
-                      <EyeIcon size={15} />
-                    </button>
                     {canUpdate && (
                       <button
                         type="button"
                         className="icon-btn"
                         aria-label={`Edit ${tenant.name}`}
-                        onClick={() => setDialogState({ mode: "edit", tenant })}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDialogState({ mode: "edit", tenant });
+                        }}
                       >
                         <EditIcon size={15} />
                       </button>
@@ -203,7 +203,10 @@ export function TenantsTableWidget({
                         type="button"
                         className="icon-btn icon-btn-danger"
                         aria-label={`Delete ${tenant.name}`}
-                        onClick={() => initiateDelete(tenant)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          initiateDelete(tenant);
+                        }}
                         disabled={deletingId === tenant.id}
                       >
                         <TrashIcon size={15} />

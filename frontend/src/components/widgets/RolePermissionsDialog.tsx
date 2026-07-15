@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { RbacRiskLevel } from "@orelia/common";
 import type { RbacResourceResponse, RbacRoleResponse } from "@orelia/common";
 import { assignRoleResources, getRoleResourceIds } from "@/lib/api/roles";
 import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
+import { SearchIcon } from "@/components/ui/icons";
 
 interface RolePermissionsDialogProps {
   role: RbacRoleResponse;
@@ -15,7 +17,7 @@ interface RolePermissionsDialogProps {
   onSaved: (role: RbacRoleResponse) => void;
 }
 
-function groupByPrefix(resources: RbacResourceResponse[]): Map<string, RbacResourceResponse[]> {
+export function groupByPrefix(resources: RbacResourceResponse[]): Map<string, RbacResourceResponse[]> {
   const groups = new Map<string, RbacResourceResponse[]>();
   for (const resource of resources) {
     const prefix = resource.name.split(":")[0];
@@ -23,14 +25,30 @@ function groupByPrefix(resources: RbacResourceResponse[]): Map<string, RbacResou
     group.push(resource);
     groups.set(prefix, group);
   }
-  return groups;
+  // Sort groups alphabetically
+  return new Map([...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])));
 }
+
+type LevelFilter = "all" | "tenant" | "platform";
+type RiskFilter = "all" | RbacRiskLevel;
+
+const RISK_LABELS: Record<RbacRiskLevel, string> = {
+  [RbacRiskLevel.Low]: "Low",
+  [RbacRiskLevel.Medium]: "Medium",
+  [RbacRiskLevel.High]: "High",
+  [RbacRiskLevel.Critical]: "Critical",
+};
 
 export function RolePermissionsDialog({ role, resources, onClose, onSaved }: RolePermissionsDialogProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // New filters
+  const [search, setSearch] = useState("");
+  const [levelFilter, setLevelFilter] = useState<LevelFilter>("all");
+  const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -61,6 +79,24 @@ export function RolePermissionsDialog({ role, resources, onClose, onSaved }: Rol
     });
   }
 
+  function toggleGroup(groupResources: RbacResourceResponse[], isAllSelected: boolean) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const res of groupResources) {
+        if (isAllSelected) {
+          next.delete(res.id);
+        } else {
+          next.add(res.id);
+        }
+      }
+      return next;
+    });
+  }
+
+  function clearAll() {
+    setSelectedIds(new Set());
+  }
+
   async function handleSave() {
     setFormError(null);
     setIsSaving(true);
@@ -75,35 +111,129 @@ export function RolePermissionsDialog({ role, resources, onClose, onSaved }: Rol
     }
   }
 
-  const groups = groupByPrefix(resources);
+  // Filter resources based on search and level before grouping
+  const filteredResources = useMemo(() => {
+    return resources.filter(res => {
+      // Level filter
+      if (levelFilter === "platform" && !res.isPlatformOnly) return false;
+      if (levelFilter === "tenant" && res.isPlatformOnly) return false;
+
+      // Risk filter
+      if (riskFilter !== "all" && res.riskLevel !== riskFilter) return false;
+
+      // Search filter
+      if (search && !res.name.toLowerCase().includes(search.toLowerCase())) return false;
+
+      return true;
+    });
+  }, [resources, search, levelFilter, riskFilter]);
+
+  const groups = useMemo(() => groupByPrefix(filteredResources), [filteredResources]);
 
   return (
-    <Dialog open title={`Permissions — ${role.name}`} onClose={onClose}>
+    <Dialog open title={`Permissions — ${role.name}`} onClose={onClose} maxWidth="850px">
       {formError && <p className="field-error">{formError}</p>}
+
+      {!isLoading && (
+        <div className="permissions-controls">
+          <div className="permissions-search">
+            <SearchIcon size={16} />
+            <input 
+              type="text" 
+              placeholder="Search permissions..." 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          
+          <div className="permissions-filters-right">
+            <select
+              className="permissions-filter-select"
+              aria-label="Filter by level"
+              value={levelFilter}
+              onChange={(e) => setLevelFilter(e.target.value as LevelFilter)}
+            >
+              <option value="all">All Levels</option>
+              <option value="tenant">Tenant Only</option>
+              <option value="platform">Platform Only</option>
+            </select>
+
+            <select
+              className="permissions-filter-select"
+              aria-label="Filter by risk level"
+              value={riskFilter}
+              onChange={(e) => setRiskFilter(e.target.value as RiskFilter)}
+            >
+              <option value="all">All Risk Levels</option>
+              {Object.values(RbacRiskLevel).map((level) => (
+                <option key={level} value={level}>
+                  {RISK_LABELS[level]}
+                </option>
+              ))}
+            </select>
+
+            <button type="button" className="permissions-clear-all" onClick={clearAll}>
+              Clear all
+            </button>
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="dialog-loading">
           <Spinner size={28} />
         </div>
       ) : (
-        <div className="permissions-list">
-          {Array.from(groups.entries()).map(([prefix, groupResources]) => (
-            <div key={prefix} className="permissions-group">
-              <p className="permissions-group-title">{prefix}</p>
-              {groupResources.map((resource) => (
-                <label key={resource.id} className="permissions-checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(resource.id)}
-                    onChange={() => toggle(resource.id)}
-                    disabled={isSaving}
-                  />
-                  <span>{resource.name}</span>
-                  {resource.isPlatformOnly && <span className="permissions-platform-tag">platform</span>}
-                </label>
-              ))}
+        <div className="permissions-grid">
+          {Array.from(groups.entries()).map(([prefix, groupResources]) => {
+            const isAllSelected = groupResources.every(res => selectedIds.has(res.id));
+            const isSomeSelected = groupResources.some(res => selectedIds.has(res.id));
+            
+            return (
+              <div key={prefix} className="permissions-group">
+                <div className="permissions-group-header">
+                  <label className="permissions-group-title">
+                    <input 
+                      type="checkbox" 
+                      checked={isAllSelected}
+                      ref={input => {
+                        if (input) input.indeterminate = isSomeSelected && !isAllSelected;
+                      }}
+                      onChange={() => toggleGroup(groupResources, isAllSelected)}
+                      disabled={isSaving}
+                    />
+                    <span>{prefix}</span>
+                  </label>
+                  <span className="permissions-group-count">
+                    {groupResources.filter(res => selectedIds.has(res.id)).length} / {groupResources.length}
+                  </span>
+                </div>
+                
+                <div className="permissions-group-items">
+                  {groupResources.map((resource) => (
+                    <label key={resource.id} className="permissions-checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(resource.id)}
+                        onChange={() => toggle(resource.id)}
+                        disabled={isSaving}
+                      />
+                      <span>{resource.name.replace(`${prefix}:`, '')}</span>
+                      <span className={`permissions-risk-tag permissions-risk-tag--${resource.riskLevel}`}>
+                        {resource.riskLevel}
+                      </span>
+                      {resource.isPlatformOnly && <span className="permissions-platform-tag">platform</span>}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          {groups.size === 0 && (
+            <div className="permissions-empty">
+              No permissions match your current filters.
             </div>
-          ))}
+          )}
         </div>
       )}
 

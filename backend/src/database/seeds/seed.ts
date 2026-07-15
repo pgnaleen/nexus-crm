@@ -51,6 +51,7 @@ function riskLevelFor(permissionKey: string): RbacRiskLevel {
 // building their own custom roles never see or can grant these.
 const PLATFORM_ONLY_PERMISSIONS: string[] = [
   PERMISSIONS.TENANTS_MANAGE,
+  PERMISSIONS.TENANTS_VIEW,
   PERMISSIONS.TENANTS_CREATE,
   PERMISSIONS.TENANTS_UPDATE,
   PERMISSIONS.TENANTS_DELETE,

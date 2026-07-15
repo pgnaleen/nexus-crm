@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/Button";
 import { EditIcon, SearchIcon, ShieldIcon, TrashIcon } from "@/components/ui/icons";
 import { RoleFormDialog } from "@/components/widgets/RoleFormDialog";
 import { RolePermissionsDialog } from "@/components/widgets/RolePermissionsDialog";
+import { RoleDetailsDialog } from "@/components/widgets/RoleDetailsDialog";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { AlertDialog } from "@/components/ui/AlertDialog";
 
 interface RolesTableWidgetProps {
   roles: RbacRoleResponse[];
@@ -19,6 +22,7 @@ type DialogState =
   | { mode: "create" }
   | { mode: "edit"; role: RbacRoleResponse }
   | { mode: "permissions"; role: RbacRoleResponse }
+  | { mode: "view"; role: RbacRoleResponse }
   | null;
 
 export function RolesTableWidget({ roles: initialRoles, resources, permissions }: RolesTableWidgetProps) {
@@ -26,7 +30,10 @@ export function RolesTableWidget({ roles: initialRoles, resources, permissions }
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [dialogState, setDialogState] = useState<DialogState>(null);
   const [search, setSearch] = useState("");
+  const [roleToDelete, setRoleToDelete] = useState<RbacRoleResponse | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const canView = permissions.includes(PERMISSIONS.RBAC_VIEW);
   const canCreate = permissions.includes(PERMISSIONS.RBAC_CREATE);
   const canUpdate = permissions.includes(PERMISSIONS.RBAC_UPDATE);
   const canDelete = permissions.includes(PERMISSIONS.RBAC_DELETE);
@@ -36,16 +43,20 @@ export function RolesTableWidget({ roles: initialRoles, resources, permissions }
     (role) => !search || role.name.toLowerCase().includes(search.toLowerCase()),
   );
 
-  async function handleDelete(role: RbacRoleResponse) {
-    if (!window.confirm(`Delete role "${role.name}"? This cannot be undone.`)) {
-      return;
-    }
+  function initiateDelete(role: RbacRoleResponse) {
+    setRoleToDelete(role);
+  }
+
+  async function confirmDelete() {
+    if (!roleToDelete) return;
+    const role = roleToDelete;
+    setRoleToDelete(null);
     setDeletingId(role.id);
     try {
       await deleteRole(role.id);
       setRoles((current) => current.filter((item) => item.id !== role.id));
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Failed to delete role");
+      setErrorMsg(err instanceof Error ? err.message : "Failed to delete role");
     } finally {
       setDeletingId(null);
     }
@@ -106,7 +117,11 @@ export function RolesTableWidget({ roles: initialRoles, resources, permissions }
             </thead>
             <tbody>
               {filteredRoles.map((role) => (
-                <tr key={role.id}>
+                <tr
+                  key={role.id}
+                  className={canView ? "interactive-row" : undefined}
+                  onClick={canView ? () => setDialogState({ mode: "view", role }) : undefined}
+                >
                   <td>{role.name}</td>
                   <td>{role.description ?? "—"}</td>
                   <td>{role.resourceCount}</td>
@@ -117,7 +132,10 @@ export function RolesTableWidget({ roles: initialRoles, resources, permissions }
                           type="button"
                           className="icon-btn"
                           aria-label={`Manage permissions for ${role.name}`}
-                          onClick={() => setDialogState({ mode: "permissions", role })}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDialogState({ mode: "permissions", role });
+                          }}
                         >
                           <ShieldIcon size={15} />
                         </button>
@@ -127,7 +145,10 @@ export function RolesTableWidget({ roles: initialRoles, resources, permissions }
                           type="button"
                           className="icon-btn"
                           aria-label={`Edit ${role.name}`}
-                          onClick={() => setDialogState({ mode: "edit", role })}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDialogState({ mode: "edit", role });
+                          }}
                         >
                           <EditIcon size={15} />
                         </button>
@@ -137,7 +158,10 @@ export function RolesTableWidget({ roles: initialRoles, resources, permissions }
                           type="button"
                           className="icon-btn icon-btn-danger"
                           aria-label={`Delete ${role.name}`}
-                          onClick={() => handleDelete(role)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            initiateDelete(role);
+                          }}
                           disabled={deletingId === role.id}
                         >
                           <TrashIcon size={15} />
@@ -152,7 +176,7 @@ export function RolesTableWidget({ roles: initialRoles, resources, permissions }
         )}
       </div>
 
-      {dialogState && dialogState.mode !== "permissions" && (
+      {dialogState && dialogState.mode !== "permissions" && dialogState.mode !== "view" && (
         <RoleFormDialog
           mode={dialogState.mode}
           role={"role" in dialogState ? dialogState.role : undefined}
@@ -169,6 +193,32 @@ export function RolesTableWidget({ roles: initialRoles, resources, permissions }
           onSaved={handleSaved}
         />
       )}
+
+      {dialogState?.mode === "view" && (
+        <RoleDetailsDialog
+          role={dialogState.role}
+          resources={resources}
+          onClose={() => setDialogState(null)}
+        />
+      )}
+
+      <ConfirmDialog
+        open={roleToDelete !== null}
+        title="Delete Role"
+        message={`Are you sure you want to delete "${roleToDelete?.name}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        isDestructive={true}
+        onConfirm={confirmDelete}
+        onCancel={() => setRoleToDelete(null)}
+      />
+
+      <AlertDialog
+        open={errorMsg !== null}
+        title="Error"
+        message={errorMsg || ""}
+        isError={true}
+        onClose={() => setErrorMsg(null)}
+      />
     </div>
   );
 }

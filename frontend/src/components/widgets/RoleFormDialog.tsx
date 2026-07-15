@@ -74,7 +74,7 @@ export function RoleFormDialog({ mode, role, onClose, onSaved }: RoleFormDialogP
         {formError && <p className="field-error">{formError}</p>}
 
         <TextField
-          label="Name"
+          label="Name *"
           name="name"
           value={values.name}
           error={errors.name}
