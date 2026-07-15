@@ -6,9 +6,12 @@ import type { IndustryResponse, PlanResponse, TenantResponse } from "@orelia/com
 import { deleteTenant } from "@/lib/api/tenants";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { EditIcon, PlusIcon, TrashIcon, SearchIcon } from "@/components/ui/icons";
+import { EditIcon, PlusIcon, TrashIcon, SearchIcon, EyeIcon } from "@/components/ui/icons";
 import { TenantFormDialog } from "@/components/widgets/TenantFormDialog";
+import { TenantDetailsDialog } from "@/components/widgets/TenantDetailsDialog";
 import { CustomSelect } from "@/components/ui/CustomSelect";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { AlertDialog } from "@/components/ui/AlertDialog";
 
 interface TenantsTableWidgetProps {
   tenants: TenantResponse[];
@@ -17,7 +20,7 @@ interface TenantsTableWidgetProps {
   permissions: string[];
 }
 
-type DialogState = { mode: "create" } | { mode: "edit"; tenant: TenantResponse } | null;
+type DialogState = { mode: "create" } | { mode: "edit" | "view"; tenant: TenantResponse } | null;
 
 export function TenantsTableWidget({
   tenants: initialTenants,
@@ -31,11 +34,13 @@ export function TenantsTableWidget({
   const [search, setSearch] = useState("");
   const [planFilter, setPlanFilter] = useState("");
   const [industryFilter, setIndustryFilter] = useState("");
+  const [tenantToDelete, setTenantToDelete] = useState<TenantResponse | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const canCreate = permissions.includes(PERMISSIONS.TENANTS_CREATE);
   const canUpdate = permissions.includes(PERMISSIONS.TENANTS_UPDATE);
   const canDelete = permissions.includes(PERMISSIONS.TENANTS_DELETE);
-  const showActionsColumn = canUpdate || canDelete;
+  const showActionsColumn = true;
 
   const hasFilters = search !== "" || planFilter !== "" || industryFilter !== "";
 
@@ -46,16 +51,20 @@ export function TenantsTableWidget({
     return true;
   });
 
-  async function handleDelete(tenant: TenantResponse) {
-    if (!window.confirm(`Delete tenant "${tenant.name}"? This cannot be undone.`)) {
-      return;
-    }
-    setDeletingId(tenant.id);
+  function initiateDelete(tenant: TenantResponse) {
+    setTenantToDelete(tenant);
+  }
+
+  async function confirmDelete() {
+    if (!tenantToDelete) return;
+    const id = tenantToDelete.id;
+    setTenantToDelete(null);
+    setDeletingId(id);
     try {
-      await deleteTenant(tenant.id);
-      setTenants((current) => current.filter((item) => item.id !== tenant.id));
+      await deleteTenant(id);
+      setTenants((current) => current.filter((item) => item.id !== id));
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Failed to delete tenant");
+      setErrorMsg(err instanceof Error ? err.message : "Failed to delete tenant");
     } finally {
       setDeletingId(null);
     }
@@ -171,6 +180,14 @@ export function TenantsTableWidget({
                 </td>
                 {showActionsColumn && (
                   <td className="table-actions">
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      aria-label={`View ${tenant.name}`}
+                      onClick={() => setDialogState({ mode: "view", tenant })}
+                    >
+                      <EyeIcon size={15} />
+                    </button>
                     {canUpdate && (
                       <button
                         type="button"
@@ -186,7 +203,7 @@ export function TenantsTableWidget({
                         type="button"
                         className="icon-btn icon-btn-danger"
                         aria-label={`Delete ${tenant.name}`}
-                        onClick={() => handleDelete(tenant)}
+                        onClick={() => initiateDelete(tenant)}
                         disabled={deletingId === tenant.id}
                       >
                         <TrashIcon size={15} />
@@ -202,7 +219,15 @@ export function TenantsTableWidget({
 
       </div>
 
-      {dialogState && (
+      {dialogState?.mode === "view" && (
+        <TenantDetailsDialog
+          open={true}
+          tenant={"tenant" in dialogState ? dialogState.tenant : null}
+          onClose={() => setDialogState(null)}
+        />
+      )}
+
+      {dialogState && dialogState.mode !== "view" && (
         <TenantFormDialog
           mode={dialogState.mode}
           tenant={"tenant" in dialogState ? dialogState.tenant : undefined}
@@ -212,6 +237,24 @@ export function TenantsTableWidget({
           onSaved={handleSaved}
         />
       )}
+
+      <ConfirmDialog
+        open={tenantToDelete !== null}
+        title="Delete Tenant"
+        message={`Are you sure you want to delete "${tenantToDelete?.name}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        isDestructive={true}
+        onConfirm={confirmDelete}
+        onCancel={() => setTenantToDelete(null)}
+      />
+
+      <AlertDialog
+        open={errorMsg !== null}
+        title="Error"
+        message={errorMsg || ""}
+        isError={true}
+        onClose={() => setErrorMsg(null)}
+      />
     </div>
   );
 }

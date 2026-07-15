@@ -1343,4 +1343,126 @@ body {
 .funnel-card-date {
   font-size: 10.5px;
   color: var(--color-text-muted);
+
+}
+
+/* ── Notification Panel ─────────────────────────────────────── */
+
+.notification-panel-wrapper {
+  position: relative;
+}
+
+.notification-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: -10px;
+  width: 340px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1), 0 0 1px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--color-border);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.notification-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border);
+  background: #f8fafc;
+}
+
+.notification-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.notification-mark-read {
+  background: none;
+  border: none;
+  font-size: 12px;
+  color: var(--color-brand);
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.notification-mark-read:hover {
+  background: rgba(47, 111, 235, 0.1);
+}
+
+.notification-list {
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border);
+  transition: background 0.15s;
+  cursor: pointer;
+}
+
+.notification-item:hover {
+  background: #f8fafc;
+}
+
+.notification-item.unread {
+  background: #f0f4fc;
+}
+
+.notification-item.unread:hover {
+  background: #eef1fb;
+}
+
+.notification-item-content {
+  flex: 1;
+}
+
+.notification-item-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 4px;
+}
+
+.notification-item-message {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+
+.notification-item-time {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.notification-unread-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--color-brand);
+  border-radius: 50%;
+  margin-top: 6px;
+  margin-left: 12px;
+  flex-shrink: 0;
+}
+
+.notification-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 14px;
 }

@@ -14,12 +14,12 @@ interface SidebarProps {
 
 // `permission: undefined` means the item has no permission gate yet (its
 // section hasn't been built out with real RBAC enforcement) — always shown.
-const ADMIN_ITEMS: { label: string; segment: string; permission?: string }[] = [
+const ADMIN_ITEMS: { label: string; segment: string; permission?: string; isRoot?: boolean }[] = [
   { label: "Tenant Management", segment: "tenants", permission: PERMISSIONS.TENANTS_MANAGE },
   { label: "Roles Management", segment: "roles", permission: PERMISSIONS.RBAC_MANAGE },
-  { label: "User Management", segment: "users" },
+  { label: "User Management", segment: "users", isRoot: true },
   { label: "Teams Management", segment: "teams" },
-  { label: "Relationship Types Management", segment: "relationship-types" },
+  { label: "Relationship Management", segment: "relationship-types" },
   { label: "Department Management", segment: "departments" },
 ];
 
@@ -71,8 +71,8 @@ export function Sidebar({ tenantSlug, permissions }: SidebarProps) {
 
       {isAdminOpen && visibleAdminItems.length > 0 && (
         <div className="sidebar-submenu">
-          {visibleAdminItems.map(({ label, segment }) => {
-            const href = `${adminBasePath}${segment}`;
+          {visibleAdminItems.map(({ label, segment, isRoot }) => {
+            const href = isRoot ? `/${tenantSlug}/${segment}` : `${adminBasePath}${segment}`;
             const isActive = pathname === href;
             return (
               <Link key={href} href={href} className={isActive ? "sidebar-link active" : "sidebar-link"}>

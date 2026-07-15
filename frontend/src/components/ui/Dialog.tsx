@@ -7,9 +7,10 @@ interface DialogProps {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  maxWidth?: string;
 }
 
-export function Dialog({ open, title, onClose, children }: DialogProps) {
+export function Dialog({ open, title, onClose, children, maxWidth }: DialogProps) {
   useEffect(() => {
     if (!open) return;
     function handleKeyDown(event: KeyboardEvent) {
@@ -27,7 +28,13 @@ export function Dialog({ open, title, onClose, children }: DialogProps) {
 
   return (
     <div className="dialog-overlay" onMouseDown={handleOverlayClick} role="presentation">
-      <div className="dialog-panel" role="dialog" aria-modal="true" aria-label={title}>
+      <div 
+        className="dialog-panel" 
+        role="dialog" 
+        aria-modal="true" 
+        aria-label={title}
+        style={maxWidth ? { maxWidth } : undefined}
+      >
         <div className="dialog-header">
           <h3 className="dialog-title">{title}</h3>
           <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>

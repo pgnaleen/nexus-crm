@@ -12,6 +12,9 @@ import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
+import { EmailField } from "@/components/ui/EmailField";
+import { PhoneField } from "@/components/ui/PhoneField";
+import { CustomSelect } from "@/components/ui/CustomSelect";
 import { email, minLength, pattern, required, validate } from "@/lib/validation";
 
 const SLUG_REGEX = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
@@ -78,11 +81,14 @@ export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onS
 
     if (!values.planId) nextErrors.planId = "Select a plan";
 
-    const contactEmailError = validate(values.contactEmail, [email()]);
+    const contactEmailError = validate(values.contactEmail, [required(), email()]);
     if (contactEmailError) nextErrors.contactEmail = contactEmailError;
 
     const billingEmailError = validate(values.billingEmail, [email()]);
     if (billingEmailError) nextErrors.billingEmail = billingEmailError;
+
+    const phoneNoError = validate(values.phoneNo, [required()]);
+    if (phoneNoError) nextErrors.phoneNo = phoneNoError;
 
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -120,75 +126,72 @@ export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onS
   }
 
   return (
-    <Dialog open title={mode === "create" ? "Add Tenant" : "Edit Tenant"} onClose={onClose}>
+    <Dialog open title={mode === "create" ? "Add Tenant" : "Edit Tenant"} onClose={onClose} maxWidth="720px">
       <form onSubmit={handleSubmit}>
         {formError && <p className="field-error">{formError}</p>}
 
         <div className="field-row">
           <TextField
-            label="Name"
+            label="Name *"
             name="name"
             value={values.name}
             error={errors.name}
+            placeholder="e.g. Acme Corp"
             onChange={(e) => setField("name", e.target.value)}
           />
           <TextField
-            label="Slug"
+            label="Slug *"
             name="slug"
             value={values.slug}
             error={errors.slug}
+            placeholder="e.g. acme-corp (lowercase & hyphens only)"
             onChange={(e) => setField("slug", e.target.value.toLowerCase())}
           />
         </div>
 
         <div className="field-row">
-          <div className={errors.planId ? "field has-error" : "field"}>
-            <label htmlFor="planId">Plan</label>
-            <select
-              id="planId"
+          <div className="field">
+            <label>Plan *</label>
+            <CustomSelect
+              fullWidth
+              label=""
               value={values.planId}
-              onChange={(e) => setField("planId", e.target.value)}
-            >
-              <option value="">Select a plan</option>
-              {plans.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.name}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setField("planId", val)}
+              options={[
+                { value: "", label: "Select a plan" },
+                ...plans.map((p) => ({ value: p.id, label: p.name }))
+              ]}
+            />
             {errors.planId && <p className="field-error">{errors.planId}</p>}
           </div>
 
           <div className="field">
-            <label htmlFor="industryId">Industry</label>
-            <select
-              id="industryId"
-              value={values.industryId}
-              onChange={(e) => setField("industryId", e.target.value)}
-            >
-              <option value="">—</option>
-              {industries.map((industry) => (
-                <option key={industry.id} value={industry.id}>
-                  {industry.name}
-                </option>
-              ))}
-            </select>
+            <label>Industry</label>
+            <CustomSelect
+              fullWidth
+              label=""
+              value={values.industryId || ""}
+              onChange={(val) => setField("industryId", val)}
+              options={[
+                { value: "", label: "Select an industry" },
+                ...industries.map((i) => ({ value: i.id, label: i.name }))
+              ]}
+            />
           </div>
         </div>
 
         <div className="field">
-          <label htmlFor="status">Status</label>
-          <select
-            id="status"
+          <label>Status *</label>
+          <CustomSelect
+            fullWidth
+            label=""
             value={values.status}
-            onChange={(e) => setField("status", e.target.value as TenantStatus)}
-          >
-            {Object.values(TenantStatus).map((status) => (
-              <option key={status} value={status}>
-                {status[0].toUpperCase() + status.slice(1)}
-              </option>
-            ))}
-          </select>
+            onChange={(val) => setField("status", val as TenantStatus)}
+            options={Object.values(TenantStatus).map((status) => ({
+              value: status,
+              label: status[0].toUpperCase() + status.slice(1)
+            }))}
+          />
         </div>
 
         <TextField
@@ -199,30 +202,32 @@ export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onS
         />
 
         <div className="field-row">
-          <TextField
-            label="Contact email"
+          <EmailField
+            label="Contact email *"
             name="contactEmail"
-            type="email"
             value={values.contactEmail}
             error={errors.contactEmail}
+            placeholder="e.g. hello@acme.com"
             onChange={(e) => setField("contactEmail", e.target.value)}
           />
-          <TextField
+          <EmailField
             label="Billing email"
             name="billingEmail"
-            type="email"
             value={values.billingEmail}
             error={errors.billingEmail}
+            placeholder="e.g. billing@acme.com"
             onChange={(e) => setField("billingEmail", e.target.value)}
           />
         </div>
 
         <div className="field-row">
-          <TextField
-            label="Phone"
+          <PhoneField
+            label="Phone *"
             name="phoneNo"
             value={values.phoneNo}
-            onChange={(e) => setField("phoneNo", e.target.value)}
+            error={errors.phoneNo}
+            placeholder="555-1234"
+            onChange={(val) => setField("phoneNo", val)}
           />
           <TextField
             label="Address"

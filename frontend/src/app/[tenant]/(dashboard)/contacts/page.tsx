@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { SearchIcon, PlusIcon } from "@/components/ui/icons";
+import { SearchIcon } from "@/components/ui/icons";
 import { CustomSelect } from "@/components/ui/CustomSelect";
-import { Button } from "@/components/ui/Button";
 
 export default function ContactsPage() {
   const [search, setSearch] = useState("");

@@ -31,23 +31,20 @@ export class CreateTenantDto implements CreateTenantRequest {
   @IsUUID()
   industryId?: string;
 
-  @IsOptional()
   @IsEnum(TenantStatus)
-  status?: TenantStatus;
+  status!: TenantStatus;
 
   @IsOptional()
   @IsString()
   @MaxLength(160)
   tagline?: string;
 
-  @IsOptional()
   @IsString()
   @MaxLength(40)
-  phoneNo?: string;
+  phoneNo!: string;
 
-  @IsOptional()
   @IsEmail()
-  contactEmail?: string;
+  contactEmail!: string;
 
   @IsOptional()
   @IsEmail()

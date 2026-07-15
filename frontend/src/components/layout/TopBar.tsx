@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { AccountMenu } from "./AccountMenu";
-import { BellIcon, SearchIcon } from "@/components/ui/icons";
+import { NotificationPanel } from "./NotificationPanel";
+import { SearchIcon } from "@/components/ui/icons";
 
 interface TopBarProps {
   tenantName: string;
@@ -50,10 +51,7 @@ export function TopBar({ tenantName, userDisplayName, tenantSlug }: TopBarProps)
           </div>
         )}
 
-        <button type="button" className="icon-btn" aria-label="Notifications">
-          <BellIcon />
-          <span className="icon-btn-dot" />
-        </button>
+        <NotificationPanel />
 
         <AccountMenu tenantName={tenantName} userDisplayName={userDisplayName} tenantSlug={tenantSlug} />
       </div>
