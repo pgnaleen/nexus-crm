@@ -50,6 +50,12 @@ export const PERMISSIONS = {
   RELATIONSHIP_TYPE_UPDATE: "relationship_type:update",
   RELATIONSHIP_TYPE_DELETE: "relationship_type:delete",
 
+  RELATIONSHIP_MANAGE: "relationship:manage",
+  RELATIONSHIP_VIEW: "relationship:view",
+  RELATIONSHIP_CREATE: "relationship:create",
+  RELATIONSHIP_UPDATE: "relationship:update",
+  RELATIONSHIP_DELETE: "relationship:delete",
+
   DEAL_SOURCE_MANAGE: "deal_source:manage",
   DEAL_SOURCE_VIEW: "deal_source:view",
   DEAL_SOURCE_CREATE: "deal_source:create",

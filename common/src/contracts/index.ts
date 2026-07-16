@@ -8,4 +8,5 @@ export * from "./rbac.contracts";
 export * from "./users.contracts";
 export * from "./teams.contracts";
 export * from "./relationship-types.contracts";
+export * from "./relationship-parties.contracts";
 export * from "./deal-sources.contracts";
