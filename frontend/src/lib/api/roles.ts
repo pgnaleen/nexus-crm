@@ -29,6 +29,10 @@ export function getRoleResourceIds(id: string): Promise<string[]> {
   return apiFetch<string[]>(`/rbac/roles/${id}/resources`);
 }
 
+export function listRoles(): Promise<RbacRoleResponse[]> {
+  return apiFetch<RbacRoleResponse[]>("/rbac/roles");
+}
+
 export function assignRoleResources(
   id: string,
   payload: AssignRoleResourcesRequest,

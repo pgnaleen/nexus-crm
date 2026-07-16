@@ -1,9 +1,7 @@
-import { SYSTEM_TENANT_SLUG } from "@orelia/common";
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { In, Repository } from "typeorm";
-import { TenantContextService } from "../../core/tenant";
-import { Tenant } from "../tenants/entities/tenant.entity";
+import { SystemTenantCache, TenantContextService } from "../../core/tenant";
 import { AssignRoleResourcesDto } from "./dto/assign-role-resources.dto";
 import { CreateRoleDto } from "./dto/create-role.dto";
 import { UpdateRoleDto } from "./dto/update-role.dto";
@@ -22,10 +20,9 @@ export class RbacService {
     private readonly roleResourceMapRepo: Repository<RbacRoleResourceMap>,
     @InjectRepository(RbacResource)
     private readonly resourceRepo: Repository<RbacResource>,
-    @InjectRepository(Tenant)
-    private readonly tenantRepo: Repository<Tenant>,
     private readonly rolesRepo: RbacRolesRepository,
     private readonly tenantContext: TenantContextService,
+    private readonly systemTenantCache: SystemTenantCache,
   ) {}
 
   async getRoleNamesForUser(userId: string): Promise<string[]> {
@@ -141,9 +138,33 @@ export class RbacService {
     }
   }
 
-  private async isCurrentTenantPlatform(): Promise<boolean> {
-    const tenantId = this.tenantContext.getTenantId();
-    const tenant = await this.tenantRepo.findOneByOrFail({ id: tenantId });
-    return tenant.slug === SYSTEM_TENANT_SLUG;
+  /**
+   * Evaluates against the AMBIENT tenant (TenantContextService), which is
+   * deliberately the impersonated tenant when act-as-tenant is active -- see
+   * SystemTenantCache. This keeps platform-only resource gating correct
+   * while acting as a non-System tenant (you can't grant a Tenant X role a
+   * platform-only permission just because you're impersonating it).
+   */
+  async isCurrentTenantPlatform(): Promise<boolean> {
+    return this.systemTenantCache.isSystemTenant(this.tenantContext.getTenantId());
+  }
+
+  /**
+   * Assigns roles to a user. Validates roleIds through the ambient
+   * (possibly impersonated) tenant via findScoped -- this is what makes it
+   * safe to not take an explicit tenantId param: the roles a caller can
+   * assign are always whichever tenant TenantContextService currently
+   * resolves to, exactly like every other write in this service.
+   */
+  async assignRolesToUser(userId: string, roleIds: string[], createdBy: string): Promise<void> {
+    if (roleIds.length === 0) {
+      return;
+    }
+    const roles = await this.rolesRepo.findScoped({ where: { id: In(roleIds) } });
+    if (roles.length !== roleIds.length) {
+      throw new NotFoundException("One or more roles not found for the current tenant");
+    }
+    const rows = roleIds.map((roleId) => this.roleUserMapRepo.create({ roleId, userId, createdBy }));
+    await this.roleUserMapRepo.save(rows);
   }
 }

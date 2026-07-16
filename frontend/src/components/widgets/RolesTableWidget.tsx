@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { PERMISSIONS } from "@orelia/common";
-import type { RbacResourceResponse, RbacRoleResponse } from "@orelia/common";
+import type { ActingTenant, RbacResourceResponse, RbacRoleResponse, TenantSummaryResponse } from "@orelia/common";
 import { deleteRole } from "@/lib/api/roles";
 import { Button } from "@/components/ui/Button";
 import { EditIcon, SearchIcon, ShieldIcon, TrashIcon } from "@/components/ui/icons";
 import { RoleFormDialog } from "@/components/widgets/RoleFormDialog";
 import { RolePermissionsDialog } from "@/components/widgets/RolePermissionsDialog";
 import { RoleDetailsDialog } from "@/components/widgets/RoleDetailsDialog";
+import { TenantActingAsSwitcher } from "@/components/widgets/TenantActingAsSwitcher";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { AlertDialog } from "@/components/ui/AlertDialog";
 
@@ -16,6 +17,10 @@ interface RolesTableWidgetProps {
   roles: RbacRoleResponse[];
   resources: RbacResourceResponse[];
   permissions: string[];
+  currentTenantId: string;
+  isPlatformSession: boolean;
+  tenants: TenantSummaryResponse[];
+  actingTenant: ActingTenant | null;
 }
 
 type DialogState =
@@ -25,7 +30,15 @@ type DialogState =
   | { mode: "view"; role: RbacRoleResponse }
   | null;
 
-export function RolesTableWidget({ roles: initialRoles, resources, permissions }: RolesTableWidgetProps) {
+export function RolesTableWidget({
+  roles: initialRoles,
+  resources,
+  permissions,
+  currentTenantId,
+  isPlatformSession,
+  tenants,
+  actingTenant,
+}: RolesTableWidgetProps) {
   const [roles, setRoles] = useState(initialRoles);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [dialogState, setDialogState] = useState<DialogState>(null);
@@ -37,6 +50,7 @@ export function RolesTableWidget({ roles: initialRoles, resources, permissions }
   const canCreate = permissions.includes(PERMISSIONS.RBAC_CREATE);
   const canUpdate = permissions.includes(PERMISSIONS.RBAC_UPDATE);
   const canDelete = permissions.includes(PERMISSIONS.RBAC_DELETE);
+  const canImpersonate = isPlatformSession && permissions.includes(PERMISSIONS.PLATFORM_IMPERSONATE_TENANT);
   const showActionsColumn = canUpdate || canDelete;
 
   const filteredRoles = roles.filter(
@@ -73,6 +87,10 @@ export function RolesTableWidget({ roles: initialRoles, resources, permissions }
 
   return (
     <div>
+      {canImpersonate && (
+        <TenantActingAsSwitcher tenants={tenants} currentTenantId={currentTenantId} actingTenant={actingTenant} />
+      )}
+
       <div className="funnel-header-top">
         <div className="funnel-header-left">
           <h1 className="funnel-title">Roles Management</h1>

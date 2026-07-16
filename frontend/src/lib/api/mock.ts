@@ -11,8 +11,6 @@ export interface MockFunnelStage {
 }
 
 export async function getMockRelationshipTypes(): Promise<MockRelationshipType[]> {
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 200));
   return [
     { id: "1", name: "Customers", slug: "customers" },
     { id: "2", name: "Suppliers", slug: "suppliers" },
@@ -21,8 +19,6 @@ export async function getMockRelationshipTypes(): Promise<MockRelationshipType[]
 }
 
 export async function getMockFunnelStages(): Promise<MockFunnelStage[]> {
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 200));
   return [
     { id: "s1", name: "Lead", slug: "lead" },
     { id: "s2", name: "Contacted", slug: "contacted" },

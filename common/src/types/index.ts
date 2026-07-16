@@ -1,6 +1,7 @@
 export * from "./tenant.types";
 export * from "./user.types";
 export * from "./rbac.types";
+export * from "./team.types";
 export * from "./company.types";
 export * from "./contact.types";
 export * from "./employee.types";

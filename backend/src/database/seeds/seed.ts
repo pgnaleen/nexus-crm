@@ -50,6 +50,7 @@ function riskLevelFor(permissionKey: string): RbacRiskLevel {
 // Resources only the System tenant's Super Admin may ever hold — tenant admins
 // building their own custom roles never see or can grant these.
 const PLATFORM_ONLY_PERMISSIONS: string[] = [
+  PERMISSIONS.PLATFORM_IMPERSONATE_TENANT,
   PERMISSIONS.TENANTS_MANAGE,
   PERMISSIONS.TENANTS_VIEW,
   PERMISSIONS.TENANTS_CREATE,

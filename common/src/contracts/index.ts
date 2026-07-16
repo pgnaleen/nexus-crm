@@ -5,3 +5,5 @@ export * from "./companies.contracts";
 export * from "./contacts.contracts";
 export * from "./tenants.contracts";
 export * from "./rbac.contracts";
+export * from "./users.contracts";
+export * from "./teams.contracts";

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PERMISSIONS } from "@orelia/common";
 import { OreliaLogo } from "@/components/brand/OreliaLogo";
-import { ChevronDownIcon, DashboardIcon, FunnelIcon, SettingsIcon, UsersGroupIcon, UserIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, DashboardIcon, FunnelIcon, SettingsIcon, SlidersIcon, UsersGroupIcon, UserIcon, ActivityIcon } from "@/components/ui/icons";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import type { MockFunnelStage, MockRelationshipType } from "@/lib/api/mock";
 
@@ -17,7 +17,7 @@ interface SidebarProps {
 }
 
 const CRM_CONFIG_ITEMS: { label: string; segment: string; permission?: string; isRoot?: boolean }[] = [
-  { label: "Teams", segment: "teams" },
+  { label: "Teams", segment: "teams", permission: PERMISSIONS.TEAMS_MANAGE },
   { label: "Relationship Types", segment: "relationship-types" },
   { label: "Deal Sources", segment: "deal-sources" },
   { label: "Main Stages", segment: "main-stages" },
@@ -27,7 +27,7 @@ const CRM_CONFIG_ITEMS: { label: string; segment: string; permission?: string; i
 const ADMIN_ITEMS: { label: string; segment: string; permission?: string; isRoot?: boolean }[] = [
   { label: "Tenants", segment: "tenants", permission: PERMISSIONS.TENANTS_MANAGE },
   { label: "Roles", segment: "roles", permission: PERMISSIONS.RBAC_MANAGE },
-  { label: "Users", segment: "users", isRoot: true },
+  { label: "Users", segment: "users", isRoot: true, permission: PERMISSIONS.USERS_MANAGE },
   { label: "Departments", segment: "departments" },
 ];
 
@@ -36,7 +36,7 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, funnelStag
   const adminBasePath = `/${tenantSlug}/admin/`;
 
   // Section Open States
-  const [isFunnelOpen, setIsFunnelOpen] = useState(pathname.startsWith(`/${tenantSlug}/funnel`));
+  const [isDealsOpen, setIsDealsOpen] = useState(pathname.startsWith(`/${tenantSlug}/deals`));
   const [isRelationshipsOpen, setIsRelationshipsOpen] = useState(pathname.startsWith(`/${tenantSlug}/relationships`));
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(pathname.startsWith(adminBasePath));
@@ -50,6 +50,9 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, funnelStag
 
   const dashboardHref = `/${tenantSlug}/dashboard`;
   const isDashboardActive = pathname === dashboardHref;
+
+  const funnelHref = `/${tenantSlug}/funnel`;
+  const isFunnelActive = pathname === funnelHref;
 
   const hrHref = `/${tenantSlug}/employees`;
   const isHrActive = pathname === hrHref;
@@ -81,24 +84,34 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, funnelStag
           Dashboard
         </Link>
 
-        {/* FUNNEL GROUP */}
+        {/* FUNNEL ROOT LINK */}
+        <Link 
+          href={funnelHref} 
+          className={isFunnelActive ? "sidebar-link active" : "sidebar-link"}
+          onClick={() => handleLinkClick(isFunnelActive)}
+        >
+          <FunnelIcon size={17} />
+          Funnel
+        </Link>
+
+        {/* DEALS GROUP */}
         <button
           type="button"
           className="sidebar-group-toggle"
-          onClick={() => setIsFunnelOpen((current) => !current)}
-          aria-expanded={isFunnelOpen}
+          onClick={() => setIsDealsOpen((current) => !current)}
+          aria-expanded={isDealsOpen}
         >
-          <FunnelIcon size={17} />
-          <span>Funnel</span>
-          <span className={isFunnelOpen ? "sidebar-chevron open" : "sidebar-chevron"}>
+          <ActivityIcon size={17} />
+          <span>Deals</span>
+          <span className={isDealsOpen ? "sidebar-chevron open" : "sidebar-chevron"}>
             <ChevronDownIcon size={14} />
           </span>
         </button>
 
-        {isFunnelOpen && (
+        {isDealsOpen && (
           <div className="sidebar-submenu">
             {funnelStages.map((stage) => {
-              const href = `/${tenantSlug}/funnel/${stage.slug}`;
+              const href = `/${tenantSlug}/deals/${stage.slug}`;
               const isActive = pathname === href;
               return (
                 <Link 
@@ -165,7 +178,7 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, funnelStag
             onClick={() => setIsConfigOpen((current) => !current)}
             aria-expanded={isConfigOpen}
           >
-            <SettingsIcon size={17} />
+            <SlidersIcon size={17} />
             <span>CRM Configuration</span>
             <span className={isConfigOpen ? "sidebar-chevron open" : "sidebar-chevron"}>
               <ChevronDownIcon size={14} />

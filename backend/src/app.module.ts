@@ -6,6 +6,7 @@ import { RequestLoggerMiddleware } from "./core/logging/request-logger.middlewar
 import { DatabaseModule } from "./database/database.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { RbacModule } from "./modules/rbac/rbac.module";
+import { TeamsModule } from "./modules/teams/teams.module";
 import { TenantsModule } from "./modules/tenants/tenants.module";
 import { UsersModule } from "./modules/users/users.module";
 
@@ -20,6 +21,7 @@ import { UsersModule } from "./modules/users/users.module";
     TenantsModule,
     UsersModule,
     RbacModule,
+    TeamsModule,
     AuthModule,
   ],
 })

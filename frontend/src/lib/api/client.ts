@@ -9,15 +9,42 @@ export class ApiError extends Error {
   }
 }
 
+// Concurrent 401s must share one refresh attempt — the refresh token is
+// rotated on use, so a second call with the same (now-stale) token would
+// fail and needlessly log the user out.
+let refreshPromise: Promise<boolean> | null = null;
+
+function refreshSession(): Promise<boolean> {
+  if (!refreshPromise) {
+    refreshPromise = fetch(`${API_BASE_URL}/api/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    })
+      .then((res) => res.ok)
+      .catch(() => false)
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}/api${path}`, {
-    ...options,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
+  const doFetch = () =>
+    fetch(`${API_BASE_URL}/api${path}`, {
+      ...options,
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
+
+  let res = await doFetch();
+
+  if (res.status === 401 && (await refreshSession())) {
+    res = await doFetch();
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => null);

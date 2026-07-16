@@ -1,11 +1,18 @@
 import { createHash, randomBytes } from "node:crypto";
-import { AuthSessionResponse, UserStatus } from "@orelia/common";
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { ActingTenant, AuthSessionResponse, UserStatus } from "@orelia/common";
+import { ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
 import * as bcrypt from "bcrypt";
 import { Repository } from "typeorm";
+import {
+  ACT_AS_TENANT_TOKEN_TYPE,
+  ACT_AS_TENANT_TTL_MS,
+  ActAsTenantTokenPayload,
+  SystemTenantCache,
+  TenantContextService,
+} from "../../core/tenant";
 import { RbacService } from "../rbac/rbac.service";
 import { Tenant } from "../tenants/entities/tenant.entity";
 import { RefreshToken } from "../users/entities/refresh-token.entity";
@@ -35,7 +42,11 @@ export class AuthService {
     private readonly rbacService: RbacService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
+    private readonly tenantContext: TenantContextService,
+    private readonly systemTenantCache: SystemTenantCache,
   ) {}
+
+  private readonly logger = new Logger(AuthService.name);
 
   async login(dto: LoginDto): Promise<{ session: AuthSessionResponse } & TokenPair> {
     const tenant = await this.tenantRepo.findOneBy({ slug: dto.tenantSlug });
@@ -100,14 +111,71 @@ export class AuthService {
     await this.refreshTokenRepo.update({ tokenHash }, { revokedAt: new Date() });
   }
 
+  /**
+   * Issues a short-lived signed "act as tenant" token. `callerRealTenantId`
+   * must come from the caller's verified main JWT (@CurrentUser()), never
+   * from the ambient TenantContextService -- checking the real identity
+   * here, not whatever tenant is currently ambient, is what stops this from
+   * being chainable/compounded if ever called while already impersonating.
+   */
+  async actAsTenant(
+    actingUserId: string,
+    callerRealTenantId: string,
+    targetTenantId: string,
+  ): Promise<{ token: string; tenant: ActingTenant }> {
+    if (!(await this.systemTenantCache.isSystemTenant(callerRealTenantId))) {
+      throw new ForbiddenException("Only the System tenant can act as another tenant");
+    }
+
+    const tenant = await this.tenantRepo.findOneBy({ id: targetTenantId });
+    if (!tenant) {
+      throw new NotFoundException("Target tenant not found");
+    }
+
+    const payload: ActAsTenantTokenPayload = {
+      typ: ACT_AS_TENANT_TOKEN_TYPE,
+      actAsTenantId: tenant.id,
+      actingUserId,
+    };
+    const token = this.jwtService.sign(payload, {
+      secret: this.config.get<string>("JWT_ACCESS_SECRET"),
+      expiresIn: ACT_AS_TENANT_TTL_MS / 1000,
+    });
+
+    this.logger.log(
+      `User ${actingUserId} (tenant ${callerRealTenantId}) began acting as tenant ${tenant.id} (${tenant.slug})`,
+    );
+
+    return { token, tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug } };
+  }
+
   async getSession(userId: string): Promise<AuthSessionResponse> {
     const user = await this.userRepo.findOneByOrFail({ id: userId });
     const tenant = await this.tenantRepo.findOneByOrFail({ id: user.tenantId });
-    const [roles, permissions] = await Promise.all([
+    const [roles, permissions, actingTenant] = await Promise.all([
       this.rbacService.getRoleNamesForUser(user.id),
       this.rbacService.getPermissionsForUser(user.id),
+      this.resolveActingTenant(user.tenantId),
     ]);
-    return this.toSession(user, tenant, roles, permissions);
+    return this.toSession(user, tenant, roles, permissions, actingTenant);
+  }
+
+  /**
+   * The ambient tenant (TenantContextService) reflects act-as-tenant when
+   * active; the user's own `tenantId` never does. When they differ, surface
+   * the impersonated tenant separately so the UI can show "acting as X"
+   * without ever changing what `tenant` means elsewhere in the session.
+   */
+  private async resolveActingTenant(realTenantId: string): Promise<ActingTenant | null> {
+    const ambientTenantId = this.tenantContext.getTenantId();
+    if (ambientTenantId === realTenantId) {
+      return null;
+    }
+    const tenant = await this.tenantRepo.findOneBy({ id: ambientTenantId });
+    if (!tenant) {
+      return null;
+    }
+    return { id: tenant.id, name: tenant.name, slug: tenant.slug };
   }
 
   private async issueSession(user: User, tenant: Tenant): Promise<{ session: AuthSessionResponse } & TokenPair> {
@@ -133,7 +201,9 @@ export class AuthService {
       }),
     );
 
-    return { session: this.toSession(user, tenant, roles, permissions), accessToken, refreshToken };
+    // Login/refresh always issue a session for the caller's real tenant --
+    // act-as-tenant is a separate cookie established afterward, never active here.
+    return { session: this.toSession(user, tenant, roles, permissions, null), accessToken, refreshToken };
   }
 
   private toSession(
@@ -141,6 +211,7 @@ export class AuthService {
     tenant: Tenant,
     roles: string[],
     permissions: string[],
+    actingTenant: ActingTenant | null,
   ): AuthSessionResponse {
     return {
       user: {
@@ -170,6 +241,7 @@ export class AuthService {
       },
       roles,
       permissions,
+      actingTenant,
     };
   }
 
