@@ -1,3 +1,4 @@
+import { DealSourceCategory } from "@orelia/common";
 import { Column, Entity } from "typeorm";
 import { AuditedTenantEntity } from "../../../core/tenant";
 
@@ -6,8 +7,8 @@ export class DealSource extends AuditedTenantEntity {
   @Column()
   name!: string;
 
-  @Column({ nullable: true })
-  category?: string;
+  @Column({ type: "enum", enum: DealSourceCategory, nullable: true })
+  category?: DealSourceCategory | null;
 
   @Column({ default: true })
   isActive!: boolean;

@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/auth/session";
-import { getMockRelationshipTypes, getMockFunnelStages } from "@/lib/api/mock";
+import { listRelationshipTypes } from "@/lib/relationship-types/server";
+import { listMainStages } from "@/lib/main-stages/server";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
+import { DialogProvider } from "@/components/providers/DialogProvider";
 
 export default async function DashboardLayout({
   children,
@@ -12,10 +14,10 @@ export default async function DashboardLayout({
   children: ReactNode;
   params: { tenant: string };
 }) {
-  const [session, relationshipTypes, funnelStages] = await Promise.all([
+  const [session, relationshipTypes, mainStages] = await Promise.all([
     getServerSession(params.tenant),
-    getMockRelationshipTypes(),
-    getMockFunnelStages(),
+    listRelationshipTypes(),
+    listMainStages(),
   ]);
 
   if (!session) {
@@ -23,21 +25,23 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="dashboard-layout">
-      <Sidebar 
-        tenantSlug={params.tenant} 
-        permissions={session.permissions} 
-        relationshipTypes={relationshipTypes}
-        funnelStages={funnelStages}
-      />
-      <div className="main-area">
-        <TopBar
-          tenantName={session.tenant.name}
-          userDisplayName={session.user.displayName}
+    <DialogProvider>
+      <div className="dashboard-layout">
+        <Sidebar
           tenantSlug={params.tenant}
+          permissions={session.permissions}
+          relationshipTypes={relationshipTypes ?? []}
+          mainStages={mainStages ?? []}
         />
-        <main className="dashboard-content">{children}</main>
+        <div className="main-area">
+          <TopBar
+            tenantName={session.tenant.name}
+            userDisplayName={session.user.displayName}
+            tenantSlug={params.tenant}
+          />
+          <main className="dashboard-content">{children}</main>
+        </div>
       </div>
-    </div>
+    </DialogProvider>
   );
 }

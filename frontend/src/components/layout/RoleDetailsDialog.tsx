@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import type { RbacResourceResponse, RbacRoleResponse } from "@orelia/common";
@@ -6,7 +6,7 @@ import { getRoleResourceIds } from "@/lib/api/roles";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
-import { groupByPrefix } from "@/components/widgets/RolePermissionsDialog";
+import { groupByPrefix } from "@/components/layout/RolePermissionsDialog";
 
 interface RoleDetailsDialogProps {
   role: RbacRoleResponse;
@@ -40,11 +40,11 @@ export function RoleDetailsDialog({ role, resources, onClose }: RoleDetailsDialo
   const groups = groupByPrefix(grantedResources);
 
   return (
-    <Dialog open title={`Role — ${role.name}`} onClose={onClose} maxWidth="720px">
+    <Dialog open title={`Role â€” ${role.name}`} onClose={onClose} maxWidth="720px">
       <div className="role-details-meta">
         <div className="role-details-meta-item">
           <span className="role-details-meta-label">Description</span>
-          <span className="role-details-meta-value">{role.description || "—"}</span>
+          <span className="role-details-meta-value">{role.description || "â€”"}</span>
         </div>
         <div className="role-details-meta-item">
           <span className="role-details-meta-label">Permissions granted</span>
@@ -72,7 +72,7 @@ export function RoleDetailsDialog({ role, resources, onClose }: RoleDetailsDialo
                 {groupResources.map((resource) => (
                   <div key={resource.id} className="permissions-view-row">
                     <span className="role-details-check" aria-hidden="true">
-                      ✓
+                      âœ“
                     </span>
                     <span>{resource.name.replace(`${prefix}:`, "")}</span>
                     <span className={`permissions-risk-tag permissions-risk-tag--${resource.riskLevel}`}>

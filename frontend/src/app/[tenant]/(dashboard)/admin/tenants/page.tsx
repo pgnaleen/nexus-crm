@@ -1,6 +1,6 @@
 import { getServerSession } from "@/lib/auth/session";
 import { listIndustries, listPlans, listTenants } from "@/lib/tenants/server";
-import { TenantsTableWidget } from "@/components/widgets/TenantsTableWidget";
+import { TenantsTableWidget } from "@/components/layout/TenantsTableWidget";
 
 export default async function TenantsManagementPage({
   params,

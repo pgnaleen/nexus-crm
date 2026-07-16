@@ -1,8 +1,19 @@
-import type { CreateUserRequest, UpdateUserRequest, UserResponse } from "@orelia/common";
+import type { CreateUserRequest, ResetPasswordRequest, UpdateUserRequest, UserResponse } from "@orelia/common";
 import { apiFetch } from "./client";
 
 export function getUser(id: string): Promise<UserResponse> {
   return apiFetch<UserResponse>(`/users/${id}`);
+}
+
+export function getUserRoleIds(id: string): Promise<string[]> {
+  return apiFetch<string[]>(`/users/${id}/roles`);
+}
+
+export function resetUserPassword(id: string, payload: ResetPasswordRequest): Promise<void> {
+  return apiFetch<void>(`/users/${id}/reset-password`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function createUser(payload: CreateUserRequest): Promise<UserResponse> {
@@ -21,4 +32,12 @@ export function updateUser(id: string, payload: UpdateUserRequest): Promise<User
 
 export function deleteUser(id: string): Promise<{ success: true }> {
   return apiFetch<{ success: true }>(`/users/${id}`, { method: "DELETE" });
+}
+
+export function disableUser(id: string): Promise<UserResponse> {
+  return apiFetch<UserResponse>(`/users/${id}/disable`, { method: "PATCH" });
+}
+
+export function enableUser(id: string): Promise<UserResponse> {
+  return apiFetch<UserResponse>(`/users/${id}/enable`, { method: "PATCH" });
 }

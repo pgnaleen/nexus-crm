@@ -5,7 +5,10 @@ import { CoreModule } from "./core/core.module";
 import { RequestLoggerMiddleware } from "./core/logging/request-logger.middleware";
 import { DatabaseModule } from "./database/database.module";
 import { AuthModule } from "./modules/auth/auth.module";
+import { DealSourcesModule } from "./modules/deal-sources/deal-sources.module";
+import { MainStagesModule } from "./modules/deal-stages/main-stages.module";
 import { RbacModule } from "./modules/rbac/rbac.module";
+import { RelationshipTypesModule } from "./modules/relationship-types/relationship-types.module";
 import { TeamsModule } from "./modules/teams/teams.module";
 import { TenantsModule } from "./modules/tenants/tenants.module";
 import { UsersModule } from "./modules/users/users.module";
@@ -22,6 +25,9 @@ import { UsersModule } from "./modules/users/users.module";
     UsersModule,
     RbacModule,
     TeamsModule,
+    RelationshipTypesModule,
+    DealSourcesModule,
+    MainStagesModule,
     AuthModule,
   ],
 })

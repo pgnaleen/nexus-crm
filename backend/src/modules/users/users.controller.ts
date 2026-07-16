@@ -1,17 +1,22 @@
 import { PERMISSIONS, UserResponse, UserSummaryResponse } from "@orelia/common";
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
+import { RbacService } from "../rbac/rbac.service";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
 import { CreateUserDto } from "./dto/create-user.dto";
+import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { User } from "./entities/user.entity";
 import { UsersService } from "./users.service";
 
 @Controller("users")
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly rbacService: RbacService,
+  ) {}
 
   @UseGuards(PermissionsGuard)
   @RequirePermission(PERMISSIONS.USERS_MANAGE)
@@ -51,6 +56,48 @@ export class UsersController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<UserResponse> {
     const updated = await this.usersService.update(id, dto, user.sub);
+    return this.toResponse(updated);
+  }
+
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.USERS_VIEW, PERMISSIONS.USERS_UPDATE])
+  @Get(":id/roles")
+  async getRoleIds(@Param("id", ParseUUIDPipe) id: string): Promise<string[]> {
+    await this.usersService.findOneOrFail(id);
+    return this.rbacService.getRoleIdsForUser(id);
+  }
+
+  @UseGuards(PermissionsGuard)
+  @RequirePermission(PERMISSIONS.USERS_UPDATE)
+  @Post(":id/reset-password")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async resetPassword(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: ResetPasswordDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<void> {
+    await this.usersService.resetPassword(id, dto.password, user.sub);
+  }
+
+  @UseGuards(PermissionsGuard)
+  @RequirePermission(PERMISSIONS.USERS_DISABLE)
+  @Patch(":id/disable")
+  async disable(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<UserResponse> {
+    const updated = await this.usersService.disable(id, user.sub);
+    return this.toResponse(updated);
+  }
+
+  @UseGuards(PermissionsGuard)
+  @RequirePermission(PERMISSIONS.USERS_DISABLE)
+  @Patch(":id/enable")
+  async enable(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<UserResponse> {
+    const updated = await this.usersService.enable(id, user.sub);
     return this.toResponse(updated);
   }
 

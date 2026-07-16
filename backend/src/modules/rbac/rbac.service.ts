@@ -167,4 +167,29 @@ export class RbacService {
     const rows = roleIds.map((roleId) => this.roleUserMapRepo.create({ roleId, userId, createdBy }));
     await this.roleUserMapRepo.save(rows);
   }
+
+  async getRoleIdsForUser(userId: string): Promise<string[]> {
+    const maps = await this.roleUserMapRepo.find({ where: { userId } });
+    return maps.map((map) => map.roleId);
+  }
+
+  /**
+   * Full replace (not incremental) -- clears every existing role grant for
+   * the user then re-assigns the given set, so removing a role from the
+   * Edit User form is just "not in roleIds" rather than needing a separate
+   * unassign call. roleIds still validated through the ambient tenant via
+   * findScoped, same safety property as assignRolesToUser.
+   */
+  async replaceRolesForUser(userId: string, roleIds: string[], updatedBy: string): Promise<void> {
+    await this.roleUserMapRepo.delete({ userId });
+    if (roleIds.length === 0) {
+      return;
+    }
+    const roles = await this.rolesRepo.findScoped({ where: { id: In(roleIds) } });
+    if (roles.length !== roleIds.length) {
+      throw new NotFoundException("One or more roles not found for the current tenant");
+    }
+    const rows = roleIds.map((roleId) => this.roleUserMapRepo.create({ roleId, userId, createdBy: updatedBy }));
+    await this.roleUserMapRepo.save(rows);
+  }
 }

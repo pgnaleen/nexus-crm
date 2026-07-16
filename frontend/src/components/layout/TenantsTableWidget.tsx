@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { PERMISSIONS } from "@orelia/common";
@@ -7,11 +7,10 @@ import { deleteTenant } from "@/lib/api/tenants";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EditIcon, PlusIcon, TrashIcon, SearchIcon, EyeIcon } from "@/components/ui/icons";
-import { TenantFormDialog } from "@/components/widgets/TenantFormDialog";
-import { TenantDetailsDialog } from "@/components/widgets/TenantDetailsDialog";
+import { TenantFormDialog } from "@/components/layout/TenantFormDialog";
+import { TenantDetailsDialog } from "@/components/layout/TenantDetailsDialog";
 import { CustomSelect } from "@/components/ui/CustomSelect";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { AlertDialog } from "@/components/ui/AlertDialog";
+import { useConfirm, useAlert } from "@/components/providers/DialogProvider";
 
 interface TenantsTableWidgetProps {
   tenants: TenantSummaryResponse[];
@@ -34,8 +33,9 @@ export function TenantsTableWidget({
   const [search, setSearch] = useState("");
   const [planFilter, setPlanFilter] = useState("");
   const [industryFilter, setIndustryFilter] = useState("");
-  const [tenantToDelete, setTenantToDelete] = useState<TenantSummaryResponse | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const confirm = useConfirm();
+  const { showError } = useAlert();
 
   const canView = permissions.includes(PERMISSIONS.TENANTS_VIEW);
   const canCreate = permissions.includes(PERMISSIONS.TENANTS_CREATE);
@@ -52,20 +52,21 @@ export function TenantsTableWidget({
     return true;
   });
 
-  function initiateDelete(tenant: TenantSummaryResponse) {
-    setTenantToDelete(tenant);
-  }
+  async function initiateDelete(tenant: TenantSummaryResponse) {
+    const ok = await confirm({
+      title: "Delete Tenant",
+      message: `Are you sure you want to delete "${tenant.name}"? This action cannot be undone.`,
+      confirmLabel: "Delete",
+      isDestructive: true,
+    });
+    if (!ok) return;
 
-  async function confirmDelete() {
-    if (!tenantToDelete) return;
-    const id = tenantToDelete.id;
-    setTenantToDelete(null);
-    setDeletingId(id);
+    setDeletingId(tenant.id);
     try {
-      await deleteTenant(id);
-      setTenants((current) => current.filter((item) => item.id !== id));
+      await deleteTenant(tenant.id);
+      setTenants((current) => current.filter((item) => item.id !== tenant.id));
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Failed to delete tenant");
+      showError(err instanceof Error ? err.message : "Failed to delete tenant");
     } finally {
       setDeletingId(null);
     }
@@ -82,7 +83,7 @@ export function TenantsTableWidget({
 
   return (
     <div className="tenant-management-wrapper">
-      {/* ── Title ──────────────────────── */}
+      {/* â”€â”€ Title â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="funnel-header-top">
         <div className="funnel-header-left">
           <h1 className="funnel-title">Tenant Management</h1>
@@ -179,7 +180,7 @@ export function TenantsTableWidget({
                 <td>{tenant.name}</td>
                 <td>{tenant.slug}</td>
                 <td>{tenant.planName}</td>
-                <td>{tenant.industryName ?? "—"}</td>
+                <td>{tenant.industryName ?? "â€”"}</td>
                 <td>
                   <StatusBadge status={tenant.status} />
                 </td>
@@ -240,24 +241,6 @@ export function TenantsTableWidget({
           onSaved={handleSaved}
         />
       )}
-
-      <ConfirmDialog
-        open={tenantToDelete !== null}
-        title="Delete Tenant"
-        message={`Are you sure you want to delete "${tenantToDelete?.name}"? This action cannot be undone.`}
-        confirmLabel="Delete"
-        isDestructive={true}
-        onConfirm={confirmDelete}
-        onCancel={() => setTenantToDelete(null)}
-      />
-
-      <AlertDialog
-        open={errorMsg !== null}
-        title="Error"
-        message={errorMsg || ""}
-        isError={true}
-        onClose={() => setErrorMsg(null)}
-      />
     </div>
   );
 }

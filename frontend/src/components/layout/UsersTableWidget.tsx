@@ -1,17 +1,17 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
-import { PERMISSIONS } from "@orelia/common";
+import { PERMISSIONS, UserStatus } from "@orelia/common";
 import type { ActingTenant, TenantSummaryResponse, UserResponse, UserSummaryResponse } from "@orelia/common";
-import { deleteUser } from "@/lib/api/users";
+import { deleteUser, disableUser, enableUser } from "@/lib/api/users";
 import { ApiError } from "@/lib/api/client";
-import { EditIcon, SearchIcon, TrashIcon } from "@/components/ui/icons";
+import { BanIcon, CheckCircleIcon, EditIcon, KeyIcon, SearchIcon, TrashIcon } from "@/components/ui/icons";
 import { UserStatusBadge } from "@/components/ui/UserStatusBadge";
-import { UserDetailsDialog } from "@/components/widgets/UserDetailsDialog";
-import { UserFormDialog } from "@/components/widgets/UserFormDialog";
-import { TenantActingAsSwitcher } from "@/components/widgets/TenantActingAsSwitcher";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { AlertDialog } from "@/components/ui/AlertDialog";
+import { UserDetailsDialog } from "@/components/layout/UserDetailsDialog";
+import { UserFormDialog } from "@/components/layout/UserFormDialog";
+import { ResetPasswordDialog } from "@/components/layout/ResetPasswordDialog";
+import { TenantActingAsSwitcher } from "@/components/layout/TenantActingAsSwitcher";
+import { useConfirm, useAlert } from "@/components/providers/DialogProvider";
 
 interface UsersTableWidgetProps {
   users: UserSummaryResponse[];
@@ -48,16 +48,20 @@ export function UsersTableWidget({
   const [search, setSearch] = useState("");
   const [viewingUser, setViewingUser] = useState<UserSummaryResponse | null>(null);
   const [formDialogState, setFormDialogState] = useState<FormDialogState>(null);
-  const [userToDelete, setUserToDelete] = useState<UserSummaryResponse | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [resettingPasswordUser, setResettingPasswordUser] = useState<UserSummaryResponse | null>(null);
+  const [togglingStatusId, setTogglingStatusId] = useState<string | null>(null);
+
+  const confirm = useConfirm();
+  const { showError, showSuccess } = useAlert();
 
   const canView = permissions.includes(PERMISSIONS.USERS_VIEW);
   const canCreate = permissions.includes(PERMISSIONS.USERS_CREATE);
   const canUpdate = permissions.includes(PERMISSIONS.USERS_UPDATE);
   const canDelete = permissions.includes(PERMISSIONS.USERS_DELETE);
+  const canDisable = permissions.includes(PERMISSIONS.USERS_DISABLE);
   const canImpersonate = isPlatformSession && permissions.includes(PERMISSIONS.PLATFORM_IMPERSONATE_TENANT);
-  const showActionsColumn = canUpdate || canDelete;
+  const showActionsColumn = canUpdate || canDelete || canDisable;
 
   const filteredUsers = users.filter(
     (user) =>
@@ -75,22 +79,55 @@ export function UsersTableWidget({
     });
   }
 
-  function initiateDelete(user: UserSummaryResponse) {
-    setUserToDelete(user);
-  }
+  async function initiateDelete(user: UserSummaryResponse) {
+    const ok = await confirm({
+      title: "Delete User",
+      message: `Are you sure you want to delete "${user.displayName}"? This action cannot be undone.`,
+      confirmLabel: "Delete",
+      isDestructive: true,
+    });
+    if (!ok) return;
 
-  async function confirmDelete() {
-    if (!userToDelete) return;
-    const id = userToDelete.id;
-    setUserToDelete(null);
-    setDeletingId(id);
+    setDeletingId(user.id);
     try {
-      await deleteUser(id);
-      setUsers((current) => current.filter((item) => item.id !== id));
+      await deleteUser(user.id);
+      setUsers((current) => current.filter((item) => item.id !== user.id));
     } catch (err) {
-      setErrorMsg(err instanceof ApiError ? err.message : "Failed to delete user");
+      showError(err instanceof ApiError ? err.message : "Failed to delete user");
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function initiateDisable(user: UserSummaryResponse) {
+    const ok = await confirm({
+      title: "Disable User",
+      message: `Disable "${user.displayName}"? This immediately ends any active session and blocks login until re-enabled.`,
+      confirmLabel: "Disable",
+      isDestructive: true,
+    });
+    if (!ok) return;
+
+    setTogglingStatusId(user.id);
+    try {
+      const updated = await disableUser(user.id);
+      handleSaved(updated);
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : "Failed to disable user");
+    } finally {
+      setTogglingStatusId(null);
+    }
+  }
+
+  async function handleEnable(user: UserSummaryResponse) {
+    setTogglingStatusId(user.id);
+    try {
+      const updated = await enableUser(user.id);
+      handleSaved(updated);
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : "Failed to enable user");
+    } finally {
+      setTogglingStatusId(null);
     }
   }
 
@@ -165,7 +202,7 @@ export function UsersTableWidget({
                     <UserStatusBadge status={user.status} />
                   </td>
                   <td>{user.loggingEmail}</td>
-                  <td>{user.lastLoggingAt ? formatLastLogin(user.lastLoggingAt) : "—"}</td>
+                  <td>{user.lastLoggingAt ? formatLastLogin(user.lastLoggingAt) : "â€”"}</td>
                   {showActionsColumn && (
                     <td className="table-actions">
                       {canUpdate && (
@@ -179,6 +216,47 @@ export function UsersTableWidget({
                           }}
                         >
                           <EditIcon size={15} />
+                        </button>
+                      )}
+                      {canUpdate && (
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          aria-label={`Reset password for ${user.displayName}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setResettingPasswordUser(user);
+                          }}
+                        >
+                          <KeyIcon size={15} />
+                        </button>
+                      )}
+                      {canDisable && user.status !== UserStatus.Disabled && (
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          aria-label={`Disable ${user.displayName}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            initiateDisable(user);
+                          }}
+                          disabled={togglingStatusId === user.id}
+                        >
+                          <BanIcon size={15} />
+                        </button>
+                      )}
+                      {canDisable && user.status === UserStatus.Disabled && (
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          aria-label={`Enable ${user.displayName}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEnable(user);
+                          }}
+                          disabled={togglingStatusId === user.id}
+                        >
+                          <CheckCircleIcon size={15} />
                         </button>
                       )}
                       {canDelete && (
@@ -215,23 +293,13 @@ export function UsersTableWidget({
         />
       )}
 
-      <ConfirmDialog
-        open={userToDelete !== null}
-        title="Delete User"
-        message={`Are you sure you want to delete "${userToDelete?.displayName}"? This action cannot be undone.`}
-        confirmLabel="Delete"
-        isDestructive={true}
-        onConfirm={confirmDelete}
-        onCancel={() => setUserToDelete(null)}
-      />
-
-      <AlertDialog
-        open={errorMsg !== null}
-        title="Error"
-        message={errorMsg || ""}
-        isError={true}
-        onClose={() => setErrorMsg(null)}
-      />
+      {resettingPasswordUser && (
+        <ResetPasswordDialog
+          user={resettingPasswordUser}
+          onClose={() => setResettingPasswordUser(null)}
+          onReset={() => showSuccess(`Password reset for ${resettingPasswordUser.displayName}.`, "Password Reset")}
+        />
+      )}
     </div>
   );
 }

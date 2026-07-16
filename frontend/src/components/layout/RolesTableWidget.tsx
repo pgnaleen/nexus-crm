@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { PERMISSIONS } from "@orelia/common";
@@ -6,12 +6,11 @@ import type { ActingTenant, RbacResourceResponse, RbacRoleResponse, TenantSummar
 import { deleteRole } from "@/lib/api/roles";
 import { Button } from "@/components/ui/Button";
 import { EditIcon, SearchIcon, ShieldIcon, TrashIcon } from "@/components/ui/icons";
-import { RoleFormDialog } from "@/components/widgets/RoleFormDialog";
-import { RolePermissionsDialog } from "@/components/widgets/RolePermissionsDialog";
-import { RoleDetailsDialog } from "@/components/widgets/RoleDetailsDialog";
-import { TenantActingAsSwitcher } from "@/components/widgets/TenantActingAsSwitcher";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { AlertDialog } from "@/components/ui/AlertDialog";
+import { RoleFormDialog } from "@/components/layout/RoleFormDialog";
+import { RolePermissionsDialog } from "@/components/layout/RolePermissionsDialog";
+import { RoleDetailsDialog } from "@/components/layout/RoleDetailsDialog";
+import { TenantActingAsSwitcher } from "@/components/layout/TenantActingAsSwitcher";
+import { useConfirm, useAlert } from "@/components/providers/DialogProvider";
 
 interface RolesTableWidgetProps {
   roles: RbacRoleResponse[];
@@ -43,8 +42,9 @@ export function RolesTableWidget({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [dialogState, setDialogState] = useState<DialogState>(null);
   const [search, setSearch] = useState("");
-  const [roleToDelete, setRoleToDelete] = useState<RbacRoleResponse | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const confirm = useConfirm();
+  const { showError } = useAlert();
 
   const canView = permissions.includes(PERMISSIONS.RBAC_VIEW);
   const canCreate = permissions.includes(PERMISSIONS.RBAC_CREATE);
@@ -57,20 +57,21 @@ export function RolesTableWidget({
     (role) => !search || role.name.toLowerCase().includes(search.toLowerCase()),
   );
 
-  function initiateDelete(role: RbacRoleResponse) {
-    setRoleToDelete(role);
-  }
+  async function initiateDelete(role: RbacRoleResponse) {
+    const ok = await confirm({
+      title: "Delete Role",
+      message: `Are you sure you want to delete "${role.name}"? This action cannot be undone.`,
+      confirmLabel: "Delete",
+      isDestructive: true,
+    });
+    if (!ok) return;
 
-  async function confirmDelete() {
-    if (!roleToDelete) return;
-    const role = roleToDelete;
-    setRoleToDelete(null);
     setDeletingId(role.id);
     try {
       await deleteRole(role.id);
       setRoles((current) => current.filter((item) => item.id !== role.id));
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Failed to delete role");
+      showError(err instanceof Error ? err.message : "Failed to delete role");
     } finally {
       setDeletingId(null);
     }
@@ -141,7 +142,7 @@ export function RolesTableWidget({
                   onClick={canView ? () => setDialogState({ mode: "view", role }) : undefined}
                 >
                   <td>{role.name}</td>
-                  <td>{role.description ?? "—"}</td>
+                  <td>{role.description ?? "â€”"}</td>
                   <td>{role.resourceCount}</td>
                   {showActionsColumn && (
                     <td className="table-actions">
@@ -219,24 +220,6 @@ export function RolesTableWidget({
           onClose={() => setDialogState(null)}
         />
       )}
-
-      <ConfirmDialog
-        open={roleToDelete !== null}
-        title="Delete Role"
-        message={`Are you sure you want to delete "${roleToDelete?.name}"? This action cannot be undone.`}
-        confirmLabel="Delete"
-        isDestructive={true}
-        onConfirm={confirmDelete}
-        onCancel={() => setRoleToDelete(null)}
-      />
-
-      <AlertDialog
-        open={errorMsg !== null}
-        title="Error"
-        message={errorMsg || ""}
-        isError={true}
-        onClose={() => setErrorMsg(null)}
-      />
     </div>
   );
 }

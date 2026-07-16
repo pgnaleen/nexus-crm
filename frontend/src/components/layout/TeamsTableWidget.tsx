@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { PERMISSIONS } from "@orelia/common";
@@ -6,9 +6,8 @@ import type { TeamResponse } from "@orelia/common";
 import { deleteTeam } from "@/lib/api/teams";
 import { ApiError } from "@/lib/api/client";
 import { EditIcon, SearchIcon, TrashIcon } from "@/components/ui/icons";
-import { TeamFormDialog } from "@/components/widgets/TeamFormDialog";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { AlertDialog } from "@/components/ui/AlertDialog";
+import { TeamFormDialog } from "@/components/layout/TeamFormDialog";
+import { useConfirm, useAlert } from "@/components/providers/DialogProvider";
 
 interface TeamsTableWidgetProps {
   teams: TeamResponse[];
@@ -21,9 +20,10 @@ export function TeamsTableWidget({ teams: initialTeams, permissions }: TeamsTabl
   const [teams, setTeams] = useState(initialTeams);
   const [search, setSearch] = useState("");
   const [dialogState, setDialogState] = useState<DialogState>(null);
-  const [teamToDelete, setTeamToDelete] = useState<TeamResponse | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const confirm = useConfirm();
+  const { showError } = useAlert();
 
   const canCreate = permissions.includes(PERMISSIONS.TEAMS_CREATE);
   const canUpdate = permissions.includes(PERMISSIONS.TEAMS_UPDATE);
@@ -43,20 +43,21 @@ export function TeamsTableWidget({ teams: initialTeams, permissions }: TeamsTabl
     });
   }
 
-  function initiateDelete(team: TeamResponse) {
-    setTeamToDelete(team);
-  }
+  async function initiateDelete(team: TeamResponse) {
+    const ok = await confirm({
+      title: "Delete Team",
+      message: `Are you sure you want to delete "${team.name}"? This action cannot be undone.`,
+      confirmLabel: "Delete",
+      isDestructive: true,
+    });
+    if (!ok) return;
 
-  async function confirmDelete() {
-    if (!teamToDelete) return;
-    const id = teamToDelete.id;
-    setTeamToDelete(null);
-    setDeletingId(id);
+    setDeletingId(team.id);
     try {
-      await deleteTeam(id);
-      setTeams((current) => current.filter((item) => item.id !== id));
+      await deleteTeam(team.id);
+      setTeams((current) => current.filter((item) => item.id !== team.id));
     } catch (err) {
-      setErrorMsg(err instanceof ApiError ? err.message : "Failed to delete team");
+      showError(err instanceof ApiError ? err.message : "Failed to delete team");
     } finally {
       setDeletingId(null);
     }
@@ -152,24 +153,6 @@ export function TeamsTableWidget({ teams: initialTeams, permissions }: TeamsTabl
           onSaved={handleSaved}
         />
       )}
-
-      <ConfirmDialog
-        open={teamToDelete !== null}
-        title="Delete Team"
-        message={`Are you sure you want to delete "${teamToDelete?.name}"? This action cannot be undone.`}
-        confirmLabel="Delete"
-        isDestructive={true}
-        onConfirm={confirmDelete}
-        onCancel={() => setTeamToDelete(null)}
-      />
-
-      <AlertDialog
-        open={errorMsg !== null}
-        title="Error"
-        message={errorMsg || ""}
-        isError={true}
-        onClose={() => setErrorMsg(null)}
-      />
     </div>
   );
 }

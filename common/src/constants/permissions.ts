@@ -44,7 +44,23 @@ export const PERMISSIONS = {
   DEALS_STAGE_UPDATE: "deals:stage:update",
 
   DEAL_STAGES_MANAGE: "deal_stages:manage",
-  DEAL_SOURCES_MANAGE: "deal_sources:manage",
+
+  RELATIONSHIP_TYPE_MANAGE: "relationship_type:manage",
+  RELATIONSHIP_TYPE_CREATE: "relationship_type:create",
+  RELATIONSHIP_TYPE_UPDATE: "relationship_type:update",
+  RELATIONSHIP_TYPE_DELETE: "relationship_type:delete",
+
+  DEAL_SOURCE_MANAGE: "deal_source:manage",
+  DEAL_SOURCE_VIEW: "deal_source:view",
+  DEAL_SOURCE_CREATE: "deal_source:create",
+  DEAL_SOURCE_UPDATE: "deal_source:update",
+  DEAL_SOURCE_DELETE: "deal_source:delete",
+
+  MAIN_STAGE_MANAGE: "main_stage:manage",
+  MAIN_STAGE_VIEW: "main_stage:view",
+  MAIN_STAGE_CREATE: "main_stage:create",
+  MAIN_STAGE_UPDATE: "main_stage:update",
+  MAIN_STAGE_DELETE: "main_stage:delete",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

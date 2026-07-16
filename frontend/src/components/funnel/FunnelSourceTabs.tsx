@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { FUNNEL_SOURCES, type FunnelLead, type FunnelStage } from "@/lib/data/funnel";
+import { type FunnelLead } from "@/lib/data/funnel";
+import type { DealSourceResponse, MainStageResponse } from "@orelia/common";
 import { FunnelBoard } from "@/components/funnel/FunnelBoard";
 import { SearchIcon } from "@/components/ui/icons";
 import { CustomSelect } from "@/components/ui/CustomSelect";
@@ -23,15 +24,22 @@ const SOURCE_CONFIG: Record<string, { accent: string; bg: string }> = {
 
 /* ── Build initial state ────────────────────────────────────── */
 function buildInitialLeads() {
-  const map: Record<string, FunnelLead[]> = {};
-  for (const src of FUNNEL_SOURCES) {
-    map[src.id] = src.leads.map((l) => ({ ...l }));
-  }
-  return map;
+  // Empty state for now since we removed the mock data
+  return {} as Record<string, FunnelLead[]>;
 }
 
-export function FunnelSourceTabs() {
-  const [activeId, setActiveId] = useState(FUNNEL_SOURCES[0].id);
+interface FunnelSourceTabsProps {
+  dealSources: DealSourceResponse[];
+  mainStages: MainStageResponse[];
+}
+
+export function FunnelSourceTabs({ dealSources, mainStages }: FunnelSourceTabsProps) {
+  const dynamicSources = [
+    { id: "all", name: "All" },
+    ...dealSources.map((ds) => ({ id: ds.id, name: ds.name })),
+  ];
+
+  const [activeId, setActiveId] = useState(dynamicSources[0].id);
   const [leadsBySource, setLeadsBySource] = useState(buildInitialLeads);
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("");
@@ -42,7 +50,7 @@ export function FunnelSourceTabs() {
   const activeLeads = leadsBySource[activeId] ?? [];
   const activeCfg = SOURCE_CONFIG[activeId] ?? { accent: "#2f6feb", bg: "#dbeafe" };
 
-  function handleMove(leadId: string, toStage: FunnelStage) {
+  function handleMove(leadId: string, toStage: string) {
     setLeadsBySource((prev) => ({
       ...prev,
       [activeId]: prev[activeId].map((l) =>
@@ -122,8 +130,8 @@ export function FunnelSourceTabs() {
       <div className="funnel-workspace">
         {/* ── Folder Tabs ──────────────────────── */}
         <div className="funnel-folder-tabs">
-          {FUNNEL_SOURCES.map((src) => {
-            const cfg = SOURCE_CONFIG[src.id] ?? activeCfg;
+          {dynamicSources.map((src) => {
+            const cfg = SOURCE_CONFIG[src.id] ?? { accent: "#475569", bg: "#f1f5f9" };
             const isActive = activeId === src.id;
             return (
               <button
@@ -137,7 +145,7 @@ export function FunnelSourceTabs() {
                 }
                 onClick={() => setActiveId(src.id)}
               >
-                {src.label}
+                {src.name}
               </button>
             );
           })}
@@ -148,7 +156,7 @@ export function FunnelSourceTabs() {
           className="funnel-board-wrapper" 
           style={{ borderTop: `3px solid ${activeCfg.accent}` }}
         >
-          <FunnelBoard leads={activeLeads} onMove={handleMove} />
+          <FunnelBoard leads={activeLeads} onMove={handleMove} mainStages={mainStages} />
         </div>
       </div>
     </div>

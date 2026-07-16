@@ -2,7 +2,7 @@ import { SYSTEM_TENANT_SLUG } from "@orelia/common";
 import { getServerSession } from "@/lib/auth/session";
 import { listResources, listRoles } from "@/lib/roles/server";
 import { listTenants } from "@/lib/tenants/server";
-import { RolesTableWidget } from "@/components/widgets/RolesTableWidget";
+import { RolesTableWidget } from "@/components/layout/RolesTableWidget";
 
 export default async function RolesManagementPage({
   params,

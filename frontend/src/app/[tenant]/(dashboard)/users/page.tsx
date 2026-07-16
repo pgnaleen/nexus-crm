@@ -2,7 +2,7 @@ import { SYSTEM_TENANT_SLUG } from "@orelia/common";
 import { getServerSession } from "@/lib/auth/session";
 import { listUsers } from "@/lib/users/server";
 import { listTenants } from "@/lib/tenants/server";
-import { UsersTableWidget } from "@/components/widgets/UsersTableWidget";
+import { UsersTableWidget } from "@/components/layout/UsersTableWidget";
 
 export default async function UsersPage({ params }: { params: { tenant: string } }) {
   const [session, users] = await Promise.all([getServerSession(params.tenant), listUsers()]);

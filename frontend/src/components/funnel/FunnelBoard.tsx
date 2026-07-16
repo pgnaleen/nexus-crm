@@ -1,10 +1,11 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { FUNNEL_STAGES, type FunnelLead, type FunnelStage } from "@/lib/data/funnel";
+import { type FunnelLead } from "@/lib/data/funnel";
+import type { MainStageResponse } from "@orelia/common";
 
 /* ── Stage colours ─────────────────────────────────────────── */
-const STAGE_CONFIG: Record<FunnelStage, { accent: string; bg: string }> = {
+const STAGE_CONFIG: Record<string, { accent: string; bg: string }> = {
   "New Lead":                { accent: "#2f6feb", bg: "#dbeafe" },
   "Qualified":               { accent: "#7c3aed", bg: "#ede9fe" },
   "Discovery":               { accent: "#6366f1", bg: "#e0e7ff" },
@@ -81,7 +82,7 @@ function DealCard({
 
 /* ── Kanban column ──────────────────────────────────────────── */
 function KanbanColumn({
-  stage,
+  stageName,
   leads,
   isOver,
   draggingId,
@@ -91,7 +92,7 @@ function KanbanColumn({
   onDragStart,
   onDragEnd,
 }: {
-  stage: FunnelStage;
+  stageName: string;
   leads: FunnelLead[];
   isOver: boolean;
   draggingId: string | null;
@@ -101,7 +102,7 @@ function KanbanColumn({
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
 }) {
-  const cfg = STAGE_CONFIG[stage];
+  const cfg = STAGE_CONFIG[stageName] ?? { accent: "#64748b", bg: "#f1f5f9" };
   const total = leads.reduce((s, l) => s + l.value, 0);
 
   return (
@@ -115,7 +116,7 @@ function KanbanColumn({
       <div className="funnel-column-header">
         <div className="funnel-column-title-row">
           <span className="funnel-column-dot" style={{ background: cfg.accent }} />
-          <span className="funnel-column-title">{stage}</span>
+          <span className="funnel-column-title">{stageName}</span>
           <span
             className="funnel-column-count"
             style={{ background: cfg.bg, color: cfg.accent }}
@@ -149,11 +150,12 @@ function KanbanColumn({
 /* ── Main board ─────────────────────────────────────────────── */
 interface FunnelBoardProps {
   leads: FunnelLead[];
-  onMove: (leadId: string, toStage: FunnelStage) => void;
+  onMove: (leadId: string, toStage: string) => void;
+  mainStages: MainStageResponse[];
 }
 
-export function FunnelBoard({ leads, onMove }: FunnelBoardProps) {
-  const [dragOverStage, setDragOverStage] = useState<FunnelStage | null>(null);
+export function FunnelBoard({ leads, onMove, mainStages }: FunnelBoardProps) {
+  const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const dragIdRef = useRef<string | null>(null);
 
@@ -168,12 +170,12 @@ export function FunnelBoard({ leads, onMove }: FunnelBoardProps) {
     setDragOverStage(null);
   }
 
-  function handleDragOver(e: React.DragEvent, stage: FunnelStage) {
+  function handleDragOver(e: React.DragEvent, stage: string) {
     e.preventDefault();
     setDragOverStage(stage);
   }
 
-  function handleDrop(stage: FunnelStage) {
+  function handleDrop(stage: string) {
     if (dragIdRef.current) {
       onMove(dragIdRef.current, stage);
     }
@@ -184,19 +186,18 @@ export function FunnelBoard({ leads, onMove }: FunnelBoardProps) {
 
   return (
     <div className="funnel-board" style={{ minHeight: "calc(100vh - 260px)" }}>
-      {FUNNEL_STAGES.map((stage) => (
+      {mainStages.map((stage) => (
         <KanbanColumn
-          key={stage}
-          stage={stage}
-          leads={leads.filter((l) => l.stage === stage)}
-          isOver={dragOverStage === stage}
+          key={stage.id}
+          stageName={stage.name}
+          leads={leads.filter((l) => l.stage === stage.name)}
+          isOver={dragOverStage === stage.name}
           draggingId={draggingId}
-          onDragOver={(e) => handleDragOver(e, stage)}
+          onDragOver={(e) => handleDragOver(e, stage.name)}
           onDragLeave={() => {
-            // only clear if we're still dragging (avoid flicker)
-            if (dragOverStage === stage) setDragOverStage(null);
+            if (dragOverStage === stage.name) setDragOverStage(null);
           }}
-          onDrop={() => handleDrop(stage)}
+          onDrop={() => handleDrop(stage.name)}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         />

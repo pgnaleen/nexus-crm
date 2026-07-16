@@ -7,20 +7,20 @@ import { PERMISSIONS } from "@orelia/common";
 import { OreliaLogo } from "@/components/brand/OreliaLogo";
 import { ChevronDownIcon, DashboardIcon, FunnelIcon, SettingsIcon, SlidersIcon, UsersGroupIcon, UserIcon, ActivityIcon } from "@/components/ui/icons";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
-import type { MockFunnelStage, MockRelationshipType } from "@/lib/api/mock";
+import type { RelationshipTypeResponse, MainStageResponse } from "@orelia/common";
 
 interface SidebarProps {
   tenantSlug: string;
   permissions: string[];
-  relationshipTypes: MockRelationshipType[];
-  funnelStages: MockFunnelStage[];
+  relationshipTypes: RelationshipTypeResponse[];
+  mainStages: MainStageResponse[];
 }
 
 const CRM_CONFIG_ITEMS: { label: string; segment: string; permission?: string; isRoot?: boolean }[] = [
   { label: "Teams", segment: "teams", permission: PERMISSIONS.TEAMS_MANAGE },
   { label: "Relationship Types", segment: "relationship-types" },
-  { label: "Deal Sources", segment: "deal-sources" },
-  { label: "Main Stages", segment: "main-stages" },
+  { label: "Deal Sources", segment: "deal-sources", permission: PERMISSIONS.DEAL_SOURCE_MANAGE },
+  { label: "Main Stages", segment: "main-stages", permission: PERMISSIONS.MAIN_STAGE_MANAGE },
   { label: "Sub Stages", segment: "sub-stages" },
 ];
 
@@ -31,13 +31,14 @@ const ADMIN_ITEMS: { label: string; segment: string; permission?: string; isRoot
   { label: "Departments", segment: "departments" },
 ];
 
-export function Sidebar({ tenantSlug, permissions, relationshipTypes, funnelStages }: SidebarProps) {
+export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages }: SidebarProps) {
   const pathname = usePathname();
   const adminBasePath = `/${tenantSlug}/admin/`;
 
   // Section Open States
   const [isDealsOpen, setIsDealsOpen] = useState(pathname.startsWith(`/${tenantSlug}/deals`));
   const [isRelationshipsOpen, setIsRelationshipsOpen] = useState(pathname.startsWith(`/${tenantSlug}/relationships`));
+  const [isHROpen, setIsHROpen] = useState(pathname.startsWith(`/${tenantSlug}/employees`));
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(pathname.startsWith(adminBasePath));
   
@@ -110,8 +111,8 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, funnelStag
 
         {isDealsOpen && (
           <div className="sidebar-submenu">
-            {funnelStages.map((stage) => {
-              const href = `/${tenantSlug}/deals/${stage.slug}`;
+            {mainStages.map((stage) => {
+              const href = `/${tenantSlug}/deals/${stage.id}`;
               const isActive = pathname === href;
               return (
                 <Link 
@@ -144,7 +145,7 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, funnelStag
         {isRelationshipsOpen && (
           <div className="sidebar-submenu">
             {relationshipTypes.map((type) => {
-              const href = `/${tenantSlug}/relationships/${type.slug}`;
+              const href = `/${tenantSlug}/relationships/${type.id}`;
               const isActive = pathname === href;
               return (
                 <Link 
@@ -160,16 +161,31 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, funnelStag
           </div>
         )}
 
-        {/* HUMAN RESOURCES */}
-        <Link 
-          href={hrHref} 
-          className={isHrActive ? "sidebar-link active" : "sidebar-link"}
-          onClick={() => handleLinkClick(isHrActive)}
+        {/* HUMAN RESOURCES GROUP */}
+        <button
+          type="button"
+          className="sidebar-group-toggle"
+          onClick={() => setIsHROpen((current) => !current)}
+          aria-expanded={isHROpen}
         >
           <UserIcon size={17} />
-          Human Resources
-        </Link>
+          <span>Human Resources</span>
+          <span className={isHROpen ? "sidebar-chevron open" : "sidebar-chevron"}>
+            <ChevronDownIcon size={14} />
+          </span>
+        </button>
 
+        {isHROpen && (
+          <div className="sidebar-submenu">
+            <Link 
+              href={hrHref} 
+              className={isHrActive ? "sidebar-link active" : "sidebar-link"}
+              onClick={() => handleLinkClick(isHrActive)}
+            >
+              Employees
+            </Link>
+          </div>
+        )}
         {/* CRM CONFIGURATION GROUP */}
         {visibleConfigItems.length > 0 && (
           <button

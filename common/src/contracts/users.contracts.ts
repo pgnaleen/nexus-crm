@@ -33,4 +33,12 @@ export interface CreateUserRequest {
 export interface UpdateUserRequest {
   displayName?: string;
   loggingEmail?: string;
+  status?: UserStatus;
+  mustChangePassword?: boolean;
+  extras?: string;
+  roleIds?: string[];
+}
+
+export interface ResetPasswordRequest {
+  password: string;
 }

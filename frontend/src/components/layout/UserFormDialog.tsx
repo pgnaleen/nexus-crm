@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { UserStatus } from "@orelia/common";
 import type { RbacRoleResponse, UserResponse, UserSummaryResponse } from "@orelia/common";
-import { createUser, updateUser } from "@/lib/api/users";
+import { createUser, getUser, getUserRoleIds, updateUser } from "@/lib/api/users";
 import { listRoles } from "@/lib/api/roles";
 import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
@@ -13,6 +13,7 @@ import { TextField } from "@/components/ui/TextField";
 import { EmailField } from "@/components/ui/EmailField";
 import { PasswordField } from "@/components/ui/PasswordField";
 import { CustomSelect } from "@/components/ui/CustomSelect";
+import { RoleCardPicker } from "@/components/ui/RoleCardPicker";
 import { email, minLength, pattern, required, validate } from "@/lib/validation";
 
 const USERNAME_REGEX = /^[a-z0-9._-]+$/;
@@ -62,10 +63,10 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
   const [isSaving, setIsSaving] = useState(false);
 
   const [availableRoles, setAvailableRoles] = useState<RbacRoleResponse[]>([]);
-  const [isLoadingRoles, setIsLoadingRoles] = useState(mode === "create");
+  const [isLoadingRoles, setIsLoadingRoles] = useState(true);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(mode === "edit");
 
   useEffect(() => {
-    if (mode !== "create") return;
     let cancelled = false;
     setIsLoadingRoles(true);
     listRoles()
@@ -81,19 +82,38 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
     return () => {
       cancelled = true;
     };
-  }, [mode]);
+  }, []);
+
+  useEffect(() => {
+    if (mode !== "edit" || !user) return;
+    let cancelled = false;
+    setIsLoadingDetail(true);
+    Promise.all([getUser(user.id), getUserRoleIds(user.id)])
+      .then(([detail, roleIds]) => {
+        if (cancelled) return;
+        setValues((current) => ({
+          ...current,
+          displayName: detail.displayName,
+          loggingEmail: detail.loggingEmail,
+          status: detail.status,
+          mustChangePassword: detail.mustChangePassword,
+          extras: detail.extras ?? "",
+          roleIds,
+        }));
+      })
+      .catch(() => {
+        if (!cancelled) setFormError("Failed to load user details");
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingDetail(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, user]);
 
   function setField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setValues((current) => ({ ...current, [field]: value }));
-  }
-
-  function toggleRole(roleId: string) {
-    setValues((current) => ({
-      ...current,
-      roleIds: current.roleIds.includes(roleId)
-        ? current.roleIds.filter((id) => id !== roleId)
-        : [...current.roleIds, roleId],
-    }));
   }
 
   function runValidation(): boolean {
@@ -147,6 +167,13 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
           : await updateUser(user!.id, {
               displayName: values.displayName.trim(),
               loggingEmail: values.loggingEmail.trim(),
+              status: values.status,
+              mustChangePassword: values.mustChangePassword,
+              // Always sent as-is (never undefined) in edit mode -- a
+              // cleared textbox must actually clear the stored value, not
+              // be treated as "field omitted, leave untouched".
+              extras: values.extras.trim(),
+              roleIds: values.roleIds,
             });
       onSaved(saved);
       onClose();
@@ -159,58 +186,62 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
 
   return (
     <Dialog open title={mode === "create" ? "Add User" : "Edit User"} onClose={onClose} maxWidth="640px">
-      <form onSubmit={handleSubmit}>
-        {formError && <p className="field-error">{formError}</p>}
+      {isLoadingDetail ? (
+        <div className="dialog-loading">
+          <Spinner size={28} />
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit}>
+          {formError && <p className="field-error">{formError}</p>}
 
-        {mode === "create" && (
+          {mode === "create" && (
+            <TextField
+              label="Username *"
+              name="username"
+              value={values.username}
+              error={errors.username}
+              placeholder="e.g. jane.doe"
+              onChange={(e) => setField("username", e.target.value.toLowerCase())}
+            />
+          )}
+
           <TextField
-            label="Username *"
-            name="username"
-            value={values.username}
-            error={errors.username}
-            placeholder="e.g. jane.doe"
-            onChange={(e) => setField("username", e.target.value.toLowerCase())}
+            label="Display Name *"
+            name="displayName"
+            value={values.displayName}
+            error={errors.displayName}
+            placeholder="e.g. Jane Doe"
+            onChange={(e) => setField("displayName", e.target.value)}
           />
-        )}
 
-        <TextField
-          label="Display Name *"
-          name="displayName"
-          value={values.displayName}
-          error={errors.displayName}
-          placeholder="e.g. Jane Doe"
-          onChange={(e) => setField("displayName", e.target.value)}
-        />
+          <EmailField
+            label="Login Email *"
+            name="loggingEmail"
+            value={values.loggingEmail}
+            error={errors.loggingEmail}
+            placeholder="e.g. jane@acme.com"
+            onChange={(e) => setField("loggingEmail", e.target.value)}
+          />
 
-        <EmailField
-          label="Login Email *"
-          name="loggingEmail"
-          value={values.loggingEmail}
-          error={errors.loggingEmail}
-          placeholder="e.g. jane@acme.com"
-          onChange={(e) => setField("loggingEmail", e.target.value)}
-        />
+          {mode === "create" && (
+            <div className="field-row">
+              <PasswordField
+                label="Initial Password *"
+                name="password"
+                value={values.password}
+                error={errors.password}
+                onChange={(e) => setField("password", e.target.value)}
+              />
+              <PasswordField
+                label="Confirm Password *"
+                name="confirmPassword"
+                value={values.confirmPassword}
+                error={errors.confirmPassword}
+                onChange={(e) => setField("confirmPassword", e.target.value)}
+              />
+            </div>
+          )}
 
-        {mode === "create" && (
-          <div className="field-row">
-            <PasswordField
-              label="Initial Password *"
-              name="password"
-              value={values.password}
-              error={errors.password}
-              onChange={(e) => setField("password", e.target.value)}
-            />
-            <PasswordField
-              label="Confirm Password *"
-              name="confirmPassword"
-              value={values.confirmPassword}
-              error={errors.confirmPassword}
-              onChange={(e) => setField("confirmPassword", e.target.value)}
-            />
-          </div>
-        )}
-
-        {mode === "create" && (
           <div className="field">
             <label>Status *</label>
             <CustomSelect
@@ -221,46 +252,31 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
               options={STATUS_OPTIONS}
             />
           </div>
-        )}
 
-        {mode === "create" && (
           <label className="field-checkbox-row">
             <input
               type="checkbox"
               checked={values.mustChangePassword}
               onChange={(e) => setField("mustChangePassword", e.target.checked)}
             />
-            <span>Require password change on first login</span>
+            <span>Require password change on next login</span>
           </label>
-        )}
 
-        {mode === "create" && (
           <div className="field">
             <label>Roles</label>
             {isLoadingRoles ? (
               <div className="dialog-loading" style={{ padding: "12px 0" }}>
                 <Spinner size={20} />
               </div>
-            ) : availableRoles.length === 0 ? (
-              <p className="field-hint">No roles exist for this tenant yet.</p>
             ) : (
-              <div className="user-role-picker">
-                {availableRoles.map((role) => (
-                  <label key={role.id} className="user-role-picker-row">
-                    <input
-                      type="checkbox"
-                      checked={values.roleIds.includes(role.id)}
-                      onChange={() => toggleRole(role.id)}
-                    />
-                    <span>{role.name}</span>
-                  </label>
-                ))}
-              </div>
+              <RoleCardPicker
+                options={availableRoles.map(r => ({ value: r.id, label: r.name, description: r.description }))}
+                values={values.roleIds}
+                onChange={(roleIds) => setField("roleIds", roleIds)}
+              />
             )}
           </div>
-        )}
 
-        {mode === "create" && (
           <div className="field">
             <label>Notes</label>
             <textarea
@@ -271,17 +287,17 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
               placeholder="Optional internal notes about this user"
             />
           </div>
-        )}
 
-        <div className="dialog-actions">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
-            Cancel
-          </Button>
-          <Button type="submit" isLoading={isSaving}>
-            {mode === "create" ? "Create user" : "Save changes"}
-          </Button>
-        </div>
-      </form>
+          <div className="dialog-actions">
+            <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
+              Cancel
+            </Button>
+            <Button type="submit" isLoading={isSaving}>
+              {mode === "create" ? "Create user" : "Save changes"}
+            </Button>
+          </div>
+        </form>
+      )}
     </Dialog>
   );
 }

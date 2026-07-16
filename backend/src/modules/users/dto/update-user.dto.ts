@@ -1,5 +1,5 @@
-import { UpdateUserRequest } from "@orelia/common";
-import { IsEmail, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+import { UpdateUserRequest, UserStatus } from "@orelia/common";
+import { ArrayUnique, IsArray, IsBoolean, IsEmail, IsEnum, IsOptional, IsString, IsUUID, MaxLength, MinLength } from "class-validator";
 
 export class UpdateUserDto implements UpdateUserRequest {
   @IsOptional()
@@ -11,4 +11,23 @@ export class UpdateUserDto implements UpdateUserRequest {
   @IsOptional()
   @IsEmail()
   loggingEmail?: string;
+
+  @IsOptional()
+  @IsEnum(UserStatus)
+  status?: UserStatus;
+
+  @IsOptional()
+  @IsBoolean()
+  mustChangePassword?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  extras?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  roleIds?: string[];
 }

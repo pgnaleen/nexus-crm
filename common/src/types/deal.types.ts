@@ -1,5 +1,6 @@
 import {
   DealPriority,
+  DealSourceCategory,
   DealStatus,
   DealType,
   DocumentType,
@@ -14,7 +15,7 @@ export interface IDealSource {
   id: string;
   tenantId: string;
   name: string;
-  category?: string | null;
+  category?: DealSourceCategory | null;
   isActive: boolean;
 }
 
@@ -23,6 +24,8 @@ export interface IMainStage {
   tenantId: string;
   name: string;
   position: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface IDealStage {
