@@ -7,6 +7,7 @@ import { DatabaseModule } from "./database/database.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { DealSourcesModule } from "./modules/deal-sources/deal-sources.module";
 import { MainStagesModule } from "./modules/deal-stages/main-stages.module";
+import { DepartmentsModule } from "./modules/departments/departments.module";
 import { RbacModule } from "./modules/rbac/rbac.module";
 import { RelationshipTypesModule } from "./modules/relationship-types/relationship-types.module";
 import { TeamsModule } from "./modules/teams/teams.module";
@@ -28,6 +29,7 @@ import { UsersModule } from "./modules/users/users.module";
     RelationshipTypesModule,
     DealSourcesModule,
     MainStagesModule,
+    DepartmentsModule,
     AuthModule,
   ],
 })

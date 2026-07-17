@@ -2,25 +2,34 @@
 
 import { useRef, useState } from "react";
 import { type FunnelLead } from "@/lib/data/funnel";
-import type { MainStageResponse } from "@orelia/common";
 
-/* ── Stage colours ─────────────────────────────────────────── */
-const STAGE_CONFIG: Record<string, { accent: string; bg: string }> = {
-  "New Lead":                { accent: "#2f6feb", bg: "#dbeafe" },
-  "Qualified":               { accent: "#7c3aed", bg: "#ede9fe" },
-  "Discovery":               { accent: "#6366f1", bg: "#e0e7ff" },
-  "Proposal Sent":           { accent: "#0891b2", bg: "#cffafe" },
-  "Negotiation":             { accent: "#ec4899", bg: "#fce7f3" },
-  "Evaluation":              { accent: "#d946ef", bg: "#fae8ff" },
-  "Decision Pending":        { accent: "#d97706", bg: "#fef3c7" },
-  "Won":                     { accent: "#10b981", bg: "#d1fae5" },
-  "Closed Lost":             { accent: "#ef4444", bg: "#fee2e2" },
-  "Purchase Order Received": { accent: "#8b5cf6", bg: "#ede9fe" },
-  "Contract Signed":         { accent: "#0ea5e9", bg: "#e0f2fe" },
-  "Project Kickoff":         { accent: "#f59e0b", bg: "#fef3c7" },
-  "Delivery":                { accent: "#e11d48", bg: "#ffe4e6" },
-  "Completed":               { accent: "#059669", bg: "#d1fae5" },
-};
+export interface FunnelColumn {
+  id: string;
+  name: string;
+}
+
+/* ── Column colours ─────────────────────────────────────────── */
+// Columns are driven by real dynamic data (Main Stage or Sub Stage names,
+// depending on which board this is), so colours can't be keyed by name --
+// there's no fixed set of names to hardcode. Assign by position instead.
+const COLUMN_PALETTE: { accent: string; bg: string }[] = [
+  { accent: "#2f6feb", bg: "#dbeafe" },
+  { accent: "#7c3aed", bg: "#ede9fe" },
+  { accent: "#6366f1", bg: "#e0e7ff" },
+  { accent: "#0891b2", bg: "#cffafe" },
+  { accent: "#ec4899", bg: "#fce7f3" },
+  { accent: "#d946ef", bg: "#fae8ff" },
+  { accent: "#d97706", bg: "#fef3c7" },
+  { accent: "#10b981", bg: "#d1fae5" },
+  { accent: "#ef4444", bg: "#fee2e2" },
+  { accent: "#0ea5e9", bg: "#e0f2fe" },
+];
+
+const DEFAULT_COLUMN_COLOR = { accent: "#64748b", bg: "#f1f5f9" };
+
+function colorForIndex(index: number): { accent: string; bg: string } {
+  return COLUMN_PALETTE[index % COLUMN_PALETTE.length] ?? DEFAULT_COLUMN_COLOR;
+}
 
 /* ── Helpers ────────────────────────────────────────────────── */
 function fmt(v: number) {
@@ -43,30 +52,31 @@ function initials(name: string) {
 /* ── Deal card ──────────────────────────────────────────────── */
 function DealCard({
   lead,
+  accent,
   isDragging,
   onDragStart,
   onDragEnd,
 }: {
   lead: FunnelLead;
+  accent: string;
   isDragging: boolean;
   onDragStart: () => void;
   onDragEnd: () => void;
 }) {
-  const cfg = STAGE_CONFIG[lead.stage];
   return (
     <div
       className={`funnel-card${isDragging ? " funnel-card-dragging" : ""}`}
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      style={{ borderLeftColor: cfg.accent }}
+      style={{ borderLeftColor: accent }}
     >
       <div className="funnel-card-header">
         <span className="funnel-card-name">{lead.name}</span>
         <span
           className="funnel-card-avatar"
           title={lead.assignee}
-          style={{ background: cfg.accent }}
+          style={{ background: accent }}
         >
           {initials(lead.assignee)}
         </span>
@@ -82,7 +92,9 @@ function DealCard({
 
 /* ── Kanban column ──────────────────────────────────────────── */
 function KanbanColumn({
-  stageName,
+  columnName,
+  accent,
+  bg,
   leads,
   isOver,
   draggingId,
@@ -92,7 +104,9 @@ function KanbanColumn({
   onDragStart,
   onDragEnd,
 }: {
-  stageName: string;
+  columnName: string;
+  accent: string;
+  bg: string;
   leads: FunnelLead[];
   isOver: boolean;
   draggingId: string | null;
@@ -102,7 +116,6 @@ function KanbanColumn({
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
 }) {
-  const cfg = STAGE_CONFIG[stageName] ?? { accent: "#64748b", bg: "#f1f5f9" };
   const total = leads.reduce((s, l) => s + l.value, 0);
 
   return (
@@ -115,11 +128,11 @@ function KanbanColumn({
       {/* Column header */}
       <div className="funnel-column-header">
         <div className="funnel-column-title-row">
-          <span className="funnel-column-dot" style={{ background: cfg.accent }} />
-          <span className="funnel-column-title">{stageName}</span>
+          <span className="funnel-column-dot" style={{ background: accent }} />
+          <span className="funnel-column-title">{columnName}</span>
           <span
             className="funnel-column-count"
-            style={{ background: cfg.bg, color: cfg.accent }}
+            style={{ background: bg, color: accent }}
           >
             {leads.length}
           </span>
@@ -132,6 +145,7 @@ function KanbanColumn({
           <DealCard
             key={lead.id}
             lead={lead}
+            accent={accent}
             isDragging={lead.id === draggingId}
             onDragStart={() => onDragStart(lead.id)}
             onDragEnd={onDragEnd}
@@ -151,10 +165,10 @@ function KanbanColumn({
 interface FunnelBoardProps {
   leads: FunnelLead[];
   onMove: (leadId: string, toStage: string) => void;
-  mainStages: MainStageResponse[];
+  columns: FunnelColumn[];
 }
 
-export function FunnelBoard({ leads, onMove, mainStages }: FunnelBoardProps) {
+export function FunnelBoard({ leads, onMove, columns }: FunnelBoardProps) {
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const dragIdRef = useRef<string | null>(null);
@@ -186,22 +200,27 @@ export function FunnelBoard({ leads, onMove, mainStages }: FunnelBoardProps) {
 
   return (
     <div className="funnel-board" style={{ minHeight: "calc(100vh - 260px)" }}>
-      {mainStages.map((stage) => (
-        <KanbanColumn
-          key={stage.id}
-          stageName={stage.name}
-          leads={leads.filter((l) => l.stage === stage.name)}
-          isOver={dragOverStage === stage.name}
-          draggingId={draggingId}
-          onDragOver={(e) => handleDragOver(e, stage.name)}
-          onDragLeave={() => {
-            if (dragOverStage === stage.name) setDragOverStage(null);
-          }}
-          onDrop={() => handleDrop(stage.name)}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        />
-      ))}
+      {columns.map((column, index) => {
+        const { accent, bg } = colorForIndex(index);
+        return (
+          <KanbanColumn
+            key={column.id}
+            columnName={column.name}
+            accent={accent}
+            bg={bg}
+            leads={leads.filter((l) => l.stage === column.name)}
+            isOver={dragOverStage === column.name}
+            draggingId={draggingId}
+            onDragOver={(e) => handleDragOver(e, column.name)}
+            onDragLeave={() => {
+              if (dragOverStage === column.name) setDragOverStage(null);
+            }}
+            onDrop={() => handleDrop(column.name)}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          />
+        );
+      })}
     </div>
   );
 }

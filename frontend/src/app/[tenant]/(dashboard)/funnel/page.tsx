@@ -8,5 +8,7 @@ export default async function FunnelPage() {
     listMainStages(),
   ]);
   
-  return <FunnelSourceTabs dealSources={dealSources ?? []} mainStages={mainStages ?? []} />;
+  const columns = (mainStages ?? []).map((stage) => ({ id: stage.id, name: stage.name }));
+
+  return <FunnelSourceTabs dealSources={dealSources ?? []} columns={columns} />;
 }

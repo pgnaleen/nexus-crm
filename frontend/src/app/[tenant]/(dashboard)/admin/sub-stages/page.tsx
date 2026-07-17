@@ -1,17 +1,19 @@
 import { SYSTEM_TENANT_SLUG } from "@orelia/common";
 import { getServerSession } from "@/lib/auth/session";
-import { listDepartments } from "@/lib/departments/server";
+import { listSubStages } from "@/lib/sub-stages/server";
+import { listMainStages } from "@/lib/main-stages/server";
 import { listTenants } from "@/lib/tenants/server";
-import { DepartmentsWidget } from "./_components/DepartmentsWidget";
+import { SubStagesWidget } from "./_components/SubStagesWidget";
 
-export default async function DepartmentsManagementPage({
+export default async function SubStagesManagementPage({
   params,
 }: {
   params: { tenant: string };
 }) {
-  const [session, departments] = await Promise.all([
+  const [session, subStages, mainStages] = await Promise.all([
     getServerSession(params.tenant),
-    listDepartments(),
+    listSubStages(),
+    listMainStages(),
   ]);
 
   const isPlatformSession = session?.tenant.slug === SYSTEM_TENANT_SLUG;
@@ -23,9 +25,10 @@ export default async function DepartmentsManagementPage({
   const scopeKey = session?.actingTenant?.id ?? session?.tenant.id ?? "none";
 
   return (
-    <DepartmentsWidget
+    <SubStagesWidget
       key={scopeKey}
-      departments={departments ?? []}
+      subStages={subStages ?? []}
+      mainStages={mainStages ?? []}
       permissions={session?.permissions ?? []}
       currentTenantId={session?.tenant.id ?? ""}
       isPlatformSession={isPlatformSession}

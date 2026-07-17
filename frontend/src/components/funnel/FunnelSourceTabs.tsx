@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { type FunnelLead } from "@/lib/data/funnel";
-import type { DealSourceResponse, MainStageResponse } from "@orelia/common";
-import { FunnelBoard } from "@/components/funnel/FunnelBoard";
+import type { DealSourceResponse } from "@orelia/common";
+import { FunnelBoard, type FunnelColumn } from "@/components/funnel/FunnelBoard";
 import { SearchIcon } from "@/components/ui/icons";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 
@@ -30,16 +30,25 @@ function buildInitialLeads() {
 
 interface FunnelSourceTabsProps {
   dealSources: DealSourceResponse[];
-  mainStages: MainStageResponse[];
+  columns: FunnelColumn[];
+  title?: string;
+  subtitle?: string;
+  addButtonLabel?: string;
 }
 
-export function FunnelSourceTabs({ dealSources, mainStages }: FunnelSourceTabsProps) {
+export function FunnelSourceTabs({
+  dealSources,
+  columns,
+  title = "Funnel",
+  subtitle = "Track deals by acquisition source",
+  addButtonLabel = "Add New Deal",
+}: FunnelSourceTabsProps) {
   const dynamicSources = [
     { id: "all", name: "All" },
     ...dealSources.map((ds) => ({ id: ds.id, name: ds.name })),
   ];
 
-  const [activeId, setActiveId] = useState(dynamicSources[0].id);
+  const [activeId, setActiveId] = useState(dynamicSources[0]?.id ?? "all");
   const [leadsBySource, setLeadsBySource] = useState(buildInitialLeads);
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("");
@@ -53,7 +62,7 @@ export function FunnelSourceTabs({ dealSources, mainStages }: FunnelSourceTabsPr
   function handleMove(leadId: string, toStage: string) {
     setLeadsBySource((prev) => ({
       ...prev,
-      [activeId]: prev[activeId].map((l) =>
+      [activeId]: (prev[activeId] ?? []).map((l) =>
         l.id === leadId ? { ...l, stage: toStage } : l
       ),
     }));
@@ -64,11 +73,11 @@ export function FunnelSourceTabs({ dealSources, mainStages }: FunnelSourceTabsPr
       {/* ── Title ──────────────────────── */}
       <div className="funnel-header-top">
         <div className="funnel-header-left">
-          <h1 className="funnel-title">Funnel</h1>
-          <p className="funnel-subtitle">Track deals by acquisition source</p>
+          <h1 className="funnel-title">{title}</h1>
+          <p className="funnel-subtitle">{subtitle}</p>
         </div>
         <button type="button" className="funnel-add-btn">
-          Add New Deal
+          {addButtonLabel}
         </button>
       </div>
 
@@ -156,7 +165,7 @@ export function FunnelSourceTabs({ dealSources, mainStages }: FunnelSourceTabsPr
           className="funnel-board-wrapper" 
           style={{ borderTop: `3px solid ${activeCfg.accent}` }}
         >
-          <FunnelBoard leads={activeLeads} onMove={handleMove} mainStages={mainStages} />
+          <FunnelBoard leads={activeLeads} onMove={handleMove} columns={columns} />
         </div>
       </div>
     </div>

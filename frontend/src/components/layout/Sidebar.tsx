@@ -21,14 +21,14 @@ const CRM_CONFIG_ITEMS: { label: string; segment: string; permission?: string; i
   { label: "Relationship Types", segment: "relationship-types" },
   { label: "Deal Sources", segment: "deal-sources", permission: PERMISSIONS.DEAL_SOURCE_MANAGE },
   { label: "Main Stages", segment: "main-stages", permission: PERMISSIONS.MAIN_STAGE_MANAGE },
-  { label: "Sub Stages", segment: "sub-stages" },
+  { label: "Sub Stages", segment: "sub-stages", permission: PERMISSIONS.SUB_STAGE_MANAGE },
 ];
 
 const ADMIN_ITEMS: { label: string; segment: string; permission?: string; isRoot?: boolean }[] = [
   { label: "Tenants", segment: "tenants", permission: PERMISSIONS.TENANTS_MANAGE },
   { label: "Roles", segment: "roles", permission: PERMISSIONS.RBAC_MANAGE },
   { label: "Users", segment: "users", isRoot: true, permission: PERMISSIONS.USERS_MANAGE },
-  { label: "Departments", segment: "departments" },
+  { label: "Departments", segment: "departments", permission: PERMISSIONS.DEPARTMENT_MANAGE },
 ];
 
 export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages }: SidebarProps) {

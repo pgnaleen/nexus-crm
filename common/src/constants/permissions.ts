@@ -67,6 +67,18 @@ export const PERMISSIONS = {
   MAIN_STAGE_CREATE: "main_stage:create",
   MAIN_STAGE_UPDATE: "main_stage:update",
   MAIN_STAGE_DELETE: "main_stage:delete",
+
+  DEPARTMENT_MANAGE: "department:manage",
+  DEPARTMENT_VIEW: "department:view",
+  DEPARTMENT_CREATE: "department:create",
+  DEPARTMENT_UPDATE: "department:update",
+  DEPARTMENT_DELETE: "department:delete",
+
+  SUB_STAGE_MANAGE: "sub_stage:manage",
+  SUB_STAGE_VIEW: "sub_stage:view",
+  SUB_STAGE_CREATE: "sub_stage:create",
+  SUB_STAGE_UPDATE: "sub_stage:update",
+  SUB_STAGE_DELETE: "sub_stage:delete",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
