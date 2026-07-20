@@ -1,9 +1,8 @@
 import type {
-  AddDealContactRequest,
   CreateDealDocumentRequest,
   CreateDealRequest,
-  DealContactResponse,
   DealDocumentResponse,
+  DealPartnerResponse,
   DealResponse,
   DealStageHistoryResponse,
   MoveDealStageRequest,
@@ -73,20 +72,24 @@ export function deleteDealDocument(dealId: string, documentId: string): Promise<
   return apiFetch<{ success: true }>(`/deals/${dealId}/documents/${documentId}`, { method: "DELETE" });
 }
 
-export function listDealContacts(dealId: string): Promise<DealContactResponse[]> {
-  return apiFetch<DealContactResponse[]>(`/deals/${dealId}/contacts`);
+export function listDealPartners(dealId: string): Promise<DealPartnerResponse[]> {
+  return apiFetch<DealPartnerResponse[]>(`/deals/${dealId}/partners`);
 }
 
-export function addDealContact(
-  dealId: string,
-  payload: AddDealContactRequest,
-): Promise<DealContactResponse> {
-  return apiFetch<DealContactResponse>(`/deals/${dealId}/contacts`, {
+export function addDealPartnerCompany(dealId: string, companyId: string): Promise<DealPartnerResponse> {
+  return apiFetch<DealPartnerResponse>(`/deals/${dealId}/partners/companies`, {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ companyId }),
   });
 }
 
-export function removeDealContact(dealId: string, contactId: string): Promise<{ success: true }> {
-  return apiFetch<{ success: true }>(`/deals/${dealId}/contacts/${contactId}`, { method: "DELETE" });
+export function addDealPartnerContact(dealId: string, contactId: string): Promise<DealPartnerResponse> {
+  return apiFetch<DealPartnerResponse>(`/deals/${dealId}/partners/contacts`, {
+    method: "POST",
+    body: JSON.stringify({ contactId }),
+  });
+}
+
+export function removeDealPartner(dealId: string, partnerId: string): Promise<{ success: true }> {
+  return apiFetch<{ success: true }>(`/deals/${dealId}/partners/${partnerId}`, { method: "DELETE" });
 }

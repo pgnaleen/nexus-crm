@@ -5,7 +5,9 @@ export interface CreateDealRequest {
   name: string;
   dealType: DealType;
   description?: string;
-  companyId: string;
+  // The customer: exactly one of companyId (company customer) or contactId
+  // (bare contact, no company) must be provided.
+  companyId?: string;
   primaryContactId?: string;
   contactId?: string;
   sourceId?: string;
@@ -50,15 +52,21 @@ export interface DealDocumentResponse {
   createdAt: string;
 }
 
-export interface AddDealContactRequest {
+export interface AddDealPartnerCompanyRequest {
+  companyId: string;
+}
+
+export interface AddDealPartnerContactRequest {
   contactId: string;
 }
 
-export interface DealContactResponse {
-  contactId: string;
-  fullName: string;
-  title?: string | null;
-  email?: string | null;
+export interface DealPartnerResponse {
+  id: string;
+  kind: "company" | "contact";
+  companyId?: string | null;
+  contactId?: string | null;
+  name: string;
+  subtitle?: string | null;
 }
 
 export interface DealStageHistoryResponse {

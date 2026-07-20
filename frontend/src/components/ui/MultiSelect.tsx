@@ -1,13 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronDownIcon, PlusIcon, SearchIcon } from "./icons";
+
+export interface MultiSelectOption {
+  value: string;
+  label: string;
+  sublabel?: string;
+  icon?: ReactNode;
+}
 
 interface MultiSelectProps {
   label?: string;
   values: string[];
   onChange: (values: string[]) => void;
-  options: { value: string; label: string }[];
+  options: MultiSelectOption[];
   placeholder?: string;
   searchPlaceholder?: string;
   addNewLabel?: string;
@@ -62,7 +69,9 @@ export function MultiSelect({
   const filteredOptions = useMemo(() => {
     if (!query.trim()) return options;
     const q = query.trim().toLowerCase();
-    return options.filter((o) => o.label.toLowerCase().includes(q));
+    return options.filter(
+      (o) => o.label.toLowerCase().includes(q) || (o.sublabel?.toLowerCase().includes(q) ?? false),
+    );
   }, [options, query]);
 
   return (
@@ -78,6 +87,7 @@ export function MultiSelect({
           ) : (
             selectedOptions.map((opt) => (
               <span key={opt.value} className="multi-select-chip">
+                {opt.icon}
                 {opt.label}
                 <button
                   type="button"
@@ -126,7 +136,11 @@ export function MultiSelect({
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                       )}
                     </div>
-                    <span>{opt.label}</span>
+                    {opt.icon}
+                    <span className="search-select-option-text">
+                      {opt.label}
+                      {opt.sublabel && <span className="search-select-option-sublabel">{opt.sublabel}</span>}
+                    </span>
                   </button>
                 );
               })

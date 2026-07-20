@@ -1,14 +1,18 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
+import { CompaniesRepository } from "../companies/companies.repository";
+import { Company } from "../companies/entities/company.entity";
+import { ContactsRepository } from "../contacts/contacts.repository";
+import { Contact } from "../contacts/entities/contact.entity";
 import { MainStagesModule } from "../deal-stages/main-stages.module";
 import { RbacModule } from "../rbac/rbac.module";
-import { DealContactsMap } from "./entities/deal-contacts-map.entity";
+import { DealPartnersMap } from "./entities/deal-partners-map.entity";
 import { DealDocument } from "./entities/deal-document.entity";
 import { Deal } from "./entities/deal.entity";
 import { MainStageHistory } from "./entities/main-stage-history.entity";
 import { SubStageHistory } from "./entities/sub-stage-history.entity";
-import { DealContactsController } from "./deal-contacts.controller";
-import { DealContactsService } from "./deal-contacts.service";
+import { DealPartnersController } from "./deal-partners.controller";
+import { DealPartnersService } from "./deal-partners.service";
 import { DealDocumentsController } from "./deal-documents.controller";
 import { DealDocumentsService } from "./deal-documents.service";
 import { DealStageHistoryController } from "./deal-stage-history.controller";
@@ -19,16 +23,24 @@ import { DealsService } from "./deals.service";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Deal, DealDocument, DealContactsMap, SubStageHistory, MainStageHistory]),
+    TypeOrmModule.forFeature([Deal, DealDocument, DealPartnersMap, SubStageHistory, MainStageHistory, Company, Contact]),
     RbacModule,
     MainStagesModule,
   ],
   controllers: [
     DealsController,
     DealDocumentsController,
-    DealContactsController,
+    DealPartnersController,
     DealStageHistoryController,
   ],
-  providers: [DealsService, DealsRepository, DealDocumentsService, DealContactsService, DealStageHistoryService],
+  providers: [
+    DealsService,
+    DealsRepository,
+    DealDocumentsService,
+    DealPartnersService,
+    DealStageHistoryService,
+    CompaniesRepository,
+    ContactsRepository,
+  ],
 })
 export class DealsModule {}

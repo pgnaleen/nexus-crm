@@ -1,5 +1,5 @@
 import { DealStatus } from "@orelia/common";
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { SubStagesService } from "../deal-stages/sub-stages.service";
 import { CreateDealDto } from "./dto/create-deal.dto";
 import { MoveDealDto } from "./dto/move-deal.dto";
@@ -29,6 +29,10 @@ export class DealsService {
   }
 
   async create(dto: CreateDealDto, userId: string): Promise<Deal> {
+    if (!dto.companyId && !dto.contactId) {
+      throw new BadRequestException("Deal requires a customer: a companyId or a contactId");
+    }
+
     const count = await this.dealsRepo.countAllScoped();
     const dealCode = `DEAL-${String(count + 1).padStart(5, "0")}`;
 

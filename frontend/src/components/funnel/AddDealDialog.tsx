@@ -15,7 +15,7 @@ import {
   type RelationshipTypeResponse,
 } from "@orelia/common";
 import { type FunnelColumn } from "@/components/funnel/FunnelBoard";
-import { addDealContact, createDeal, uploadDealDocument } from "@/lib/api/deals";
+import { addDealPartnerCompany, addDealPartnerContact, createDeal, uploadDealDocument } from "@/lib/api/deals";
 import { listCompaniesPicker, listContactsPicker } from "@/lib/api/pickers";
 import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
@@ -90,7 +90,7 @@ function parsePartyValue(value: string): OtherParty | null {
   return { kind, id };
 }
 
-type TabId = "details" | "documents" | "contacts";
+type TabId = "details" | "documents" | "partners";
 
 // Nested "create a new company/person" flow, reusing the exact same dialogs
 // the Relationships section uses -- a new party still has to be tagged with
@@ -100,13 +100,6 @@ type AddPartyState =
   | { step: "kind"; relationshipTypeId: string; relationshipTypeName: string }
   | { step: "company"; relationshipTypeId: string; relationshipTypeName: string }
   | { step: "contact"; relationshipTypeId: string; relationshipTypeName: string }
-  | null;
-
-// Linked Contacts only ever creates a person, so this skips the company/
-// person "kind" step the Other Party flow needs.
-type AddContactState =
-  | { step: "type" }
-  | { step: "form"; relationshipTypeId: string; relationshipTypeName: string }
   | null;
 
 function ChooseRelationshipTypeDialog({
@@ -202,10 +195,9 @@ export function AddDealDialog({
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [documents, setDocuments] = useState<StagedDocument[]>([]);
-  const [contactIds, setContactIds] = useState<string[]>([]);
+  const [partnerValues, setPartnerValues] = useState<string[]>([]);
   const [isDropActive, setIsDropActive] = useState(false);
   const [addPartyState, setAddPartyState] = useState<AddPartyState>(null);
-  const [addContactState, setAddContactState] = useState<AddContactState>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function setField<K extends keyof DetailsFormState>(field: K, value: DetailsFormState[K]) {
@@ -268,8 +260,9 @@ export function AddDealDialog({
       return;
     }
 
-    // Deals still require a companyId on the backend. When the other party
-    // is a person with no company of their own, there's nothing to send yet.
+    // The customer: a company (companyId) or a bare contact with no company
+    // of its own (contactId) -- never both, matching the single "Other
+    // Party" selection.
     let companyId: string | undefined;
     let contactId: string | undefined;
     let primaryContactId: string | undefined;
@@ -277,18 +270,8 @@ export function AddDealDialog({
       companyId = otherParty.id;
       primaryContactId = values.primaryContactId || undefined;
     } else if (otherParty?.kind === "contact") {
-      const contact = contacts.find((c) => c.id === otherParty.id);
-      companyId = contact?.companyId ?? undefined;
       contactId = otherParty.id;
       primaryContactId = otherParty.id;
-    }
-
-    if (!companyId) {
-      setFormError(
-        "The selected contact isn't linked to a company, and deals currently require one. Pick a contact that belongs to a company, or a company directly.",
-      );
-      setActiveTab("details");
-      return;
     }
 
     setIsSaving(true);
@@ -316,7 +299,13 @@ export function AddDealDialog({
         ...documents.map((doc) =>
           uploadDealDocument(deal.id, doc.file, { docType: DocumentType.Other, title: doc.file.name }),
         ),
-        ...contactIds.map((linkedContactId) => addDealContact(deal.id, { contactId: linkedContactId })),
+        ...partnerValues.map((value) => {
+          const partner = parsePartyValue(value);
+          if (!partner) return Promise.resolve();
+          return partner.kind === "company"
+            ? addDealPartnerCompany(deal.id, partner.id)
+            : addDealPartnerContact(deal.id, partner.id);
+        }),
       ]);
 
       onCreated(deal);
@@ -343,6 +332,12 @@ export function AddDealDialog({
       icon: <UserIcon size={14} />,
     })),
   ];
+
+  // Excludes whichever party is already the deal's customer -- a company or
+  // contact shouldn't also be listed as its own deal's partner.
+  const partnerOptions: SearchSelectOption[] = otherPartyOptions.filter(
+    (opt) => opt.value !== partyValue(otherParty),
+  );
 
   const companyContacts = otherParty?.kind === "company" ? contacts.filter((c) => c.companyId === otherParty.id) : [];
   const primaryContactOptions: SearchSelectOption[] = companyContacts.map((c) => ({
@@ -371,19 +366,6 @@ export function AddDealDialog({
     setAddPartyState(null);
   }
 
-  function openAddLinkedContact() {
-    setAddContactState(
-      relationshipTypes.length === 1
-        ? { step: "form", relationshipTypeId: relationshipTypes[0].id, relationshipTypeName: relationshipTypes[0].name }
-        : { step: "type" },
-    );
-  }
-
-  function handleLinkedContactSaved() {
-    void refreshPickers();
-    setAddContactState(null);
-  }
-
   return (
     <Dialog open title="Add New Deal" onClose={onClose} maxWidth="720px">
       <form onSubmit={handleSubmit}>
@@ -404,10 +386,10 @@ export function AddDealDialog({
           </button>
           <button
             type="button"
-            className={`dialog-tab${activeTab === "contacts" ? " dialog-tab-active" : ""}`}
-            onClick={() => setActiveTab("contacts")}
+            className={`dialog-tab${activeTab === "partners" ? " dialog-tab-active" : ""}`}
+            onClick={() => setActiveTab("partners")}
           >
-            Contacts{contactIds.length > 0 ? ` (${contactIds.length})` : ""}
+            Partners{partnerValues.length > 0 ? ` (${partnerValues.length})` : ""}
           </button>
         </div>
 
@@ -621,19 +603,19 @@ export function AddDealDialog({
           </div>
         )}
 
-        {/* ── Contacts ──────────────────────────────────── */}
-        {activeTab === "contacts" && (
+        {/* ── Partners ──────────────────────────────────── */}
+        {activeTab === "partners" && (
           <div>
             <div className="field">
-              <label>Linked Contacts</label>
+              <label>Partners (Companies or Contacts)</label>
               <MultiSelect
-                values={contactIds}
-                onChange={setContactIds}
-                options={contacts.map((c) => ({ value: c.id, label: c.fullName }))}
-                placeholder="Select contacts..."
-                searchPlaceholder="Search contacts..."
-                addNewLabel="Add New Contact"
-                onAddNew={openAddLinkedContact}
+                values={partnerValues}
+                onChange={setPartnerValues}
+                options={partnerOptions}
+                placeholder="Select partner companies or contacts..."
+                searchPlaceholder="Search by name..."
+                addNewLabel="Add New"
+                onAddNew={openAddParty}
               />
             </div>
           </div>
@@ -718,27 +700,6 @@ export function AddDealDialog({
           companies={companies}
           onClose={() => setAddPartyState(null)}
           onSaved={handlePartySaved}
-        />
-      )}
-
-      {/* ── Add New Contact flow (Linked Contacts tab) ──── */}
-      {addContactState?.step === "type" && (
-        <ChooseRelationshipTypeDialog
-          title="Add New Contact"
-          relationshipTypes={relationshipTypes}
-          onClose={() => setAddContactState(null)}
-          onSelect={(rt) => setAddContactState({ step: "form", relationshipTypeId: rt.id, relationshipTypeName: rt.name })}
-        />
-      )}
-
-      {addContactState?.step === "form" && (
-        <ContactFormDialog
-          mode="create"
-          relationshipTypeId={addContactState.relationshipTypeId}
-          relationshipTypeName={addContactState.relationshipTypeName}
-          companies={companies}
-          onClose={() => setAddContactState(null)}
-          onSaved={handleLinkedContactSaved}
         />
       )}
     </Dialog>

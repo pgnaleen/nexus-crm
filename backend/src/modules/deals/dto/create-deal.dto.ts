@@ -26,8 +26,9 @@ export class CreateDealDto implements CreateDealRequest {
   @IsString()
   description?: string;
 
+  @IsOptional()
   @IsUUID()
-  companyId!: string;
+  companyId?: string;
 
   @IsOptional()
   @IsUUID()

@@ -45,7 +45,7 @@ export interface IDeal {
   name: string;
   dealType: DealType;
   description?: string | null;
-  companyId: string;
+  companyId?: string | null;
   primaryContactId?: string | null;
   contactId?: string | null;
   sourceId?: string | null;

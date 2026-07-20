@@ -1,5 +1,5 @@
 import { DealPriority, DealStatus, DealType } from "@orelia/common";
-import { Column, Entity, JoinColumn, ManyToOne } from "typeorm";
+import { Check, Column, Entity, JoinColumn, ManyToOne } from "typeorm";
 import { AuditedTenantEntity } from "../../../core/tenant";
 import { Company } from "../../companies/entities/company.entity";
 import { Contact } from "../../contacts/entities/contact.entity";
@@ -10,6 +10,7 @@ import { Department } from "../../departments/entities/department.entity";
 import { Employee } from "../../employees/entities/employee.entity";
 
 @Entity("deals")
+@Check(`("company_id" IS NOT NULL) OR ("contact_id" IS NOT NULL)`)
 export class Deal extends AuditedTenantEntity {
   @Column()
   dealCode!: string;
@@ -23,10 +24,13 @@ export class Deal extends AuditedTenantEntity {
   @Column({ type: "text", nullable: true })
   description?: string;
 
-  @Column({ type: "uuid" })
-  companyId!: string;
+  // Nullable -- the customer can be a bare contact with no company of its
+  // own (contactId below carries that case). The CHECK on this entity
+  // enforces that a deal always has one or the other.
+  @Column({ type: "uuid", nullable: true })
+  companyId?: string;
 
-  @ManyToOne(() => Company, { onDelete: "CASCADE" })
+  @ManyToOne(() => Company, { nullable: true, onDelete: "CASCADE" })
   @JoinColumn({ name: "company_id" })
   company?: Company;
 
