@@ -19,18 +19,22 @@ import { CustomSelect } from "@/components/ui/CustomSelect";
 
 
 
-/* ── Per-source accent colours ─────────────────────────────── */
-const SOURCE_CONFIG: Record<string, { accent: string; bg: string }> = {
-  all:          { accent: "#475569", bg: "#f1f5f9" },
-  customers:    { accent: "#2f6feb", bg: "#dbeafe" },
-  ceo:          { accent: "#7c3aed", bg: "#ede9fe" },
-  partners:     { accent: "#059669", bg: "#d1fae5" },
-  direct:       { accent: "#d97706", bg: "#fef3c7" },
-  referral:     { accent: "#e11d48", bg: "#ffe4e6" },
-  social_media: { accent: "#0ea5e9", bg: "#e0f2fe" },
-  events:       { accent: "#d946ef", bg: "#fae8ff" },
-  inbound:      { accent: "#14b8a6", bg: "#ccfbf1" },
-};
+/* ── Per-source accent colours ─────────────────────────────────
+   Deal Sources are tenant-defined (created/renamed freely from Admin),
+   so colors can't be keyed by name -- each source is assigned a slot by
+   its stable position in `dealSources`, cycling past 8. Fixed hue order,
+   never re-shuffled by filtering/sorting the tab list. */
+const ALL_TAB_CONFIG = { accent: "#475569", bg: "#f1f5f9" };
+const SOURCE_PALETTE: { accent: string; bg: string }[] = [
+  { accent: "#2a78d6", bg: "#dbeafe" }, // blue
+  { accent: "#008300", bg: "#dcfce7" }, // green
+  { accent: "#e87ba4", bg: "#fce7f3" }, // magenta
+  { accent: "#eda100", bg: "#fef3c7" }, // yellow
+  { accent: "#1baf7a", bg: "#ccfbf1" }, // aqua
+  { accent: "#eb6834", bg: "#ffedd5" }, // orange
+  { accent: "#4a3aa7", bg: "#ede9fe" }, // violet
+  { accent: "#e34948", bg: "#fee2e2" }, // red
+];
 
 type StageField = "mainStageName" | "currentStageName";
 
@@ -109,6 +113,11 @@ export function FunnelSourceTabs({
     ...dealSources.map((ds) => ({ id: ds.id, name: ds.name })),
   ];
 
+  const sourceColorById = new Map(
+    dealSources.map((ds, i) => [ds.id, SOURCE_PALETTE[i % SOURCE_PALETTE.length]])
+  );
+  const getTabColor = (id: string) => (id === "all" ? ALL_TAB_CONFIG : sourceColorById.get(id) ?? ALL_TAB_CONFIG);
+
   const [activeId, setActiveId] = useState(dynamicSources[0]?.id ?? "all");
   const [leadsBySource, setLeadsBySource] = useState(() => buildInitialLeads(initialDeals, stageField));
   const [search, setSearch] = useState("");
@@ -119,7 +128,7 @@ export function FunnelSourceTabs({
   const hasFilters = search !== "" || department !== "" || country !== "";
 
   const activeLeads = leadsBySource[activeId] ?? [];
-  const activeCfg = SOURCE_CONFIG[activeId] ?? { accent: "#2f6feb", bg: "#dbeafe" };
+  const activeCfg = getTabColor(activeId);
 
   function handleMove(leadId: string, toStage: string) {
     setLeadsBySource((prev) => ({
@@ -213,7 +222,7 @@ export function FunnelSourceTabs({
         {/* ── Folder Tabs ──────────────────────── */}
         <div className="funnel-folder-tabs">
           {dynamicSources.map((src) => {
-            const cfg = SOURCE_CONFIG[src.id] ?? { accent: "#475569", bg: "#f1f5f9" };
+            const cfg = getTabColor(src.id);
             const isActive = activeId === src.id;
             return (
               <button
