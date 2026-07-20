@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { ActingTenant, AuthSessionResponse, UserStatus } from "@orelia/common";
 import { ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -20,6 +20,7 @@ import { User } from "../users/entities/user.entity";
 import { LoginDto } from "./dto/login.dto";
 import type { AuthenticatedUser } from "./types/authenticated-user";
 import { parseDurationToMs } from "./util/duration";
+import { hashToken } from "./util/token-hash";
 
 interface TokenPair {
   accessToken: string;
@@ -86,7 +87,7 @@ export class AuthService {
       throw new UnauthorizedException("Missing refresh token");
     }
 
-    const tokenHash = this.hashToken(rawRefreshToken);
+    const tokenHash = hashToken(rawRefreshToken);
     const existing = await this.refreshTokenRepo.findOneBy({ tokenHash });
     if (!existing || existing.revokedAt || existing.expiresAt < new Date()) {
       throw new UnauthorizedException("Refresh token is invalid or expired");
@@ -107,7 +108,7 @@ export class AuthService {
     if (!rawRefreshToken) {
       return;
     }
-    const tokenHash = this.hashToken(rawRefreshToken);
+    const tokenHash = hashToken(rawRefreshToken);
     await this.refreshTokenRepo.update({ tokenHash }, { revokedAt: new Date() });
   }
 
@@ -196,7 +197,7 @@ export class AuthService {
       this.refreshTokenRepo.create({
         userId: user.id,
         tenantId: tenant.id,
-        tokenHash: this.hashToken(refreshToken),
+        tokenHash: hashToken(refreshToken),
         expiresAt: new Date(Date.now() + parseDurationToMs(refreshExpiresIn)),
       }),
     );
@@ -243,9 +244,5 @@ export class AuthService {
       permissions,
       actingTenant,
     };
-  }
-
-  private hashToken(token: string): string {
-    return createHash("sha256").update(token).digest("hex");
   }
 }

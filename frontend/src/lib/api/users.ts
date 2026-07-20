@@ -1,4 +1,4 @@
-import type { CreateUserRequest, ResetPasswordRequest, UpdateUserRequest, UserResponse } from "@orelia/common";
+import type { ChangeOwnPasswordRequest, CreateUserRequest, ResetPasswordRequest, UpdateUserRequest, UserResponse } from "@orelia/common";
 import { apiFetch } from "./client";
 
 export function getUser(id: string): Promise<UserResponse> {
@@ -40,4 +40,11 @@ export function disableUser(id: string): Promise<UserResponse> {
 
 export function enableUser(id: string): Promise<UserResponse> {
   return apiFetch<UserResponse>(`/users/${id}/enable`, { method: "PATCH" });
+}
+
+export function changeOwnPassword(payload: ChangeOwnPasswordRequest): Promise<void> {
+  return apiFetch<void>("/users/me/change-password", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }

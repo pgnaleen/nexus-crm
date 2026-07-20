@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { logout } from "@/lib/api/auth";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
@@ -63,6 +64,13 @@ export function AccountMenu({ tenantName, userDisplayName, tenantSlug }: Account
             <div className="account-menu-name">{userDisplayName}</div>
             <div className="account-menu-tenant">{tenantName}</div>
           </div>
+          <Link
+            href={`/${tenantSlug}/profile`}
+            className="account-menu-item"
+            onClick={() => setIsOpen(false)}
+          >
+            My Profile
+          </Link>
           <button type="button" className="account-menu-item account-menu-item-logout" onClick={handleLogout}>
             Log out
           </button>

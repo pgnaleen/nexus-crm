@@ -42,3 +42,9 @@ export interface UpdateUserRequest {
 export interface ResetPasswordRequest {
   password: string;
 }
+
+/** Self-service password change -- POST /users/me/change-password. */
+export interface ChangeOwnPasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}

@@ -1,10 +1,14 @@
 import { PERMISSIONS, UserResponse, UserSummaryResponse } from "@orelia/common";
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import type { Request } from "express";
+import { REFRESH_COOKIE } from "../auth/auth.constants";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
+import { hashToken } from "../auth/util/token-hash";
 import { RbacService } from "../rbac/rbac.service";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
+import { ChangeOwnPasswordDto } from "./dto/change-own-password.dto";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
@@ -77,6 +81,21 @@ export class UsersController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<void> {
     await this.usersService.resetPassword(id, dto.password, user.sub);
+  }
+
+  // No PermissionsGuard/RequirePermission here -- any authenticated user
+  // (via the global JwtAuthGuard) may change their own password, regardless
+  // of what RBAC permissions their role otherwise grants.
+  @Post("me/change-password")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async changeOwnPassword(
+    @Body() dto: ChangeOwnPasswordDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
+  ): Promise<void> {
+    const rawRefreshToken = req.cookies?.[REFRESH_COOKIE];
+    const currentTokenHash = rawRefreshToken ? hashToken(rawRefreshToken) : undefined;
+    await this.usersService.changeOwnPassword(user.sub, dto, currentTokenHash);
   }
 
   @UseGuards(PermissionsGuard)

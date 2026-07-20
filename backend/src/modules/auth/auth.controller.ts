@@ -4,6 +4,7 @@ import type { Request, Response } from "express";
 import { ACT_AS_TENANT_COOKIE, ACT_AS_TENANT_TTL_MS } from "../../core/tenant";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
+import { ACCESS_COOKIE, ACCESS_MAX_AGE_MS, REFRESH_COOKIE, REFRESH_MAX_AGE_MS } from "./auth.constants";
 import { AuthService } from "./auth.service";
 import { CurrentUser } from "./decorators/current-user.decorator";
 import { Public } from "./decorators/public.decorator";
@@ -11,11 +12,6 @@ import { ActAsTenantDto } from "./dto/act-as-tenant.dto";
 import { LoginDto } from "./dto/login.dto";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import type { AuthenticatedUser } from "./types/authenticated-user";
-
-const ACCESS_COOKIE = "orelia_access_token";
-const REFRESH_COOKIE = "orelia_refresh_token";
-const ACCESS_MAX_AGE_MS = 15 * 60 * 1000;
-const REFRESH_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 @Controller("auth")
 export class AuthController {

@@ -492,8 +492,10 @@ body {
 }
 
 .account-menu-item {
+  display: block;
   width: 100%;
   text-align: left;
+  text-decoration: none;
   padding: 8px 10px;
   border-radius: 6px;
   border: none;
@@ -588,6 +590,39 @@ body {
   font-size: 14px;
   font-weight: 600;
   margin: 0;
+  color: var(--color-text);
+}
+
+.profile-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 640px;
+}
+
+.profile-page .content-card-title {
+  margin-bottom: 14px;
+}
+
+.profile-info-grid {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  row-gap: 12px;
+  margin: 0;
+}
+
+.profile-info-row {
+  display: contents;
+}
+
+.profile-info-row dt {
+  color: var(--color-text-muted);
+  font-size: 13.5px;
+}
+
+.profile-info-row dd {
+  margin: 0;
+  font-size: 13.5px;
   color: var(--color-text);
 }
 
