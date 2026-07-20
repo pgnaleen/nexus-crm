@@ -7,7 +7,8 @@ import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { PasswordField } from "@/components/ui/PasswordField";
-import { minLength, required, validate } from "@/lib/validation";
+import { PasswordStrengthHint } from "@/components/ui/PasswordStrengthHint";
+import { minLength, required, strongPassword, validate } from "@/lib/validation";
 
 interface ResetPasswordDialogProps {
   user: UserSummaryResponse;
@@ -24,7 +25,7 @@ export function ResetPasswordDialog({ user, onClose, onReset }: ResetPasswordDia
 
   function runValidation(): boolean {
     const nextErrors: { password?: string; confirmPassword?: string } = {};
-    const passwordError = validate(password, [required(), minLength(8)]);
+    const passwordError = validate(password, [required(), minLength(8), strongPassword()]);
     if (passwordError) nextErrors.password = passwordError;
     if (password !== confirmPassword) {
       nextErrors.confirmPassword = "Passwords do not match";
@@ -66,6 +67,7 @@ export function ResetPasswordDialog({ user, onClose, onReset }: ResetPasswordDia
           error={errors.password}
           onChange={(e) => setPassword(e.target.value)}
         />
+        <PasswordStrengthHint password={password} />
         <PasswordField
           label="Confirm New Password *"
           name="confirmPassword"

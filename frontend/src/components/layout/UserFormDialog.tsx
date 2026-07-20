@@ -12,9 +12,10 @@ import { Spinner } from "@/components/ui/Spinner";
 import { TextField } from "@/components/ui/TextField";
 import { EmailField } from "@/components/ui/EmailField";
 import { PasswordField } from "@/components/ui/PasswordField";
+import { PasswordStrengthHint } from "@/components/ui/PasswordStrengthHint";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { RoleCardPicker } from "@/components/ui/RoleCardPicker";
-import { email, minLength, pattern, required, validate } from "@/lib/validation";
+import { email, minLength, pattern, required, strongPassword, validate } from "@/lib/validation";
 
 const USERNAME_REGEX = /^[a-z0-9._-]+$/;
 
@@ -127,7 +128,7 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
       ]);
       if (usernameError) nextErrors.username = usernameError;
 
-      const passwordError = validate(values.password, [required(), minLength(8)]);
+      const passwordError = validate(values.password, [required(), minLength(8), strongPassword()]);
       if (passwordError) nextErrors.password = passwordError;
 
       if (values.password !== values.confirmPassword) {
@@ -224,22 +225,25 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
           />
 
           {mode === "create" && (
-            <div className="field-row">
-              <PasswordField
-                label="Initial Password *"
-                name="password"
-                value={values.password}
-                error={errors.password}
-                onChange={(e) => setField("password", e.target.value)}
-              />
-              <PasswordField
-                label="Confirm Password *"
-                name="confirmPassword"
-                value={values.confirmPassword}
-                error={errors.confirmPassword}
-                onChange={(e) => setField("confirmPassword", e.target.value)}
-              />
-            </div>
+            <>
+              <div className="field-row">
+                <PasswordField
+                  label="Initial Password *"
+                  name="password"
+                  value={values.password}
+                  error={errors.password}
+                  onChange={(e) => setField("password", e.target.value)}
+                />
+                <PasswordField
+                  label="Confirm Password *"
+                  name="confirmPassword"
+                  value={values.confirmPassword}
+                  error={errors.confirmPassword}
+                  onChange={(e) => setField("confirmPassword", e.target.value)}
+                />
+              </div>
+              <PasswordStrengthHint password={values.password} />
+            </>
           )}
 
           <div className="field">

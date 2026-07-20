@@ -16,6 +16,15 @@ export function email(message = "Must be a valid email address"): Validator {
   return (value) => (value.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? message : undefined);
 }
 
+// Mirrors PASSWORD_STRENGTH_REGEX in backend/src/modules/users/dto/password-policy.ts
+export const PASSWORD_STRENGTH_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
+
+export function strongPassword(
+  message = "Must include an uppercase letter, a lowercase letter, a number, and a special character"
+): Validator {
+  return (value) => (value.length > 0 && !PASSWORD_STRENGTH_REGEX.test(value) ? message : undefined);
+}
+
 export function validate(value: string, validators: Validator[]): string | undefined {
   for (const validator of validators) {
     const error = validator(value);

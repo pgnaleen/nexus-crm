@@ -2,8 +2,9 @@ import { UserStatus } from "@orelia/common";
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import * as bcrypt from "bcrypt";
-import { Repository } from "typeorm";
+import { Not, Repository } from "typeorm";
 import { RbacService } from "../rbac/rbac.service";
+import { ChangeOwnPasswordDto } from "./dto/change-own-password.dto";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { RefreshToken } from "./entities/refresh-token.entity";
@@ -87,6 +88,33 @@ export class UsersService {
     user.mustChangePassword = true;
     user.updatedBy = updatedBy;
     await this.usersRepo.saveScoped(user);
+  }
+
+  async changeOwnPassword(id: string, dto: ChangeOwnPasswordDto, currentTokenHash: string | undefined): Promise<void> {
+    const user = await this.findOneOrFail(id);
+    const currentMatches = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+    if (!currentMatches) {
+      // 403, not 401 -- the caller's session is fine, they just didn't prove
+      // the current password. A 401 here would make apiFetch's global
+      // refresh-and-retry treat this like an expired access token.
+      throw new ForbiddenException("Current password is incorrect");
+    }
+
+    user.passwordHash = await bcrypt.hash(dto.newPassword, PASSWORD_HASH_ROUNDS);
+    // Unlike an admin-initiated reset, this IS the user's real chosen
+    // password -- nothing further to force on next login.
+    user.mustChangePassword = false;
+    user.updatedBy = id;
+    await this.usersRepo.saveScoped(user);
+
+    // Revoke every other active session -- old refresh tokens were minted
+    // under the password that just changed. The caller's own token (the
+    // session used to make this change) is spared so they aren't logged out
+    // of the tab they just used.
+    await this.refreshTokenRepo.update(
+      currentTokenHash ? { userId: id, tokenHash: Not(currentTokenHash) } : { userId: id },
+      { revokedAt: new Date() },
+    );
   }
 
   async disable(id: string, actingUserId: string): Promise<User> {
