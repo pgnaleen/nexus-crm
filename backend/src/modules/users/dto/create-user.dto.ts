@@ -12,6 +12,7 @@ import {
   MaxLength,
   MinLength,
 } from "class-validator";
+import { PASSWORD_STRENGTH_MESSAGE, PASSWORD_STRENGTH_REGEX } from "./password-policy";
 
 const USERNAME_REGEX = /^[a-z0-9._-]+$/;
 
@@ -35,6 +36,7 @@ export class CreateUserDto implements CreateUserRequest {
   @IsString()
   @MinLength(8)
   @MaxLength(72)
+  @Matches(PASSWORD_STRENGTH_REGEX, { message: PASSWORD_STRENGTH_MESSAGE })
   password!: string;
 
   @IsOptional()

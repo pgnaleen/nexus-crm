@@ -1,5 +1,6 @@
 import { ResetPasswordRequest } from "@orelia/common";
-import { IsString, MaxLength, MinLength } from "class-validator";
+import { IsString, Matches, MaxLength, MinLength } from "class-validator";
+import { PASSWORD_STRENGTH_MESSAGE, PASSWORD_STRENGTH_REGEX } from "./password-policy";
 
 export class ResetPasswordDto implements ResetPasswordRequest {
   // bcrypt silently truncates input past 72 bytes -- reject longer passwords
@@ -7,5 +8,6 @@ export class ResetPasswordDto implements ResetPasswordRequest {
   @IsString()
   @MinLength(8)
   @MaxLength(72)
+  @Matches(PASSWORD_STRENGTH_REGEX, { message: PASSWORD_STRENGTH_MESSAGE })
   password!: string;
 }

@@ -11,6 +11,7 @@ import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
+import { PhoneField } from "@/components/ui/PhoneField";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { email as emailValidator, minLength, required, validate } from "@/lib/validation";
 
@@ -240,11 +241,11 @@ export function ContactFormDialog({
         {activeTab === "contact" && (
           <div>
             <div className="field-row">
-              <TextField
+              <PhoneField
                 label="Mobile number"
                 name="mobileNo"
                 value={values.mobileNo}
-                onChange={(e) => setField("mobileNo", e.target.value)}
+                onChange={(val) => setField("mobileNo", val)}
               />
               <TextField
                 label="Direct phone number"
