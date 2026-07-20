@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type FunnelLead } from "@/lib/data/funnel";
 import type {
   CompanyPickerResponse,
@@ -14,10 +14,13 @@ import type {
 } from "@orelia/common";
 import { FunnelBoard, type FunnelColumn } from "@/components/funnel/FunnelBoard";
 import { AddDealDialog } from "@/components/funnel/AddDealDialog";
+import { DealStageHistoryDialog } from "@/components/funnel/DealStageHistoryDialog";
+import { moveDeal } from "@/lib/api/deals";
+import { ApiError } from "@/lib/api/client";
+import { useToast } from "@/components/providers/ToastProvider";
+import { useAlert } from "@/components/providers/DialogProvider";
 import { SearchIcon } from "@/components/ui/icons";
 import { CustomSelect } from "@/components/ui/CustomSelect";
-
-
 
 /* ── Per-source accent colours ─────────────────────────────── */
 const SOURCE_CONFIG: Record<string, { accent: string; bg: string }> = {
@@ -32,36 +35,39 @@ const SOURCE_CONFIG: Record<string, { accent: string; bg: string }> = {
   inbound:      { accent: "#14b8a6", bg: "#ccfbf1" },
 };
 
+// How long a stage move stays undoable before it's persisted to the backend.
+const UNDO_GRACE_PERIOD_MS = 30000;
+
 type StageField = "mainStageName" | "currentStageName";
+type StageIdField = "mainStageId" | "currentStageId";
+
+const STAGE_ID_FIELD: Record<StageField, StageIdField> = {
+  mainStageName: "mainStageId",
+  currentStageName: "currentStageId",
+};
 
 /* ── Convert a real Deal into the board's display shape ──────── */
-// stageField selects which deal field drives the column the card lands in:
-//   "mainStageName"    → funnel overview board (columns = Main Stages)
-//   "currentStageName" → per-main-stage board  (columns = Sub Stages)
-function dealToFunnelLead(deal: DealResponse, stageField: StageField): FunnelLead {
+// stageIdField selects which deal field drives the column a card lands in:
+//   "mainStageId"    → funnel overview board (columns = Main Stages)
+//   "currentStageId" → per-main-stage board  (columns = Sub Stages)
+function dealToFunnelLead(deal: DealResponse, stageIdField: StageIdField): FunnelLead {
   return {
     id: deal.id,
     name: deal.name,
     company: deal.companyName ?? "",
     value: deal.estimatedValue ?? 0,
-    stage: deal[stageField] ?? "",
+    stage: deal[stageIdField] ?? "",
     date: deal.expectedCloseDate ?? "",
     assignee: deal.ownerName ?? "Unassigned",
   };
 }
 
-/* ── Build initial state from deals already loaded server-side ─ */
-function buildInitialLeads(deals: DealResponse[], stageField: StageField): Record<string, FunnelLead[]> {
-  const all: FunnelLead[] = [];
-  const bySource: Record<string, FunnelLead[]> = {};
-  for (const deal of deals) {
-    const lead = dealToFunnelLead(deal, stageField);
-    all.push(lead);
-    if (deal.sourceId) {
-      bySource[deal.sourceId] = [...(bySource[deal.sourceId] ?? []), lead];
-    }
-  }
-  return { ...bySource, all };
+interface PendingMove {
+  toastId: string;
+  // Snapshot of the deal's stage fields *before* any optimistic change in
+  // this pending sequence -- kept across rapid re-drags of the same card so
+  // Undo always lands on the last value actually saved in the backend.
+  original: Pick<DealResponse, "mainStageId" | "mainStageName" | "currentStageId" | "currentStageName">;
 }
 
 interface FunnelSourceTabsProps {
@@ -70,7 +76,9 @@ interface FunnelSourceTabsProps {
   // Sub Stage options for the Add Deal dialog, when they differ from the
   // board's own `columns` (e.g. the Funnel overview groups its board by Main
   // Stage, but a deal's currentStageId must be a real Sub Stage). Defaults to
-  // `columns` when the board is already Sub-Stage-shaped.
+  // `columns` when the board is already Sub-Stage-shaped. Also used to
+  // resolve which Sub Stage a Main-Stage-grouped board should move a deal
+  // into when it's dropped on a Main Stage column (see resolveTarget below).
   stageOptions?: FunnelColumn[];
   // Which deal field to use when matching a deal card into a board column:
   //   "mainStageName"    → funnel overview (Main Stage columns, default)
@@ -104,41 +112,137 @@ export function FunnelSourceTabs({
   subtitle = "Track deals by acquisition source",
   addButtonLabel = "Add New Deal",
 }: FunnelSourceTabsProps) {
+  const stageIdField = STAGE_ID_FIELD[stageField];
   const dynamicSources = [
     { id: "all", name: "All" },
     ...dealSources.map((ds) => ({ id: ds.id, name: ds.name })),
   ];
 
   const [activeId, setActiveId] = useState(dynamicSources[0]?.id ?? "all");
-  const [leadsBySource, setLeadsBySource] = useState(() => buildInitialLeads(initialDeals, stageField));
+  const [deals, setDeals] = useState<DealResponse[]>(initialDeals);
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("");
   const [country, setCountry] = useState("");
   const [isAddDealOpen, setAddDealOpen] = useState(false);
+  const [historyDealId, setHistoryDealId] = useState<string | null>(null);
+
+  const { showToast, dismissToast, flushToast } = useToast();
+  const { showError } = useAlert();
+  const pendingMovesRef = useRef<Map<string, PendingMove>>(new Map());
+  const mountedRef = useRef(true);
+
+  // On unmount (e.g. navigating to another page), any move still sitting in
+  // its undo grace period would otherwise be silently lost -- flush it now
+  // so it's persisted instead.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      pendingMovesRef.current.forEach((pending) => flushToast(pending.toastId));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const hasFilters = search !== "" || department !== "" || country !== "";
 
-  const activeLeads = leadsBySource[activeId] ?? [];
+  const columnNameById = new Map(columns.map((c) => [c.id, c.name]));
+
+  const activeDeals = activeId === "all" ? deals : deals.filter((d) => d.sourceId === activeId);
+  const activeLeads = activeDeals.map((deal) => dealToFunnelLead(deal, stageIdField));
   const activeCfg = SOURCE_CONFIG[activeId] ?? { accent: "#2f6feb", bg: "#dbeafe" };
 
-  function handleMove(leadId: string, toStage: string) {
-    setLeadsBySource((prev) => ({
-      ...prev,
-      [activeId]: (prev[activeId] ?? []).map((l) =>
-        l.id === leadId ? { ...l, stage: toStage } : l
-      ),
-    }));
+  // Dropping on a board column always needs a real Sub Stage id to persist
+  // (that's what the backend + history rows track). Per-Main-Stage boards
+  // already have Sub Stage columns, so the dropped column *is* the target.
+  // The tenant-wide overview groups by Main Stage instead, so dropping there
+  // is ambiguous as to which Sub Stage -- land in that Main Stage's first
+  // Sub Stage in sequence, the same default used when creating a new deal.
+  function resolveTarget(droppedColumnId: string): { subStageId: string; mainStageId?: string } | null {
+    if (stageField !== "mainStageName") {
+      return { subStageId: droppedColumnId };
+    }
+    const firstSubStage = (stageOptions ?? []).find((s) => s.mainStageId === droppedColumnId);
+    if (!firstSubStage) return null;
+    return { subStageId: firstSubStage.id, mainStageId: droppedColumnId };
+  }
+
+  function handleMove(dealId: string, droppedColumnId: string) {
+    const deal = deals.find((d) => d.id === dealId);
+    if (!deal) return;
+    const currentColumnId = deal[stageIdField] ?? "";
+    if (currentColumnId === droppedColumnId) return; // dropped back on its own column
+
+    const target = resolveTarget(droppedColumnId);
+    if (!target) {
+      showError("This stage doesn't have any sub stages configured yet.", "Can't move deal");
+      return;
+    }
+
+    const existingPending = pendingMovesRef.current.get(dealId);
+    if (existingPending) {
+      // Re-dragging the same card before its previous move was persisted --
+      // cancel that toast/timer silently (nothing was saved yet) and replace
+      // it with a fresh grace period for the new target.
+      dismissToast(existingPending.toastId);
+    }
+    const original: PendingMove["original"] = existingPending?.original ?? {
+      mainStageId: deal.mainStageId,
+      mainStageName: deal.mainStageName,
+      currentStageId: deal.currentStageId,
+      currentStageName: deal.currentStageName,
+    };
+
+    const toastId = showToast({
+      message: `Deal moved to ${columnNameById.get(droppedColumnId) ?? "new stage"}`,
+      actionLabel: "Undo",
+      durationMs: UNDO_GRACE_PERIOD_MS,
+      onAction: () => handleUndo(dealId),
+      onExpire: () => void persistMove(dealId, target.subStageId),
+    });
+
+    pendingMovesRef.current.set(dealId, { toastId, original });
+
+    setDeals((prev) =>
+      prev.map((d) => {
+        if (d.id !== dealId) return d;
+        const next: DealResponse = { ...d, currentStageId: target.subStageId };
+        if (target.mainStageId) {
+          next.mainStageId = target.mainStageId;
+          next.mainStageName = columnNameById.get(target.mainStageId) ?? d.mainStageName;
+        } else {
+          next.currentStageName = columnNameById.get(target.subStageId) ?? d.currentStageName;
+        }
+        return next;
+      }),
+    );
+  }
+
+  function handleUndo(dealId: string) {
+    const pending = pendingMovesRef.current.get(dealId);
+    if (!pending) return;
+    pendingMovesRef.current.delete(dealId);
+    setDeals((prev) => prev.map((d) => (d.id === dealId ? { ...d, ...pending.original } : d)));
+  }
+
+  async function persistMove(dealId: string, subStageId: string) {
+    const pending = pendingMovesRef.current.get(dealId);
+    pendingMovesRef.current.delete(dealId);
+    try {
+      const updated = await moveDeal(dealId, { toStageId: subStageId });
+      if (mountedRef.current) {
+        setDeals((prev) => prev.map((d) => (d.id === dealId ? updated : d)));
+      }
+    } catch (err) {
+      if (!mountedRef.current) return;
+      showError(err instanceof ApiError ? err.message : "Failed to save the stage change", "Move failed");
+      if (pending) {
+        setDeals((prev) => prev.map((d) => (d.id === dealId ? { ...d, ...pending.original } : d)));
+      }
+    }
   }
 
   function handleDealCreated(deal: DealResponse) {
-    const lead = dealToFunnelLead(deal, stageField);
-    setLeadsBySource((prev) => {
-      const next: Record<string, FunnelLead[]> = { ...prev, all: [...(prev.all ?? []), lead] };
-      if (deal.sourceId) {
-        next[deal.sourceId] = [...(prev[deal.sourceId] ?? []), lead];
-      }
-      return next;
-    });
+    setDeals((prev) => [...prev, deal]);
   }
 
   return (
@@ -159,15 +263,15 @@ export function FunnelSourceTabs({
         <div className="funnel-filters-left">
           <div className="funnel-filters-search">
             <SearchIcon />
-            <input 
-              type="text" 
-              placeholder="Search deals..." 
+            <input
+              type="text"
+              placeholder="Search deals..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <div className="funnel-filters-selects">
-            <CustomSelect 
+            <CustomSelect
               label="Department"
               value={department}
               onChange={setDepartment}
@@ -177,8 +281,8 @@ export function FunnelSourceTabs({
                 { value: "marketing", label: "Marketing" },
               ]}
             />
-            
-            <CustomSelect 
+
+            <CustomSelect
               label="Country"
               value={country}
               onChange={setCountry}
@@ -194,8 +298,8 @@ export function FunnelSourceTabs({
 
         {hasFilters && (
           <div className="funnel-filters-right">
-            <button 
-              type="button" 
+            <button
+              type="button"
               className="funnel-clear-btn"
               onClick={() => {
                 setSearch("");
@@ -234,11 +338,16 @@ export function FunnelSourceTabs({
         </div>
 
         {/* ── Kanban board container ──────────────────────── */}
-        <div 
-          className="funnel-board-wrapper" 
+        <div
+          className="funnel-board-wrapper"
           style={{ borderTop: `3px solid ${activeCfg.accent}` }}
         >
-          <FunnelBoard leads={activeLeads} onMove={handleMove} columns={columns} />
+          <FunnelBoard
+            leads={activeLeads}
+            onMove={handleMove}
+            columns={columns}
+            onShowHistory={(dealId) => setHistoryDealId(dealId)}
+          />
         </div>
       </div>
 
@@ -257,6 +366,10 @@ export function FunnelSourceTabs({
           onClose={() => setAddDealOpen(false)}
           onCreated={handleDealCreated}
         />
+      )}
+
+      {historyDealId && (
+        <DealStageHistoryDialog dealId={historyDealId} onClose={() => setHistoryDealId(null)} />
       )}
     </div>
   );

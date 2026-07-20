@@ -6,6 +6,7 @@ import { listMainStages } from "@/lib/main-stages/server";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { DialogProvider } from "@/components/providers/DialogProvider";
+import { ToastProvider } from "@/components/providers/ToastProvider";
 
 export default async function DashboardLayout({
   children,
@@ -26,22 +27,24 @@ export default async function DashboardLayout({
 
   return (
     <DialogProvider>
-      <div className="dashboard-layout">
-        <Sidebar
-          tenantSlug={params.tenant}
-          permissions={session.permissions}
-          relationshipTypes={relationshipTypes ?? []}
-          mainStages={mainStages ?? []}
-        />
-        <div className="main-area">
-          <TopBar
-            tenantName={session.tenant.name}
-            userDisplayName={session.user.displayName}
+      <ToastProvider>
+        <div className="dashboard-layout">
+          <Sidebar
             tenantSlug={params.tenant}
+            permissions={session.permissions}
+            relationshipTypes={relationshipTypes ?? []}
+            mainStages={mainStages ?? []}
           />
-          <main className="dashboard-content">{children}</main>
+          <div className="main-area">
+            <TopBar
+              tenantName={session.tenant.name}
+              userDisplayName={session.user.displayName}
+              tenantSlug={params.tenant}
+            />
+            <main className="dashboard-content">{children}</main>
+          </div>
         </div>
-      </div>
+      </ToastProvider>
     </DialogProvider>
   );
 }

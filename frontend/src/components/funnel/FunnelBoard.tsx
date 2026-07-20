@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { type FunnelLead } from "@/lib/data/funnel";
+import { ActivityIcon } from "@/components/ui/icons";
 
 export interface FunnelColumn {
   id: string;
@@ -61,12 +62,14 @@ function DealCard({
   isDragging,
   onDragStart,
   onDragEnd,
+  onShowHistory,
 }: {
   lead: FunnelLead;
   accent: string;
   isDragging: boolean;
   onDragStart: () => void;
   onDragEnd: () => void;
+  onShowHistory?: (dealId: string) => void;
 }) {
   return (
     <div
@@ -90,6 +93,20 @@ function DealCard({
       <div className="funnel-card-footer">
         <span className="funnel-card-value">{fmt(lead.value)}</span>
         <span className="funnel-card-date">{lead.date}</span>
+        {onShowHistory && (
+          <button
+            type="button"
+            className="funnel-card-history-btn"
+            aria-label="View stage history"
+            title="View stage history"
+            onClick={(e) => {
+              e.stopPropagation();
+              onShowHistory(lead.id);
+            }}
+          >
+            <ActivityIcon size={13} />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -108,6 +125,7 @@ function KanbanColumn({
   onDrop,
   onDragStart,
   onDragEnd,
+  onShowHistory,
 }: {
   columnName: string;
   accent: string;
@@ -120,6 +138,7 @@ function KanbanColumn({
   onDrop: () => void;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
+  onShowHistory?: (dealId: string) => void;
 }) {
   const total = leads.reduce((s, l) => s + l.value, 0);
 
@@ -154,6 +173,7 @@ function KanbanColumn({
             isDragging={lead.id === draggingId}
             onDragStart={() => onDragStart(lead.id)}
             onDragEnd={onDragEnd}
+            onShowHistory={onShowHistory}
           />
         ))}
         {leads.length === 0 && (
@@ -169,11 +189,14 @@ function KanbanColumn({
 /* ── Main board ─────────────────────────────────────────────── */
 interface FunnelBoardProps {
   leads: FunnelLead[];
-  onMove: (leadId: string, toStage: string) => void;
+  // toStageId is the id of the column the card was dropped on -- callers
+  // persist moves by id, not by the display name shown in the column header.
+  onMove: (leadId: string, toStageId: string) => void;
   columns: FunnelColumn[];
+  onShowHistory?: (dealId: string) => void;
 }
 
-export function FunnelBoard({ leads, onMove, columns }: FunnelBoardProps) {
+export function FunnelBoard({ leads, onMove, columns, onShowHistory }: FunnelBoardProps) {
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const dragIdRef = useRef<string | null>(null);
@@ -189,14 +212,14 @@ export function FunnelBoard({ leads, onMove, columns }: FunnelBoardProps) {
     setDragOverStage(null);
   }
 
-  function handleDragOver(e: React.DragEvent, stage: string) {
+  function handleDragOver(e: React.DragEvent, stageId: string) {
     e.preventDefault();
-    setDragOverStage(stage);
+    setDragOverStage(stageId);
   }
 
-  function handleDrop(stage: string) {
+  function handleDrop(stageId: string) {
     if (dragIdRef.current) {
-      onMove(dragIdRef.current, stage);
+      onMove(dragIdRef.current, stageId);
     }
     dragIdRef.current = null;
     setDraggingId(null);
@@ -213,16 +236,17 @@ export function FunnelBoard({ leads, onMove, columns }: FunnelBoardProps) {
             columnName={column.name}
             accent={accent}
             bg={bg}
-            leads={leads.filter((l) => l.stage === column.name)}
-            isOver={dragOverStage === column.name}
+            leads={leads.filter((l) => l.stage === column.id)}
+            isOver={dragOverStage === column.id}
             draggingId={draggingId}
-            onDragOver={(e) => handleDragOver(e, column.name)}
+            onDragOver={(e) => handleDragOver(e, column.id)}
             onDragLeave={() => {
-              if (dragOverStage === column.name) setDragOverStage(null);
+              if (dragOverStage === column.id) setDragOverStage(null);
             }}
-            onDrop={() => handleDrop(column.name)}
+            onDrop={() => handleDrop(column.id)}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
+            onShowHistory={onShowHistory}
           />
         );
       })}

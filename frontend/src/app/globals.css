@@ -31,6 +31,28 @@
   }
 }
 
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-progress {
+  from {
+    width: 100%;
+  }
+
+  to {
+    width: 0%;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -768,6 +790,67 @@ body {
   background: rgba(19, 26, 46, 0.45);
   padding: 20px;
   animation: overlay-in 0.15s ease both;
+}
+
+/* Undo toast stack */
+
+.toast-stack {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 1100;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 10px;
+  align-items: center;
+}
+
+.undo-toast {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 280px;
+  padding: 13px 16px;
+  background: #16181d;
+  color: #fff;
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(8, 12, 28, 0.28);
+  overflow: hidden;
+  animation: toast-in 0.18s ease both;
+}
+
+.undo-toast-message {
+  flex: 1;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.undo-toast-action {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #7db2ff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 2px;
+}
+
+.undo-toast-action:hover {
+  color: #a8cbff;
+}
+
+.undo-toast-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--color-brand);
+  animation-name: toast-progress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
 }
 
 .dialog-panel {
@@ -1827,6 +1910,90 @@ body {
   font-size: 10.5px;
   color: var(--color-text-muted);
 
+}
+
+.funnel-card-history-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.funnel-card-history-btn:hover {
+  background: #f1f5f9;
+  color: var(--color-brand);
+}
+
+/* Deal stage history dialog */
+
+.stage-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.stage-history-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.stage-history-item:last-child {
+  border-bottom: none;
+}
+
+.stage-history-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: #eff6ff;
+  color: var(--color-brand);
+}
+
+.stage-history-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.stage-history-line {
+  font-size: 13.5px;
+  color: var(--color-text);
+}
+
+.stage-history-kind {
+  display: inline-block;
+  padding: 1px 7px;
+  margin-right: 2px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: var(--color-text-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.stage-history-meta {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--color-text-muted);
 }
 
 /* ── Notification Panel ─────────────────────────────────────── */

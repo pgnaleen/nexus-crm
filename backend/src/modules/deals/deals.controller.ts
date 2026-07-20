@@ -16,6 +16,7 @@ import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
 import { CreateDealDto } from "./dto/create-deal.dto";
+import { MoveDealDto } from "./dto/move-deal.dto";
 import { UpdateDealDto } from "./dto/update-deal.dto";
 import { Deal } from "./entities/deal.entity";
 import { DealsService } from "./deals.service";
@@ -60,6 +61,18 @@ export class DealsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<DealResponse> {
     const deal = await this.dealsService.update(id, dto, user.sub);
+    return this.toResponse(deal);
+  }
+
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.DEALS_UPDATE])
+  @Post(":id/move")
+  async move(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: MoveDealDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<DealResponse> {
+    const deal = await this.dealsService.moveStage(id, dto, user.sub);
     return this.toResponse(deal);
   }
 

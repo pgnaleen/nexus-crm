@@ -22,10 +22,10 @@ export interface FunnelLead {
   name: string;
   company: string;
   value: number;
-  // Column identity is now driven by real dynamic data (Main Stage or Sub
-  // Stage names, depending on which board this lead is rendered in), not a
-  // fixed compile-time set -- matching against the fixed FunnelStage union
-  // would reject legitimate tenant-defined stage names.
+  // The id of the Main Stage or Sub Stage column this lead sits in
+  // (depending on which board it's rendered in) -- not a display name.
+  // FunnelBoard matches leads to columns by this id, so a move persists
+  // unambiguously even if two stages share the same name.
   stage: string;
   date: string;
   assignee: string;

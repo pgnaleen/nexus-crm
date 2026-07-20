@@ -60,3 +60,16 @@ export interface DealContactResponse {
   title?: string | null;
   email?: string | null;
 }
+
+export interface DealStageHistoryResponse {
+  id: string;
+  kind: "main_stage" | "sub_stage";
+  fromStageId: string | null;
+  fromStageName: string | null;
+  toStageId: string;
+  toStageName: string;
+  movedById: string | null;
+  movedByName: string | null;
+  movedAt: string;
+  note: string | null;
+}

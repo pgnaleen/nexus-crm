@@ -5,6 +5,8 @@ import type {
   DealContactResponse,
   DealDocumentResponse,
   DealResponse,
+  DealStageHistoryResponse,
+  MoveDealStageRequest,
   UpdateDealRequest,
 } from "@orelia/common";
 import { ApiError, apiFetch } from "./client";
@@ -26,6 +28,14 @@ export function updateDeal(id: string, payload: UpdateDealRequest): Promise<Deal
 
 export function deleteDeal(id: string): Promise<{ success: true }> {
   return apiFetch<{ success: true }>(`/deals/${id}`, { method: "DELETE" });
+}
+
+export function moveDeal(id: string, payload: MoveDealStageRequest): Promise<DealResponse> {
+  return apiFetch<DealResponse>(`/deals/${id}/move`, { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function listDealStageHistory(id: string): Promise<DealStageHistoryResponse[]> {
+  return apiFetch<DealStageHistoryResponse[]>(`/deals/${id}/stage-history`);
 }
 
 export function listDealDocuments(dealId: string): Promise<DealDocumentResponse[]> {

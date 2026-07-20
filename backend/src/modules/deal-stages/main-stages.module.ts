@@ -14,5 +14,6 @@ import { SubStagesService } from "./sub-stages.service";
   imports: [TypeOrmModule.forFeature([MainStage, SubStage]), RbacModule],
   controllers: [MainStagesController, SubStagesController],
   providers: [MainStagesService, MainStagesRepository, SubStagesService, SubStagesRepository],
+  exports: [MainStagesService, SubStagesService],
 })
 export class MainStagesModule {}
