@@ -29,6 +29,7 @@ export interface ICompany {
   hqCityAddress?: string | null;
   branches?: string[] | null;
   parentCompanyId?: string | null;
+  parentCompanyName?: string | null;
   credit?: CreditStatus | null;
   territoryOwnerId?: string | null;
   territoryNotes?: string | null;

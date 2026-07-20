@@ -1,16 +1,23 @@
 import "reflect-metadata";
+import { join } from "path";
 import { NestFactory } from "@nestjs/core";
+import { NestExpressApplication } from "@nestjs/platform-express";
 import { ValidationPipe } from "@nestjs/common";
 import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
+import { UPLOAD_DIR } from "./modules/uploads/uploads.constants";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger:
       process.env.NODE_ENV === "production"
         ? ["log", "warn", "error"]
         : ["log", "warn", "error", "debug", "verbose"],
   });
+
+  // Uploaded files are served directly by Express, bypassing the "api"
+  // global prefix below -- URLs are just /uploads/<file>, not /api/uploads/<file>.
+  app.useStaticAssets(join(process.cwd(), UPLOAD_DIR), { prefix: "/uploads" });
 
   app.use(cookieParser());
   // origin:true (reflect any requester) + credentials:true would let any

@@ -1,7 +1,28 @@
-import { AccountTier, CreateCompanyRequest, EmployeeCountBand, RevenueBand } from "@orelia/common";
-import { IsEnum, IsNumber, IsOptional, IsString, IsUUID, MaxLength, MinLength } from "class-validator";
+import {
+  AccountTier,
+  CreateRelationshipPartyCompanyRequest,
+  CreditStatus,
+  EmployeeCountBand,
+  FiscalYearEndMonth,
+  Region,
+  RevenueBand,
+  Sector,
+} from "@orelia/common";
+import { Type } from "class-transformer";
+import {
+  IsArray,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+  ValidateNested,
+} from "class-validator";
+import { CreateRelationshipPartyContactDto } from "./create-relationship-party-contact.dto";
 
-export class CreateRelationshipPartyCompanyDto implements CreateCompanyRequest {
+export class CreateRelationshipPartyCompanyDto implements CreateRelationshipPartyCompanyRequest {
   @IsString()
   @MinLength(1)
   @MaxLength(200)
@@ -14,6 +35,11 @@ export class CreateRelationshipPartyCompanyDto implements CreateCompanyRequest {
   @IsOptional()
   @IsString()
   logo?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  brands?: string[];
 
   @IsOptional()
   @IsUUID()
@@ -40,6 +66,22 @@ export class CreateRelationshipPartyCompanyDto implements CreateCompanyRequest {
   annualSpend?: number;
 
   @IsOptional()
+  @IsEnum(Sector)
+  sector?: Sector;
+
+  @IsOptional()
+  @IsString()
+  stockTicker?: string;
+
+  @IsOptional()
+  @IsEnum(FiscalYearEndMonth)
+  fiscalYearEnd?: FiscalYearEndMonth;
+
+  @IsOptional()
+  @IsEnum(Region)
+  region?: Region;
+
+  @IsOptional()
   @IsString()
   country?: string;
 
@@ -48,6 +90,33 @@ export class CreateRelationshipPartyCompanyDto implements CreateCompanyRequest {
   hqCityAddress?: string;
 
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  branches?: string[];
+
+  @IsOptional()
   @IsUUID()
   parentCompanyId?: string;
+
+  @IsOptional()
+  @IsString()
+  parentCompanyName?: string;
+
+  @IsOptional()
+  @IsEnum(CreditStatus)
+  credit?: CreditStatus;
+
+  @IsOptional()
+  @IsUUID()
+  territoryOwnerId?: string;
+
+  @IsOptional()
+  @IsString()
+  territoryNotes?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateRelationshipPartyContactDto)
+  contacts?: CreateRelationshipPartyContactDto[];
 }

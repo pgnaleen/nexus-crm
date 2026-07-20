@@ -76,6 +76,12 @@ export class Company extends AuditedTenantEntity {
   @JoinColumn({ name: "parent_company_id" })
   parentCompany?: Company;
 
+  // Free-text fallback for when the parent isn't itself a Company record yet
+  // -- mutually exclusive with parentCompanyId in practice, enforced at the
+  // form/service layer rather than a DB constraint (either is valid alone).
+  @Column({ nullable: true })
+  parentCompanyName?: string;
+
   @Column({ type: "enum", enum: CreditStatus, nullable: true })
   credit?: CreditStatus;
 

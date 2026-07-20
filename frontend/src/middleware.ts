@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { extractCookieValue, getSetCookieValues, withCookie } from "./lib/auth/cookie-utils";
 
 const ACCESS_COOKIE = "orelia_access_token";
 const REFRESH_COOKIE = "orelia_refresh_token";
@@ -18,35 +19,6 @@ function decodeJwtExpiryMs(token: string): number | null {
   } catch {
     return null;
   }
-}
-
-// Modern fetch implementations expose Headers.getSetCookie() for the
-// multi-value case; fall back to a comma-split that only breaks at a
-// following "name=" boundary (Set-Cookie's Expires attribute also contains
-// commas, e.g. "Expires=Wed, 21 Oct 2026 ...", so a naive split is unsafe).
-function splitSetCookieHeader(combined: string): string[] {
-  return combined.split(/,(?=\s*[\w.-]+=)/);
-}
-
-function extractCookieValue(setCookieHeaders: string[], name: string): string | null {
-  for (const header of setCookieHeaders) {
-    const pair = header.split(";")[0] ?? "";
-    const eq = pair.indexOf("=");
-    if (eq !== -1 && pair.slice(0, eq).trim() === name) {
-      return pair.slice(eq + 1).trim();
-    }
-  }
-  return null;
-}
-
-function withCookie(cookieHeader: string, name: string, value: string): string {
-  const parts = cookieHeader
-    .split(";")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .filter((part) => !part.startsWith(`${name}=`));
-  parts.push(`${name}=${value}`);
-  return parts.join("; ");
 }
 
 export async function middleware(request: NextRequest) {
@@ -82,11 +54,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const getSetCookie = (refreshRes.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
-  const setCookieValues =
-    typeof getSetCookie === "function"
-      ? getSetCookie.call(refreshRes.headers)
-      : splitSetCookieHeader(refreshRes.headers.get("set-cookie") ?? "");
+  const setCookieValues = getSetCookieValues(refreshRes.headers);
 
   if (setCookieValues.length === 0) {
     return NextResponse.next();

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { PERMISSIONS } from "@orelia/common";
@@ -142,7 +142,7 @@ export function RolesTableWidget({
                   onClick={canView ? () => setDialogState({ mode: "view", role }) : undefined}
                 >
                   <td>{role.name}</td>
-                  <td>{role.description ?? "â€”"}</td>
+                  <td>{role.description ?? <span style={{ color: "var(--color-text-muted)" }}>&mdash;</span>}</td>
                   <td>{role.resourceCount}</td>
                   {showActionsColumn && (
                     <td className="table-actions">

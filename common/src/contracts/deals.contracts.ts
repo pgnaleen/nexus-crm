@@ -1,4 +1,4 @@
-import { DealPriority, DealType } from "../enums";
+import { DealPriority, DealType, DocumentType } from "../enums";
 import { IDeal } from "../types";
 
 export interface CreateDealRequest {
@@ -31,6 +31,32 @@ export interface MoveDealStageRequest {
 
 export interface DealResponse extends IDeal {
   companyName?: string;
+  mainStageName?: string;
   currentStageName?: string;
   ownerName?: string;
+}
+
+export interface CreateDealDocumentRequest {
+  docType: DocumentType;
+  title: string;
+}
+
+export interface DealDocumentResponse {
+  id: string;
+  dealId: string;
+  docType: DocumentType;
+  title: string;
+  url: string;
+  createdAt: string;
+}
+
+export interface AddDealContactRequest {
+  contactId: string;
+}
+
+export interface DealContactResponse {
+  contactId: string;
+  fullName: string;
+  title?: string | null;
+  email?: string | null;
 }

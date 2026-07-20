@@ -1,6 +1,6 @@
 import type {
-  CreateCompanyRequest,
   CreateContactRequest,
+  CreateRelationshipPartyCompanyRequest,
   RelationshipPartyResponse,
   UpdateCompanyRequest,
   UpdateContactRequest,
@@ -15,7 +15,7 @@ export function listRelationshipParties(
 
 export function createRelationshipPartyCompany(
   relationshipTypeId: string,
-  payload: CreateCompanyRequest,
+  payload: CreateRelationshipPartyCompanyRequest,
 ): Promise<RelationshipPartyResponse> {
   return apiFetch<RelationshipPartyResponse>(
     `/relationship-types/${relationshipTypeId}/parties/companies`,

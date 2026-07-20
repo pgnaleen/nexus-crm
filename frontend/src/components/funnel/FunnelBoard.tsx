@@ -6,6 +6,11 @@ import { type FunnelLead } from "@/lib/data/funnel";
 export interface FunnelColumn {
   id: string;
   name: string;
+  // Only meaningful for Sub Stage columns -- lets AddDealDialog derive which
+  // Main Stage a deal belongs to from the Sub Stage the user picks, without a
+  // separate page-level "current main stage" prop that wouldn't make sense on
+  // the tenant-wide Funnel overview page.
+  mainStageId?: string;
 }
 
 /* ── Column colours ─────────────────────────────────────────── */

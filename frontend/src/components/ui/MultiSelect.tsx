@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { ChevronDownIcon } from "./icons";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDownIcon, PlusIcon, SearchIcon } from "./icons";
 
 interface MultiSelectProps {
   label?: string;
@@ -9,21 +9,40 @@ interface MultiSelectProps {
   onChange: (values: string[]) => void;
   options: { value: string; label: string }[];
   placeholder?: string;
+  searchPlaceholder?: string;
+  addNewLabel?: string;
+  onAddNew?: () => void;
 }
 
-export function MultiSelect({ label, values, onChange, options, placeholder = "Select..." }: MultiSelectProps) {
+export function MultiSelect({
+  label,
+  values,
+  onChange,
+  options,
+  placeholder = "Select...",
+  searchPlaceholder = "Search...",
+  addNewLabel,
+  onAddNew,
+}: MultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (ref.current && !ref.current.contains(event.target as Node)) {
         setIsOpen(false);
+        setQuery("");
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (isOpen) inputRef.current?.focus();
+  }, [isOpen]);
 
   function toggleOption(value: string) {
     if (values.includes(value)) {
@@ -40,10 +59,16 @@ export function MultiSelect({ label, values, onChange, options, placeholder = "S
 
   const selectedOptions = options.filter((o) => values.includes(o.value));
 
+  const filteredOptions = useMemo(() => {
+    if (!query.trim()) return options;
+    const q = query.trim().toLowerCase();
+    return options.filter((o) => o.label.toLowerCase().includes(q));
+  }, [options, query]);
+
   return (
     <div className="multi-select-wrapper" ref={ref}>
       {label && <label className="field-label">{label}</label>}
-      <div 
+      <div
         className={`multi-select-trigger ${isOpen ? "is-open" : ""}`}
         onClick={() => setIsOpen(!isOpen)}
       >
@@ -70,30 +95,55 @@ export function MultiSelect({ label, values, onChange, options, placeholder = "S
           <ChevronDownIcon size={14} />
         </div>
       </div>
-      
+
       {isOpen && (
         <div className="multi-select-menu">
-          {options.length === 0 ? (
-            <div className="multi-select-empty">No options available</div>
-          ) : (
-            options.map((opt) => {
-              const isSelected = values.includes(opt.value);
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  className={`multi-select-option ${isSelected ? "is-selected" : ""}`}
-                  onClick={() => toggleOption(opt.value)}
-                >
-                  <div className="multi-select-checkbox">
-                    {isSelected && (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                    )}
-                  </div>
-                  <span>{opt.label}</span>
-                </button>
-              );
-            })
+          <div className="search-select-search-box" onClick={(e) => e.stopPropagation()}>
+            <SearchIcon size={14} />
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              placeholder={searchPlaceholder}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <div className="search-select-options">
+            {filteredOptions.length === 0 ? (
+              <div className="multi-select-empty">No options found</div>
+            ) : (
+              filteredOptions.map((opt) => {
+                const isSelected = values.includes(opt.value);
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className={`multi-select-option ${isSelected ? "is-selected" : ""}`}
+                    onClick={() => toggleOption(opt.value)}
+                  >
+                    <div className="multi-select-checkbox">
+                      {isSelected && (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      )}
+                    </div>
+                    <span>{opt.label}</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+          {onAddNew && (
+            <button
+              type="button"
+              className="search-select-add-new"
+              onClick={() => {
+                setIsOpen(false);
+                setQuery("");
+                onAddNew();
+              }}
+            >
+              <PlusIcon size={14} /> {addNewLabel ?? "Add new"}
+            </button>
           )}
         </div>
       )}

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { PERMISSIONS } from "@orelia/common";
@@ -6,7 +6,7 @@ import type { IndustryResponse, PlanResponse, TenantResponse, TenantSummaryRespo
 import { deleteTenant } from "@/lib/api/tenants";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { EditIcon, PlusIcon, TrashIcon, SearchIcon, EyeIcon } from "@/components/ui/icons";
+import { EditIcon, PlusIcon, TrashIcon, SearchIcon, EyeIcon, ExternalLinkIcon } from "@/components/ui/icons";
 import { TenantFormDialog } from "@/components/layout/TenantFormDialog";
 import { TenantDetailsDialog } from "@/components/layout/TenantDetailsDialog";
 import { CustomSelect } from "@/components/ui/CustomSelect";
@@ -180,12 +180,24 @@ export function TenantsTableWidget({
                 <td>{tenant.name}</td>
                 <td>{tenant.slug}</td>
                 <td>{tenant.planName}</td>
-                <td>{tenant.industryName ?? "â€”"}</td>
+                <td>{tenant.industryName ?? <span style={{ color: "var(--color-text-muted)" }}>&mdash;</span>}</td>
                 <td>
                   <StatusBadge status={tenant.status} />
                 </td>
                 {showActionsColumn && (
                   <td className="table-actions">
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      aria-label={`Open login for ${tenant.name}`}
+                      title={`Open login page for ${tenant.name}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open(`/${tenant.slug}`, "_blank");
+                      }}
+                    >
+                      <ExternalLinkIcon size={15} />
+                    </button>
                     {canUpdate && (
                       <button
                         type="button"

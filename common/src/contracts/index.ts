@@ -11,3 +11,4 @@ export * from "./relationship-types.contracts";
 export * from "./relationship-parties.contracts";
 export * from "./deal-sources.contracts";
 export * from "./departments.contracts";
+export * from "./pickers.contracts";

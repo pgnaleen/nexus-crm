@@ -5,13 +5,19 @@ import { CoreModule } from "./core/core.module";
 import { RequestLoggerMiddleware } from "./core/logging/request-logger.middleware";
 import { DatabaseModule } from "./database/database.module";
 import { AuthModule } from "./modules/auth/auth.module";
+import { CompaniesModule } from "./modules/companies/companies.module";
+import { ContactsModule } from "./modules/contacts/contacts.module";
 import { DealSourcesModule } from "./modules/deal-sources/deal-sources.module";
 import { MainStagesModule } from "./modules/deal-stages/main-stages.module";
+import { DealsModule } from "./modules/deals/deals.module";
 import { DepartmentsModule } from "./modules/departments/departments.module";
+import { EmployeesModule } from "./modules/employees/employees.module";
+import { IndustriesModule } from "./modules/industries/industries.module";
 import { RbacModule } from "./modules/rbac/rbac.module";
 import { RelationshipTypesModule } from "./modules/relationship-types/relationship-types.module";
 import { TeamsModule } from "./modules/teams/teams.module";
 import { TenantsModule } from "./modules/tenants/tenants.module";
+import { UploadsModule } from "./modules/uploads/uploads.module";
 import { UsersModule } from "./modules/users/users.module";
 
 @Module({
@@ -29,7 +35,13 @@ import { UsersModule } from "./modules/users/users.module";
     RelationshipTypesModule,
     DealSourcesModule,
     MainStagesModule,
+    DealsModule,
     DepartmentsModule,
+    CompaniesModule,
+    ContactsModule,
+    EmployeesModule,
+    IndustriesModule,
+    UploadsModule,
     AuthModule,
   ],
 })

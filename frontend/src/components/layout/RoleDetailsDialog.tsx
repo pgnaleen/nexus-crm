@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import type { RbacResourceResponse, RbacRoleResponse } from "@orelia/common";
@@ -40,11 +40,11 @@ export function RoleDetailsDialog({ role, resources, onClose }: RoleDetailsDialo
   const groups = groupByPrefix(grantedResources);
 
   return (
-    <Dialog open title={`Role â€” ${role.name}`} onClose={onClose} maxWidth="720px">
+    <Dialog open title={`Role — ${role.name}`} onClose={onClose} maxWidth="720px">
       <div className="role-details-meta">
         <div className="role-details-meta-item">
           <span className="role-details-meta-label">Description</span>
-          <span className="role-details-meta-value">{role.description || "â€”"}</span>
+          <span className="role-details-meta-value">{role.description || "—"}</span>
         </div>
         <div className="role-details-meta-item">
           <span className="role-details-meta-label">Permissions granted</span>

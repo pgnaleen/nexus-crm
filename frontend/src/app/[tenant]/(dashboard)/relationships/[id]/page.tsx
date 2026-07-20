@@ -4,6 +4,7 @@ import { getServerSession } from "@/lib/auth/session";
 import { listRelationshipTypes } from "@/lib/relationship-types/server";
 import { listRelationshipParties } from "@/lib/relationship-parties/server";
 import { listTenants } from "@/lib/tenants/server";
+import { listCompaniesPicker, listEmployeesPicker, listIndustries } from "@/lib/pickers/server";
 import { RelationshipViewWidget } from "./_components/RelationshipViewWidget";
 
 export default async function RelationshipTypePage({
@@ -11,10 +12,13 @@ export default async function RelationshipTypePage({
 }: {
   params: { tenant: string; id: string };
 }) {
-  const [session, allTypes, parties] = await Promise.all([
+  const [session, allTypes, parties, industries, employees, companies] = await Promise.all([
     getServerSession(params.tenant),
     listRelationshipTypes(),
     listRelationshipParties(params.id),
+    listIndustries(),
+    listEmployeesPicker(),
+    listCompaniesPicker(),
   ]);
 
   // Fetch all relationship types and find the one that matches the URL ID.
@@ -43,6 +47,9 @@ export default async function RelationshipTypePage({
       isPlatformSession={isPlatformSession}
       tenants={tenants ?? []}
       actingTenant={session?.actingTenant ?? null}
+      industries={industries ?? []}
+      employees={employees ?? []}
+      companies={companies ?? []}
     />
   );
 }

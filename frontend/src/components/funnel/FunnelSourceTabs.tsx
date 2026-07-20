@@ -2,8 +2,18 @@
 
 import { useState } from "react";
 import { type FunnelLead } from "@/lib/data/funnel";
-import type { DealSourceResponse } from "@orelia/common";
+import type {
+  CompanyPickerResponse,
+  ContactPickerResponse,
+  DealResponse,
+  DealSourceResponse,
+  DepartmentResponse,
+  EmployeePickerResponse,
+  IndustryResponse,
+  RelationshipTypeResponse,
+} from "@orelia/common";
 import { FunnelBoard, type FunnelColumn } from "@/components/funnel/FunnelBoard";
+import { AddDealDialog } from "@/components/funnel/AddDealDialog";
 import { SearchIcon } from "@/components/ui/icons";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 
@@ -22,15 +32,57 @@ const SOURCE_CONFIG: Record<string, { accent: string; bg: string }> = {
   inbound:      { accent: "#14b8a6", bg: "#ccfbf1" },
 };
 
-/* ── Build initial state ────────────────────────────────────── */
-function buildInitialLeads() {
-  // Empty state for now since we removed the mock data
-  return {} as Record<string, FunnelLead[]>;
+type StageField = "mainStageName" | "currentStageName";
+
+/* ── Convert a real Deal into the board's display shape ──────── */
+// stageField selects which deal field drives the column the card lands in:
+//   "mainStageName"    → funnel overview board (columns = Main Stages)
+//   "currentStageName" → per-main-stage board  (columns = Sub Stages)
+function dealToFunnelLead(deal: DealResponse, stageField: StageField): FunnelLead {
+  return {
+    id: deal.id,
+    name: deal.name,
+    company: deal.companyName ?? "",
+    value: deal.estimatedValue ?? 0,
+    stage: deal[stageField] ?? "",
+    date: deal.expectedCloseDate ?? "",
+    assignee: deal.ownerName ?? "Unassigned",
+  };
+}
+
+/* ── Build initial state from deals already loaded server-side ─ */
+function buildInitialLeads(deals: DealResponse[], stageField: StageField): Record<string, FunnelLead[]> {
+  const all: FunnelLead[] = [];
+  const bySource: Record<string, FunnelLead[]> = {};
+  for (const deal of deals) {
+    const lead = dealToFunnelLead(deal, stageField);
+    all.push(lead);
+    if (deal.sourceId) {
+      bySource[deal.sourceId] = [...(bySource[deal.sourceId] ?? []), lead];
+    }
+  }
+  return { ...bySource, all };
 }
 
 interface FunnelSourceTabsProps {
   dealSources: DealSourceResponse[];
   columns: FunnelColumn[];
+  // Sub Stage options for the Add Deal dialog, when they differ from the
+  // board's own `columns` (e.g. the Funnel overview groups its board by Main
+  // Stage, but a deal's currentStageId must be a real Sub Stage). Defaults to
+  // `columns` when the board is already Sub-Stage-shaped.
+  stageOptions?: FunnelColumn[];
+  // Which deal field to use when matching a deal card into a board column:
+  //   "mainStageName"    → funnel overview (Main Stage columns, default)
+  //   "currentStageName" → per-main-stage board (Sub Stage columns)
+  stageField?: StageField;
+  companies: CompanyPickerResponse[];
+  employees: EmployeePickerResponse[];
+  contacts: ContactPickerResponse[];
+  departments: DepartmentResponse[];
+  relationshipTypes: RelationshipTypeResponse[];
+  industries: IndustryResponse[];
+  initialDeals?: DealResponse[];
   title?: string;
   subtitle?: string;
   addButtonLabel?: string;
@@ -39,6 +91,15 @@ interface FunnelSourceTabsProps {
 export function FunnelSourceTabs({
   dealSources,
   columns,
+  stageOptions,
+  stageField = "mainStageName",
+  companies,
+  employees,
+  contacts,
+  departments,
+  relationshipTypes,
+  industries,
+  initialDeals = [],
   title = "Funnel",
   subtitle = "Track deals by acquisition source",
   addButtonLabel = "Add New Deal",
@@ -49,10 +110,11 @@ export function FunnelSourceTabs({
   ];
 
   const [activeId, setActiveId] = useState(dynamicSources[0]?.id ?? "all");
-  const [leadsBySource, setLeadsBySource] = useState(buildInitialLeads);
+  const [leadsBySource, setLeadsBySource] = useState(() => buildInitialLeads(initialDeals, stageField));
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("");
   const [country, setCountry] = useState("");
+  const [isAddDealOpen, setAddDealOpen] = useState(false);
 
   const hasFilters = search !== "" || department !== "" || country !== "";
 
@@ -68,6 +130,17 @@ export function FunnelSourceTabs({
     }));
   }
 
+  function handleDealCreated(deal: DealResponse) {
+    const lead = dealToFunnelLead(deal, stageField);
+    setLeadsBySource((prev) => {
+      const next: Record<string, FunnelLead[]> = { ...prev, all: [...(prev.all ?? []), lead] };
+      if (deal.sourceId) {
+        next[deal.sourceId] = [...(prev[deal.sourceId] ?? []), lead];
+      }
+      return next;
+    });
+  }
+
   return (
     <div className="funnel-page">
       {/* ── Title ──────────────────────── */}
@@ -76,7 +149,7 @@ export function FunnelSourceTabs({
           <h1 className="funnel-title">{title}</h1>
           <p className="funnel-subtitle">{subtitle}</p>
         </div>
-        <button type="button" className="funnel-add-btn">
+        <button type="button" className="funnel-add-btn" onClick={() => setAddDealOpen(true)}>
           {addButtonLabel}
         </button>
       </div>
@@ -168,6 +241,23 @@ export function FunnelSourceTabs({
           <FunnelBoard leads={activeLeads} onMove={handleMove} columns={columns} />
         </div>
       </div>
+
+      {isAddDealOpen && (
+        <AddDealDialog
+          dealSources={dealSources}
+          columns={columns}
+          stageOptions={stageOptions}
+          companies={companies}
+          employees={employees}
+          contacts={contacts}
+          departments={departments}
+          relationshipTypes={relationshipTypes}
+          industries={industries}
+          defaultDealSourceId={activeId !== "all" ? activeId : dealSources[0]?.id}
+          onClose={() => setAddDealOpen(false)}
+          onCreated={handleDealCreated}
+        />
+      )}
     </div>
   );
 }

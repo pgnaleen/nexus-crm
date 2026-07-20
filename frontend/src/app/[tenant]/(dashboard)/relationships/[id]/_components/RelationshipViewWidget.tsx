@@ -4,6 +4,9 @@ import { useState } from "react";
 import { PERMISSIONS } from "@orelia/common";
 import type {
   ActingTenant,
+  CompanyPickerResponse,
+  EmployeePickerResponse,
+  IndustryResponse,
   RelationshipPartyResponse,
   RelationshipTypeResponse,
   TenantSummaryResponse,
@@ -30,6 +33,9 @@ interface RelationshipViewWidgetProps {
   isPlatformSession: boolean;
   tenants: TenantSummaryResponse[];
   actingTenant: ActingTenant | null;
+  industries: IndustryResponse[];
+  employees: EmployeePickerResponse[];
+  companies: CompanyPickerResponse[];
 }
 
 type DialogState =
@@ -63,6 +69,9 @@ export function RelationshipViewWidget({
   isPlatformSession,
   tenants,
   actingTenant,
+  industries,
+  employees,
+  companies,
 }: RelationshipViewWidgetProps) {
   const [parties, setParties] = useState(initialParties);
   const [search, setSearch] = useState("");
@@ -327,6 +336,9 @@ export function RelationshipViewWidget({
           mode="create"
           relationshipTypeId={relationshipType.id}
           relationshipTypeName={relationshipType.name}
+          industries={industries}
+          employees={employees}
+          companies={companies}
           onClose={() => setDialogState(null)}
           onSaved={handleSaved}
         />
@@ -337,6 +349,7 @@ export function RelationshipViewWidget({
           mode="create"
           relationshipTypeId={relationshipType.id}
           relationshipTypeName={relationshipType.name}
+          companies={companies}
           onClose={() => setDialogState(null)}
           onSaved={handleSaved}
         />
@@ -349,6 +362,9 @@ export function RelationshipViewWidget({
           relationshipTypeName={relationshipType.name}
           mapId={dialogState.party.id}
           company={dialogState.party.company}
+          industries={industries}
+          employees={employees}
+          companies={companies}
           onClose={() => setDialogState(null)}
           onSaved={handleSaved}
         />
@@ -361,6 +377,7 @@ export function RelationshipViewWidget({
           relationshipTypeName={relationshipType.name}
           mapId={dialogState.party.id}
           contact={dialogState.party.contact}
+          companies={companies}
           onClose={() => setDialogState(null)}
           onSaved={handleSaved}
         />

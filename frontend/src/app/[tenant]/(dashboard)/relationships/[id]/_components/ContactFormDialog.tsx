@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { RoleBuying } from "@orelia/common";
-import type { ContactResponse } from "@orelia/common";
+import type { CompanyPickerResponse, ContactResponse } from "@orelia/common";
 import {
   createRelationshipPartyContact,
   updateRelationshipPartyContact,
@@ -39,6 +39,7 @@ interface FormState {
   linkedIn: string;
   country: string;
   timezone: string;
+  companyId: string;
 }
 
 function toFormState(contact?: ContactResponse): FormState {
@@ -53,8 +54,11 @@ function toFormState(contact?: ContactResponse): FormState {
     linkedIn: contact?.linkedIn ?? "",
     country: contact?.country ?? "",
     timezone: contact?.timezone ?? "",
+    companyId: contact?.companyId ?? "",
   };
 }
+
+type TabId = "details" | "contact";
 
 interface ContactFormDialogProps {
   mode: "create" | "edit";
@@ -62,6 +66,7 @@ interface ContactFormDialogProps {
   relationshipTypeName: string;
   mapId?: string;
   contact?: ContactResponse;
+  companies: CompanyPickerResponse[];
   onClose: () => void;
   onSaved: () => void;
 }
@@ -72,9 +77,11 @@ export function ContactFormDialog({
   relationshipTypeName,
   mapId,
   contact,
+  companies,
   onClose,
   onSaved,
 }: ContactFormDialogProps) {
+  const [activeTab, setActiveTab] = useState<TabId>("details");
   const [values, setValues] = useState<FormState>(() => toFormState(contact));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -93,7 +100,11 @@ export function ContactFormDialog({
       if (emailError) nextErrors.email = emailError;
     }
     setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
+    if (Object.keys(nextErrors).length > 0) {
+      setActiveTab("details");
+      return false;
+    }
+    return true;
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -115,6 +126,7 @@ export function ContactFormDialog({
           linkedIn: values.linkedIn.trim() || undefined,
           country: values.country.trim() || undefined,
           timezone: values.timezone.trim() || undefined,
+          companyId: values.companyId || undefined,
         });
       } else {
         // PATCH semantics: omitted keys are left untouched, so every field
@@ -131,6 +143,7 @@ export function ContactFormDialog({
           linkedIn: values.linkedIn.trim(),
           country: values.country.trim(),
           timezone: values.timezone.trim(),
+          companyId: values.companyId || undefined,
         });
       }
       onSaved();
@@ -142,6 +155,11 @@ export function ContactFormDialog({
     }
   }
 
+  const companyOptions = [
+    { value: "", label: "None" },
+    ...companies.map((c) => ({ value: c.id, label: c.name })),
+  ];
+
   return (
     <Dialog
       open
@@ -150,85 +168,126 @@ export function ContactFormDialog({
       maxWidth="560px"
     >
       <form onSubmit={handleSubmit}>
-        {formError && <p className="field-error">{formError}</p>}
-
-        <TextField
-          label="Full name *"
-          name="fullName"
-          value={values.fullName}
-          error={errors.fullName}
-          placeholder="e.g. Jane Doe"
-          onChange={(e) => setField("fullName", e.target.value)}
-        />
-
-        <TextField
-          label="Title"
-          name="title"
-          value={values.title}
-          onChange={(e) => setField("title", e.target.value)}
-        />
-
-        <TextField
-          label="Department"
-          name="department"
-          value={values.department}
-          onChange={(e) => setField("department", e.target.value)}
-        />
-
-        <div className="field">
-          <label>Buying role</label>
-          <CustomSelect
-            fullWidth
-            label=""
-            value={values.roleBuying}
-            onChange={(val) => setField("roleBuying", val as RoleBuying | "")}
-            options={ROLE_BUYING_OPTIONS}
-          />
+        <div className="dialog-tabs">
+          <button
+            type="button"
+            className={`dialog-tab${activeTab === "details" ? " dialog-tab-active" : ""}`}
+            onClick={() => setActiveTab("details")}
+          >
+            Person Details
+          </button>
+          <button
+            type="button"
+            className={`dialog-tab${activeTab === "contact" ? " dialog-tab-active" : ""}`}
+            onClick={() => setActiveTab("contact")}
+          >
+            Contact Details
+          </button>
         </div>
 
-        <TextField
-          label="Email"
-          name="email"
-          type="email"
-          value={values.email}
-          error={errors.email}
-          onChange={(e) => setField("email", e.target.value)}
-        />
+        {formError && <p className="field-error">{formError}</p>}
 
-        <TextField
-          label="Mobile number"
-          name="mobileNo"
-          value={values.mobileNo}
-          onChange={(e) => setField("mobileNo", e.target.value)}
-        />
+        {/* ── Tab 1: Person Details ──────────────────────── */}
+        {activeTab === "details" && (
+          <div>
+            <TextField
+              label="Full name *"
+              name="fullName"
+              value={values.fullName}
+              error={errors.fullName}
+              placeholder="e.g. Jane Doe"
+              onChange={(e) => setField("fullName", e.target.value)}
+            />
 
-        <TextField
-          label="Direct phone number"
-          name="directPhoneNo"
-          value={values.directPhoneNo}
-          onChange={(e) => setField("directPhoneNo", e.target.value)}
-        />
+            <div className="field-row">
+              <TextField
+                label="Title"
+                name="title"
+                value={values.title}
+                onChange={(e) => setField("title", e.target.value)}
+              />
+              <TextField
+                label="Department"
+                name="department"
+                value={values.department}
+                onChange={(e) => setField("department", e.target.value)}
+              />
+            </div>
 
-        <TextField
-          label="LinkedIn"
-          name="linkedIn"
-          value={values.linkedIn}
-          onChange={(e) => setField("linkedIn", e.target.value)}
-        />
+            <div className="field">
+              <label>Buying role</label>
+              <CustomSelect
+                fullWidth
+                label=""
+                value={values.roleBuying}
+                onChange={(val) => setField("roleBuying", val as RoleBuying | "")}
+                options={ROLE_BUYING_OPTIONS}
+              />
+            </div>
 
-        <TextField
-          label="Country"
-          name="country"
-          value={values.country}
-          onChange={(e) => setField("country", e.target.value)}
-        />
+            <TextField
+              label="Email"
+              name="email"
+              type="email"
+              value={values.email}
+              error={errors.email}
+              onChange={(e) => setField("email", e.target.value)}
+            />
+          </div>
+        )}
 
-        <TextField
-          label="Timezone"
-          name="timezone"
-          value={values.timezone}
-          onChange={(e) => setField("timezone", e.target.value)}
-        />
+        {/* ── Tab 2: Contact Details ──────────────────────── */}
+        {activeTab === "contact" && (
+          <div>
+            <div className="field-row">
+              <TextField
+                label="Mobile number"
+                name="mobileNo"
+                value={values.mobileNo}
+                onChange={(e) => setField("mobileNo", e.target.value)}
+              />
+              <TextField
+                label="Direct phone number"
+                name="directPhoneNo"
+                value={values.directPhoneNo}
+                onChange={(e) => setField("directPhoneNo", e.target.value)}
+              />
+            </div>
+
+            <TextField
+              label="LinkedIn"
+              name="linkedIn"
+              value={values.linkedIn}
+              onChange={(e) => setField("linkedIn", e.target.value)}
+            />
+
+            <div className="field-row">
+              <TextField
+                label="Country"
+                name="country"
+                value={values.country}
+                onChange={(e) => setField("country", e.target.value)}
+              />
+              <TextField
+                label="Timezone"
+                name="timezone"
+                value={values.timezone}
+                onChange={(e) => setField("timezone", e.target.value)}
+              />
+            </div>
+
+            <div className="field">
+              <label>Company</label>
+              <CustomSelect
+                fullWidth
+                label=""
+                value={values.companyId}
+                onChange={(val) => setField("companyId", val)}
+                options={companyOptions}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="dialog-actions">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>

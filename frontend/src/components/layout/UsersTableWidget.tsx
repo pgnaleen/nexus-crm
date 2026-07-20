@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { PERMISSIONS, UserStatus } from "@orelia/common";
@@ -202,7 +202,7 @@ export function UsersTableWidget({
                     <UserStatusBadge status={user.status} />
                   </td>
                   <td>{user.loggingEmail}</td>
-                  <td>{user.lastLoggingAt ? formatLastLogin(user.lastLoggingAt) : "â€”"}</td>
+                  <td>{user.lastLoggingAt ? formatLastLogin(user.lastLoggingAt) : <span style={{ color: "var(--color-text-muted)" }}>&mdash;</span>}</td>
                   {showActionsColumn && (
                     <td className="table-actions">
                       {canUpdate && (

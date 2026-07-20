@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PERMISSIONS } from "@orelia/common";
 import { OreliaLogo } from "@/components/brand/OreliaLogo";
-import { ChevronDownIcon, DashboardIcon, FunnelIcon, SettingsIcon, SlidersIcon, UsersGroupIcon, UserIcon, ActivityIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, DashboardIcon, FunnelIcon, SettingsIcon, SlidersIcon, UsersGroupIcon, UserIcon, ActivityIcon, BellIcon } from "@/components/ui/icons";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import type { RelationshipTypeResponse, MainStageResponse } from "@orelia/common";
 
@@ -55,6 +55,9 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
   const funnelHref = `/${tenantSlug}/funnel`;
   const isFunnelActive = pathname === funnelHref;
 
+  const calendarHref = `/${tenantSlug}/calendar`;
+  const isCalendarActive = pathname === calendarHref;
+
   const hrHref = `/${tenantSlug}/employees`;
   const isHrActive = pathname === hrHref;
 
@@ -93,6 +96,16 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
         >
           <FunnelIcon size={17} />
           Funnel
+        </Link>
+
+        {/* CALENDAR ROOT LINK */}
+        <Link 
+          href={calendarHref} 
+          className={isCalendarActive ? "sidebar-link active" : "sidebar-link"}
+          onClick={() => handleLinkClick(isCalendarActive)}
+        >
+          <BellIcon size={17} />
+          Calendar
         </Link>
 
         {/* DEALS GROUP */}

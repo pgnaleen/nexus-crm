@@ -1,5 +1,23 @@
-import { AccountTier, EmployeeCountBand, RevenueBand, UpdateCompanyRequest } from "@orelia/common";
-import { IsEnum, IsNumber, IsOptional, IsString, IsUUID, MaxLength, MinLength } from "class-validator";
+import {
+  AccountTier,
+  CreditStatus,
+  EmployeeCountBand,
+  FiscalYearEndMonth,
+  Region,
+  RevenueBand,
+  Sector,
+  UpdateCompanyRequest,
+} from "@orelia/common";
+import {
+  IsArray,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from "class-validator";
 
 export class UpdateRelationshipPartyCompanyDto implements UpdateCompanyRequest {
   @IsOptional()
@@ -15,6 +33,11 @@ export class UpdateRelationshipPartyCompanyDto implements UpdateCompanyRequest {
   @IsOptional()
   @IsString()
   logo?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  brands?: string[];
 
   @IsOptional()
   @IsUUID()
@@ -44,6 +67,22 @@ export class UpdateRelationshipPartyCompanyDto implements UpdateCompanyRequest {
   annualSpend?: number | null;
 
   @IsOptional()
+  @IsEnum(Sector)
+  sector?: Sector | null;
+
+  @IsOptional()
+  @IsString()
+  stockTicker?: string;
+
+  @IsOptional()
+  @IsEnum(FiscalYearEndMonth)
+  fiscalYearEnd?: FiscalYearEndMonth | null;
+
+  @IsOptional()
+  @IsEnum(Region)
+  region?: Region | null;
+
+  @IsOptional()
   @IsString()
   country?: string;
 
@@ -52,6 +91,27 @@ export class UpdateRelationshipPartyCompanyDto implements UpdateCompanyRequest {
   hqCityAddress?: string;
 
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  branches?: string[];
+
+  @IsOptional()
   @IsUUID()
-  parentCompanyId?: string;
+  parentCompanyId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  parentCompanyName?: string;
+
+  @IsOptional()
+  @IsEnum(CreditStatus)
+  credit?: CreditStatus | null;
+
+  @IsOptional()
+  @IsUUID()
+  territoryOwnerId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  territoryNotes?: string;
 }

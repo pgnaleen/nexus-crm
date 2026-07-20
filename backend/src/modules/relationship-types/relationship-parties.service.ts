@@ -1,6 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { InjectDataSource } from "@nestjs/typeorm";
+import { DataSource } from "typeorm";
+import { TenantContextService } from "../../core/tenant";
 import { CompaniesRepository } from "../companies/companies.repository";
+import { Company } from "../companies/entities/company.entity";
 import { ContactsRepository } from "../contacts/contacts.repository";
+import { Contact } from "../contacts/entities/contact.entity";
 import { CreateRelationshipPartyCompanyDto } from "./dto/create-relationship-party-company.dto";
 import { CreateRelationshipPartyContactDto } from "./dto/create-relationship-party-contact.dto";
 import { UpdateRelationshipPartyCompanyDto } from "./dto/update-relationship-party-company.dto";
@@ -16,6 +21,8 @@ export class RelationshipPartiesService {
     private readonly companiesRepo: CompaniesRepository,
     private readonly contactsRepo: ContactsRepository,
     private readonly relationshipTypesService: RelationshipTypesService,
+    private readonly tenantContext: TenantContextService,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   async findAllForType(relationshipTypeId: string): Promise<RelationshipCompanyContactMap[]> {
@@ -44,16 +51,54 @@ export class RelationshipPartiesService {
     userId: string,
   ): Promise<RelationshipCompanyContactMap> {
     await this.relationshipTypesService.findOneOrFail(relationshipTypeId);
-    const company = this.companiesRepo.createScoped({ ...dto, createdBy: userId });
-    const savedCompany = await this.companiesRepo.saveScoped(company);
+    const tenantId = this.tenantContext.getTenantId();
+    const { contacts, ...companyFields } = dto;
 
-    const party = this.partiesRepo.createScoped({
-      relationshipTypeId,
-      companyId: savedCompany.id,
-      createdBy: userId,
+    // The company and every inline contact must land together or not at
+    // all -- without this, a failure partway through (e.g. the 2nd of 3
+    // contacts) would leave a company with only some of its people attached,
+    // silently. Plain repositories bound to the transactional manager here
+    // (not the tenant-scoped createScoped/saveScoped helpers, which operate
+    // outside the transaction) -- tenantId is set explicitly instead, which
+    // is safe since it comes from the trusted request context, not the body.
+    const companyPartyId = await this.dataSource.transaction(async (manager) => {
+      const companyRepo = manager.getRepository(Company);
+      const contactRepo = manager.getRepository(Contact);
+      const partyRepo = manager.getRepository(RelationshipCompanyContactMap);
+
+      const company = companyRepo.create({ ...companyFields, tenantId, createdBy: userId });
+      const savedCompany = await companyRepo.save(company);
+
+      const companyParty = partyRepo.create({
+        relationshipTypeId,
+        companyId: savedCompany.id,
+        tenantId,
+        createdBy: userId,
+      });
+      const savedCompanyParty = await partyRepo.save(companyParty);
+
+      for (const contactDto of contacts ?? []) {
+        const contact = contactRepo.create({
+          ...contactDto,
+          companyId: savedCompany.id,
+          tenantId,
+          createdBy: userId,
+        });
+        const savedContact = await contactRepo.save(contact);
+
+        const contactParty = partyRepo.create({
+          relationshipTypeId,
+          contactId: savedContact.id,
+          tenantId,
+          createdBy: userId,
+        });
+        await partyRepo.save(contactParty);
+      }
+
+      return savedCompanyParty.id;
     });
-    const savedParty = await this.partiesRepo.saveScoped(party);
-    return this.findOneOrFail(relationshipTypeId, savedParty.id);
+
+    return this.findOneOrFail(relationshipTypeId, companyPartyId);
   }
 
   async addContact(

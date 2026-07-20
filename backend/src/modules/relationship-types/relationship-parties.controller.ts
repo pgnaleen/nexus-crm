@@ -155,6 +155,7 @@ export class RelationshipPartiesController {
       hqCityAddress: company.hqCityAddress ?? null,
       branches: company.branches ?? null,
       parentCompanyId: company.parentCompanyId ?? null,
+      parentCompanyName: company.parentCompanyName ?? null,
       credit: company.credit ?? null,
       territoryOwnerId: company.territoryOwnerId ?? null,
       territoryNotes: company.territoryNotes ?? null,
