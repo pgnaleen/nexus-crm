@@ -39,6 +39,7 @@
 - source: commit `9fd864f` — code review, 2026-07-20
   summary: "[HIGH] `deal-contacts.service.ts` add() never validates contactId belongs to the caller's tenant."
   evidence: "`backend/src/modules/deals/deal-contacts.service.ts` L19-35 only checks for a duplicate mapping, not tenant ownership. A caller supplying another tenant's contact UUID links it successfully, and findAll() then returns that tenant's contact name/title/email."
+  resolved: "2026-07-20, commit `01fb6ab` — deal-contacts.service.ts/controller.ts were replaced by deal-partners.service.ts/controller.ts (generalizing the concept to company-or-contact deal partners). The new addCompany()/addContact() both resolve the target through CompaniesRepository/ContactsRepository's tenant-scoped findOneScoped() before linking, with an explicit comment noting this closes exactly this gap. Verified during pre-deploy review."
 
 - source: commit `9fd864f` — code review, 2026-07-20
   summary: "[HIGH] Logo upload lets the stored file extension diverge from the validated MIME type, enabling stored XSS."
