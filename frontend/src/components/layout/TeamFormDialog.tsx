@@ -64,7 +64,7 @@ export function TeamFormDialog({ mode, team, onClose, onSaved }: TeamFormDialogP
   }
 
   return (
-    <Dialog open title={mode === "create" ? "Add Team" : "Edit Team"} onClose={onClose}>
+    <Dialog open title={mode === "create" ? "Add Team" : mode === "view" ? "View Team" : "Edit Team"} onClose={onClose}>
       <form onSubmit={handleSubmit}>
         {formError && <p className="field-error">{formError}</p>}
 
@@ -73,16 +73,19 @@ export function TeamFormDialog({ mode, team, onClose, onSaved }: TeamFormDialogP
           name="name"
           value={values.name}
           error={errors.name}
+          disabled={isViewOnly}
           onChange={(e) => setField("name", e.target.value)}
         />
 
         <div className="dialog-actions">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
-            Cancel
+            {isViewOnly ? "Close" : "Cancel"}
           </Button>
-          <Button type="submit" isLoading={isSaving}>
-            {mode === "create" ? "Create team" : "Save changes"}
-          </Button>
+          {!isViewOnly && (
+            <Button type="submit" isLoading={isSaving}>
+              {mode === "create" ? "Create team" : "Save changes"}
+            </Button>
+          )}
         </div>
       </form>
     </Dialog>
