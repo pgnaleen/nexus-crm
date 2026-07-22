@@ -37,6 +37,7 @@ const ADMIN_ITEMS: { label: string; segment: string; prefix?: string; isRoot?: b
   { label: "Roles", segment: "roles", prefix: "rbac" },
   { label: "Users", segment: "users", isRoot: true, prefix: "users" },
   { label: "Departments", segment: "departments", prefix: "department" },
+  { label: "Backups", segment: "backups", prefix: "backup" },
 ];
 
 export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages }: SidebarProps) {
