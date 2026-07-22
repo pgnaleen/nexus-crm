@@ -72,11 +72,45 @@ export class RelationshipPartiesController {
   ): Promise<RelationshipPartyResponse> {
     this.logger.debug(`POST .../parties/contacts called for type ${relationshipTypeId} by ${user.sub}`);
     try {
-      const party = await this.partiesService.addContact(relationshipTypeId, dto, user.sub);
-      this.logger.debug(`POST .../parties/contacts succeeded, party ${party.id}`);
-      return this.toResponse(party);
+      const { party, contact } = await this.partiesService.addContact(relationshipTypeId, dto, user.sub);
+      if (party) {
+        this.logger.debug(`POST .../parties/contacts succeeded, party ${party.id}`);
+        return this.toResponse(party);
+      }
+      // Company-owned contact: no independent party row exists for it (see
+      // relationship-parties.service.ts), so the response is built directly
+      // from the contact instead of going through toResponse(party).
+      this.logger.debug(`POST .../parties/contacts succeeded, company-owned contact ${contact.id} (no party row)`);
+      return {
+        id: contact.id,
+        relationshipTypeId,
+        kind: "contact",
+        isActive: true,
+        createdAt: contact.createdAt.toISOString(),
+        updatedAt: contact.updatedAt.toISOString(),
+        company: null,
+        contact: this.toContactResponse(contact),
+      };
     } catch (err) {
       this.logger.error(`POST .../parties/contacts failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  @UseGuards(PermissionsGuard)
+  @RequirePermission(ANY_RELATIONSHIP_PERMISSION)
+  @Get("companies/:mapId/contacts")
+  async listCompanyContacts(
+    @Param("relationshipTypeId", ParseUUIDPipe) relationshipTypeId: string,
+    @Param("mapId", ParseUUIDPipe) mapId: string,
+  ): Promise<ContactResponse[]> {
+    this.logger.debug(`GET .../parties/companies/${mapId}/contacts called`);
+    try {
+      const contacts = await this.partiesService.listContactsForCompany(relationshipTypeId, mapId);
+      this.logger.debug(`GET .../parties/companies/${mapId}/contacts returning ${contacts.length} row(s)`);
+      return contacts.map((contact) => this.toContactResponse(contact));
+    } catch (err) {
+      this.logger.error(`GET .../parties/companies/${mapId}/contacts failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }

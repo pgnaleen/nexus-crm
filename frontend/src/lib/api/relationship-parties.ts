@@ -1,4 +1,5 @@
 import type {
+  ContactResponse,
   CreateContactRequest,
   CreateRelationshipPartyCompanyRequest,
   RelationshipPartyResponse,
@@ -72,6 +73,15 @@ export function enableRelationshipParty(
   return apiFetch<RelationshipPartyResponse>(
     `/relationship-types/${relationshipTypeId}/parties/${mapId}/enable`,
     { method: "PATCH" },
+  );
+}
+
+export function listCompanyContacts(
+  relationshipTypeId: string,
+  mapId: string,
+): Promise<ContactResponse[]> {
+  return apiFetch<ContactResponse[]>(
+    `/relationship-types/${relationshipTypeId}/parties/companies/${mapId}/contacts`,
   );
 }
 

@@ -88,6 +88,14 @@ export class RelationshipPartiesService {
 
         const contactIds: string[] = [];
         for (const contactDto of contacts ?? []) {
+          // Company-owned contacts (an employee/contact-person at this
+          // company) do NOT get their own relationship_company_contact_map
+          // row -- they're already covered by the company's own party row
+          // via their companyId. Giving them an independent row made them
+          // indistinguishable from a standalone party directly and
+          // independently tagged with this relationship type, which
+          // double-counted them in findAllForType/the dependent-count
+          // queries (bug fixed 2026-07-22).
           const contact = contactRepo.create({
             ...contactDto,
             companyId: savedCompany.id,
@@ -96,14 +104,6 @@ export class RelationshipPartiesService {
           });
           const savedContact = await contactRepo.save(contact);
           contactIds.push(savedContact.id);
-
-          const contactParty = partyRepo.create({
-            relationshipTypeId,
-            contactId: savedContact.id,
-            tenantId,
-            createdBy: userId,
-          });
-          await partyRepo.save(contactParty);
         }
 
         return { companyPartyId: savedCompanyParty.id, savedCompanyId: savedCompany.id, savedContactIds: contactIds };
@@ -138,20 +138,12 @@ export class RelationshipPartiesService {
     relationshipTypeId: string,
     dto: CreateRelationshipPartyContactDto,
     userId: string,
-  ): Promise<RelationshipCompanyContactMap> {
-    this.logger.debug(`addContact called for relationship type ${relationshipTypeId} by ${userId} (fullName="${dto.fullName}")`);
+  ): Promise<{ party: RelationshipCompanyContactMap | null; contact: Contact }> {
+    this.logger.debug(`addContact called for relationship type ${relationshipTypeId} by ${userId} (fullName="${dto.fullName}", companyId=${dto.companyId ?? "none"})`);
     await this.relationshipTypesService.findOneOrFail(relationshipTypeId);
     try {
       const contact = this.contactsRepo.createScoped({ ...dto, createdBy: userId });
       const savedContact = await this.contactsRepo.saveScoped(contact);
-
-      const party = this.partiesRepo.createScoped({
-        relationshipTypeId,
-        contactId: savedContact.id,
-        createdBy: userId,
-      });
-      const savedParty = await this.partiesRepo.saveScoped(party);
-      this.logger.debug(`addContact succeeded, contact ${savedContact.id}`);
 
       await this.auditLogService.record({
         entityType: "contact",
@@ -161,11 +153,42 @@ export class RelationshipPartiesService {
         changes: { relationshipTypeId, ...dto },
       });
 
-      return this.findOneOrFail(relationshipTypeId, savedParty.id);
+      if (dto.companyId) {
+        // Company-owned contact -- already covered by the company's own
+        // party row, so it must NOT get an independent one of its own (see
+        // the same reasoning in addCompany's inline-contacts loop above).
+        this.logger.debug(`addContact: contact ${savedContact.id} belongs to company ${dto.companyId}, skipping standalone party row`);
+        return { party: null, contact: savedContact };
+      }
+
+      const party = this.partiesRepo.createScoped({
+        relationshipTypeId,
+        contactId: savedContact.id,
+        createdBy: userId,
+      });
+      const savedParty = await this.partiesRepo.saveScoped(party);
+      this.logger.debug(`addContact succeeded, standalone contact ${savedContact.id}`);
+
+      return { party: await this.findOneOrFail(relationshipTypeId, savedParty.id), contact: savedContact };
     } catch (err) {
       this.logger.error(`addContact failed for relationship type ${relationshipTypeId}: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
+  }
+
+  async listContactsForCompany(relationshipTypeId: string, mapId: string): Promise<Contact[]> {
+    this.logger.debug(`listContactsForCompany called for party ${mapId} on relationship type ${relationshipTypeId}`);
+    const party = await this.findOneOrFail(relationshipTypeId, mapId);
+    if (!party.companyId) {
+      this.logger.debug(`Blocked: party ${mapId} is not a company`);
+      throw new BadRequestException("This relationship party is not a company");
+    }
+    const contacts = await this.contactsRepo.findScoped({
+      where: { companyId: party.companyId },
+      order: { fullName: "ASC" },
+    });
+    this.logger.debug(`listContactsForCompany returning ${contacts.length} row(s) for company ${party.companyId}`);
+    return contacts;
   }
 
   async updateCompany(
