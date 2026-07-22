@@ -389,6 +389,118 @@ Relationships → Employee Management → shared UI primitives' own built-in tex
 
 ---
 
+## F. Relationship-Type-scoped Company/Contact tagging — found 2026-07-23
+
+Three related items, discovered together while investigating why the Add Deal dialog's Customer
+and Partners fields looked "off." The first is already fixed and committed; the other two are
+design-agreed but not yet built.
+
+### F1. ✅ FIXED — Company-owned contacts double-counted as independent Relationship-Type parties
+**Where:** `backend/src/modules/relationship-types/relationship-parties.service.ts` (`addCompany`,
+`addContact`), `relationship-parties.controller.ts`, `CompanyFormDialog.tsx`.
+
+**What:** Every contact added under a Company (either inline at company-creation, or from the
+company's own edit form) was getting its own independent `relationship_company_contact_map` row,
+tagged with the same Relationship Type as the company itself — e.g. tag "Acme Corp" as Customer
+with two contacts (Jane, Bob) attached, and the Customers list showed **3** entries (Acme Corp,
+Jane, Bob), not 1. The same inflation hit the dependent-count shown next to each Relationship Type
+and the cascade-delete warning count, since both are driven by the same table.
+
+**Why:** A contact who merely works at a customer company isn't itself a customer — only the
+company is. The map row was meant to express "this Company/Contact is directly and independently
+tagged with this type," but company-owned contacts were getting one purely as a side effect of
+being added to the company's own contact list, with no way for the list/count queries to tell the
+two cases apart.
+
+**How:** `addCompany`'s inline-contacts loop and `addContact` (when called with a `companyId`, the
+path used by "add a new contact to an existing company" from the edit form) no longer create a map
+row — the `Contact` row itself (with `companyId` set) is still created exactly as before. Since
+company-owned contacts no longer ride along on the party list that used to make them visible, added
+`GET .../parties/companies/:mapId/contacts` (queries `Contact` directly by `companyId`, bypassing
+the map table entirely) and wired it into `CompanyFormDialog.tsx`'s edit mode so existing contacts
+stay visible — read-only for now, see F3 below for why editing them isn't wired in yet.
+
+**Status:** Done, committed (`27167ba`, `fix(relationships): stop company contacts double-counting
+as independent relationship parties`). Not click-tested end-to-end in a running instance — this
+environment has no installed dependencies (`node_modules`/`common/dist` don't exist, `pnpm`/`tsc`
+unavailable), so the fix was verified by careful reading, not a real build/run. **Also not done**:
+existing (pre-fix) company contacts still have their old bogus map rows sitting in the database —
+the fix stops new bad rows, it doesn't retroactively clean up old ones. Optional one-time cleanup,
+not scheduled.
+
+### F2. 🟠 Add Deal's Customer and Partners fields show every Company/Contact in the tenant, not just ones tagged with the matching Relationship Type
+**Where:** `frontend/src/components/funnel/AddDealDialog.tsx` (`otherPartyOptions`,
+`partnerOptions`), `backend/src/modules/pickers/pickers.controller.ts`,
+`companies.service.ts::findPicker`, `contacts.service.ts::findPicker`.
+
+**What:** The Customer field and the Partners field in Add Deal both pull from the exact same
+unfiltered source — `GET /pickers/companies` + `GET /pickers/contacts`, tenant-scoped and
+name-search-filtered only:
+```ts
+const qb = this.companiesRepo.queryBuilderScoped("company").orderBy("company.name", "ASC").take(20);
+if (search?.trim()) qb.andWhere("company.name ILIKE :search", { search: `%${search.trim()}%` });
+```
+No join to `relationship_company_contact_map`, no `relationshipTypeId` filter anywhere. A company
+tagged as a Vendor, or not tagged with any Relationship Type at all, shows up identically to one
+tagged Customer when picking a deal's customer — and the exact same list, minus whoever's already
+picked, is reused as-is for Partners.
+
+**Why:** A Deal's "customer" and "partners" fields are meant to represent specific business
+relationships (who this deal is being sold to, who's partnering on it) — not "any company/contact
+that happens to exist in the tenant." Confirmed with the user this is the intended behavior:
+Customer should only offer parties tagged as the tenant's Customer type; Partners should only offer
+parties tagged as the tenant's Partner type.
+
+**How — agreed design, not yet built:** `relationship_types` has no way today to identify *which*
+row means "Customer" versus an ordinary custom tag (`{ id, name }` only, fully tenant-renameable) —
+matching by the literal string "Customer" would break under multi-tenancy (different tenants name
+their types differently; a rename breaks the match). Agreed approach: add a nullable `systemRole`
+column to `relationship_types` (`CUSTOMER` / `PARTNER` / null for ordinary custom types), with a
+partial unique index so a tenant can have at most one type flagged per role. Tenant admin sets the
+flag once, on whichever of their own Relationship Types should play that role, via a new field on
+the existing Relationship Types create/edit form — the flag travels with the row, independent of
+whatever the type is named or later renamed to. The Deal pickers then resolve "this tenant's
+Customer-role type id" once, and filter the company/contact picker through
+`relationship_company_contact_map` using that id — falling back to an empty state pointing at
+Relationship Types admin if the tenant hasn't configured the role yet, not silently showing
+everything (today's behavior) or erroring.
+
+Touches: migration (new nullable column + partial unique index), `RelationshipType`
+entity/DTOs/service (validate one-per-role-per-tenant on create/update), Relationship Types admin
+form UI, two new/adjusted picker endpoints (role-scoped, replacing the plain company/contact
+pickers for these two specific fields only — every other consumer of `/pickers/companies|contacts`
+is unaffected), `AddDealDialog.tsx`'s Customer/Partners fields, `api-endpoint-registry.md`, plus
+this project's standing rules (audit logging on the role-flag change, debug logging on the new
+endpoints, i18n for any new label text).
+
+**Status:** Design agreed with the user, not started. Real gap — verified via direct code read
+(`AddDealDialog.tsx:583-606`, `pickers.controller.ts`, both `findPicker` methods), not assumed.
+
+### F3. Related, separate task — no way to tag an existing Company/Contact under an additional Relationship Type
+**Where:** `relationship-parties.service.ts`/`.controller.ts`, `RelationshipViewWidget.tsx`.
+
+**What:** Today, the only way to get a Company/Contact tagged under a Relationship Type is
+`addCompany`/`addContact` — both of which always create a **brand-new** Company/Contact row. There
+is no "pick an existing Company/Contact and just add this tag" action anywhere.
+
+**Why:** Raised by the user during the F2 discussion — a company that already exists (e.g. tagged
+Supplier) shouldn't need to be re-created from scratch just to *also* be tagged Partner. The
+underlying data already supports one Company/Contact holding multiple Relationship Type tags
+simultaneously (checked: no uniqueness constraint on `relationship_company_contact_map` blocks
+more than one row per company across different types) — the only missing piece is the UI/API
+action itself.
+
+**How — not designed in detail yet:** likely a new "Add existing" option alongside today's
+"Add Company"/"Add Contact" actions in `RelationshipViewWidget.tsx`, backed by a picker-driven
+dialog (search existing companies/contacts, same picker pattern used elsewhere) and a new
+service method that creates only the map row for an existing party id under the target
+Relationship Type — no new Company/Contact record, no duplication.
+
+**Status:** Deferred, explicitly agreed with the user to log rather than build now (F2 is the
+priority). Not designed beyond the shape above.
+
+---
+
 ## Recommendation — what to actually finish today
 
 "Production ready, no bugs, today" and "fix everything in this document today" are different
