@@ -1,6 +1,7 @@
-import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { In, Repository } from "typeorm";
+import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { SystemTenantCache, TenantContextService } from "../../core/tenant";
 import { AssignRoleResourcesDto } from "./dto/assign-role-resources.dto";
 import { CreateRoleDto } from "./dto/create-role.dto";
@@ -13,6 +14,8 @@ import { RbacRolesRepository } from "./rbac-roles.repository";
 
 @Injectable()
 export class RbacService {
+  private readonly logger = new Logger(RbacService.name);
+
   constructor(
     @InjectRepository(RbacRoleUserMap)
     private readonly roleUserMapRepo: Repository<RbacRoleUserMap>,
@@ -23,20 +26,26 @@ export class RbacService {
     private readonly rolesRepo: RbacRolesRepository,
     private readonly tenantContext: TenantContextService,
     private readonly systemTenantCache: SystemTenantCache,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   async getRoleNamesForUser(userId: string): Promise<string[]> {
+    this.logger.debug(`getRoleNamesForUser called for user ${userId}`);
     const maps = await this.roleUserMapRepo.find({
       where: { userId },
       relations: ["role"],
     });
-    return maps.map((map) => map.role!.name);
+    const names = maps.map((map) => map.role!.name);
+    this.logger.debug(`getRoleNamesForUser returning ${names.length} role name(s) for user ${userId}`);
+    return names;
   }
 
   async getPermissionsForUser(userId: string): Promise<string[]> {
+    this.logger.debug(`getPermissionsForUser called for user ${userId}`);
     const roleMaps = await this.roleUserMapRepo.find({ where: { userId } });
     const roleIds = roleMaps.map((map) => map.roleId);
     if (roleIds.length === 0) {
+      this.logger.debug(`getPermissionsForUser: user ${userId} holds no roles, returning empty`);
       return [];
     }
 
@@ -46,12 +55,16 @@ export class RbacService {
     });
 
     const permissionNames = resourceMaps.map((map) => map.resource!.name);
-    return Array.from(new Set(permissionNames));
+    const unique = Array.from(new Set(permissionNames));
+    this.logger.debug(`getPermissionsForUser returning ${unique.length} unique permission(s) for user ${userId}`);
+    return unique;
   }
 
   async findAllRoles(): Promise<Array<{ role: RbacRole; resourceCount: number }>> {
+    this.logger.debug("findAllRoles called");
     const roles = await this.rolesRepo.findScoped({ order: { name: "ASC" } });
     if (roles.length === 0) {
+      this.logger.debug("findAllRoles: no roles for this tenant, returning empty");
       return [];
     }
 
@@ -64,6 +77,7 @@ export class RbacService {
       .getRawMany<{ roleId: string; count: string }>();
     const countByRoleId = new Map(counts.map((row) => [row.roleId, Number(row.count)]));
 
+    this.logger.debug(`findAllRoles returning ${roles.length} role(s)`);
     return roles.map((role) => ({ role, resourceCount: countByRoleId.get(role.id) ?? 0 }));
   }
 
@@ -76,34 +90,100 @@ export class RbacService {
   }
 
   async createRole(dto: CreateRoleDto, userId: string): Promise<RbacRole> {
-    const role = this.rolesRepo.createScoped({ ...dto, createdBy: userId });
-    return this.rolesRepo.saveScoped(role);
+    this.logger.debug(`createRole called by ${userId} (name="${dto.name}")`);
+    try {
+      const role = this.rolesRepo.createScoped({ ...dto, createdBy: userId });
+      const saved = await this.rolesRepo.saveScoped(role);
+      this.logger.debug(`createRole succeeded for role ${saved.id}`);
+      await this.auditLogService.record({
+        entityType: "rbac_role",
+        entityId: saved.id,
+        action: "insert",
+        actorId: userId,
+        changes: { ...dto },
+      });
+      return saved;
+    } catch (err) {
+      this.logger.error(`createRole failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   async updateRole(id: string, dto: UpdateRoleDto, userId: string): Promise<RbacRole> {
+    this.logger.debug(`updateRole called for role ${id} by ${userId}`);
     const role = await this.findRoleOrFail(id);
-    Object.assign(role, dto, { updatedBy: userId });
-    await this.rolesRepo.saveScoped(role);
-    // Re-fetch rather than return the in-memory object: any field the caller
-    // omitted from dto ends up as an explicit `undefined` own-property (a
-    // declared-but-unset TS class field), which Object.assign then copies
-    // onto `role`. TypeORM's save() correctly skips undefined columns in the
-    // generated UPDATE (the DB value is never touched), but the in-memory
-    // object stays stale — returning it directly would misreport those
-    // untouched fields as missing/null in the API response.
-    return this.findRoleOrFail(id);
+
+    const before: Record<string, unknown> = {};
+    const roleAsRecord = role as unknown as Record<string, unknown>;
+    for (const key of Object.keys(dto)) {
+      before[key] = roleAsRecord[key];
+    }
+
+    try {
+      Object.assign(role, dto, { updatedBy: userId });
+      await this.rolesRepo.saveScoped(role);
+      // Re-fetch rather than return the in-memory object: any field the caller
+      // omitted from dto ends up as an explicit `undefined` own-property (a
+      // declared-but-unset TS class field), which Object.assign then copies
+      // onto `role`. TypeORM's save() correctly skips undefined columns in the
+      // generated UPDATE (the DB value is never touched), but the in-memory
+      // object stays stale — returning it directly would misreport those
+      // untouched fields as missing/null in the API response.
+      const updated = await this.findRoleOrFail(id);
+      this.logger.debug(`updateRole succeeded for role ${id}`);
+
+      const changes: Record<string, { old: unknown; new: unknown }> = {};
+      const updatedAsRecord = updated as unknown as Record<string, unknown>;
+      for (const key of Object.keys(dto)) {
+        const newValue = updatedAsRecord[key];
+        if (before[key] !== newValue) {
+          changes[key] = { old: before[key], new: newValue };
+        }
+      }
+      if (Object.keys(changes).length > 0) {
+        await this.auditLogService.record({
+          entityType: "rbac_role",
+          entityId: id,
+          action: "update",
+          actorId: userId,
+          changes,
+        });
+      }
+
+      return updated;
+    } catch (err) {
+      this.logger.error(`updateRole failed for role ${id}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   async removeRole(id: string, userId: string): Promise<void> {
+    this.logger.debug(`removeRole called for role ${id} by ${userId}`);
     const role = await this.findRoleOrFail(id);
-    await this.rolesRepo.softRemoveScoped(role, userId);
+    try {
+      await this.rolesRepo.softRemoveScoped(role, userId);
+      this.logger.debug(`removeRole succeeded for role ${id}`);
+      await this.auditLogService.record({
+        entityType: "rbac_role",
+        entityId: id,
+        action: "delete",
+        actorId: userId,
+        changes: { name: role.name },
+      });
+    } catch (err) {
+      this.logger.error(`removeRole failed for role ${id}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   /** Resources assignable from the current tenant — isPlatformOnly ones only show up for the System tenant. */
   async findAllResources(): Promise<RbacResource[]> {
+    this.logger.debug("findAllResources called");
     const isPlatform = await this.isCurrentTenantPlatform();
     const resources = await this.resourceRepo.find({ order: { name: "ASC" } });
-    return isPlatform ? resources : resources.filter((resource) => !resource.isPlatformOnly);
+    const visible = isPlatform ? resources : resources.filter((resource) => !resource.isPlatformOnly);
+    this.logger.debug(`findAllResources returning ${visible.length} resource(s) (isPlatform=${isPlatform})`);
+    return visible;
   }
 
   async getResourceIdsForRole(roleId: string): Promise<string[]> {
@@ -112,29 +192,46 @@ export class RbacService {
   }
 
   async assignResourcesToRole(roleId: string, dto: AssignRoleResourcesDto, userId: string): Promise<void> {
+    this.logger.debug(`assignResourcesToRole called for role ${roleId} by ${userId} (${dto.resourceIds.length} resource(s))`);
     await this.findRoleOrFail(roleId); // also confirms the role belongs to the current tenant
     const { resourceIds } = dto;
 
     if (resourceIds.length > 0) {
       const resources = await this.resourceRepo.find({ where: { id: In(resourceIds) } });
       if (resources.length !== resourceIds.length) {
+        this.logger.debug(`Blocked: assignResourcesToRole for role ${roleId} referenced a resource id that doesn't exist`);
         throw new NotFoundException("One or more resources not found");
       }
 
       const isPlatform = await this.isCurrentTenantPlatform();
       if (!isPlatform && resources.some((resource) => resource.isPlatformOnly)) {
+        this.logger.debug(`Blocked: role ${roleId} (non-platform tenant) tried to be granted a platform-only resource`);
         throw new ForbiddenException(
           "Platform-only permissions can only be assigned to roles in the System tenant",
         );
       }
     }
 
-    await this.roleResourceMapRepo.delete({ roleId });
-    if (resourceIds.length > 0) {
-      const rows = resourceIds.map((resourceId) =>
-        this.roleResourceMapRepo.create({ roleId, resourceId, createdBy: userId }),
-      );
-      await this.roleResourceMapRepo.save(rows);
+    try {
+      const before = await this.getResourceIdsForRole(roleId);
+      await this.roleResourceMapRepo.delete({ roleId });
+      if (resourceIds.length > 0) {
+        const rows = resourceIds.map((resourceId) =>
+          this.roleResourceMapRepo.create({ roleId, resourceId, createdBy: userId }),
+        );
+        await this.roleResourceMapRepo.save(rows);
+      }
+      this.logger.debug(`assignResourcesToRole succeeded for role ${roleId}`);
+      await this.auditLogService.record({
+        entityType: "rbac_role",
+        entityId: roleId,
+        action: "update",
+        actorId: userId,
+        changes: { resourceIds: { old: before, new: resourceIds } },
+      });
+    } catch (err) {
+      this.logger.error(`assignResourcesToRole failed for role ${roleId}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
     }
   }
 
@@ -157,15 +254,31 @@ export class RbacService {
    * resolves to, exactly like every other write in this service.
    */
   async assignRolesToUser(userId: string, roleIds: string[], createdBy: string): Promise<void> {
+    this.logger.debug(`assignRolesToUser called for user ${userId} by ${createdBy} (${roleIds.length} role(s))`);
     if (roleIds.length === 0) {
+      this.logger.debug("assignRolesToUser: empty roleIds, nothing to do");
       return;
     }
-    const roles = await this.rolesRepo.findScoped({ where: { id: In(roleIds) } });
-    if (roles.length !== roleIds.length) {
-      throw new NotFoundException("One or more roles not found for the current tenant");
+    try {
+      const roles = await this.rolesRepo.findScoped({ where: { id: In(roleIds) } });
+      if (roles.length !== roleIds.length) {
+        this.logger.debug(`Blocked: assignRolesToUser for user ${userId} referenced a role id not found for this tenant`);
+        throw new NotFoundException("One or more roles not found for the current tenant");
+      }
+      const rows = roleIds.map((roleId) => this.roleUserMapRepo.create({ roleId, userId, createdBy }));
+      await this.roleUserMapRepo.save(rows);
+      this.logger.debug(`assignRolesToUser succeeded for user ${userId}`);
+      await this.auditLogService.record({
+        entityType: "user",
+        entityId: userId,
+        action: "update",
+        actorId: createdBy,
+        changes: { addedRoleIds: roleIds },
+      });
+    } catch (err) {
+      this.logger.error(`assignRolesToUser failed for user ${userId}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
     }
-    const rows = roleIds.map((roleId) => this.roleUserMapRepo.create({ roleId, userId, createdBy }));
-    await this.roleUserMapRepo.save(rows);
   }
 
   async getRoleIdsForUser(userId: string): Promise<string[]> {
@@ -181,15 +294,39 @@ export class RbacService {
    * findScoped, same safety property as assignRolesToUser.
    */
   async replaceRolesForUser(userId: string, roleIds: string[], updatedBy: string): Promise<void> {
-    await this.roleUserMapRepo.delete({ userId });
-    if (roleIds.length === 0) {
-      return;
+    this.logger.debug(`replaceRolesForUser called for user ${userId} by ${updatedBy} (${roleIds.length} role(s))`);
+    try {
+      const before = await this.getRoleIdsForUser(userId);
+      await this.roleUserMapRepo.delete({ userId });
+      if (roleIds.length === 0) {
+        this.logger.debug(`replaceRolesForUser: clearing all roles for user ${userId}`);
+        await this.auditLogService.record({
+          entityType: "user",
+          entityId: userId,
+          action: "update",
+          actorId: updatedBy,
+          changes: { roleIds: { old: before, new: [] } },
+        });
+        return;
+      }
+      const roles = await this.rolesRepo.findScoped({ where: { id: In(roleIds) } });
+      if (roles.length !== roleIds.length) {
+        this.logger.debug(`Blocked: replaceRolesForUser for user ${userId} referenced a role id not found for this tenant`);
+        throw new NotFoundException("One or more roles not found for the current tenant");
+      }
+      const rows = roleIds.map((roleId) => this.roleUserMapRepo.create({ roleId, userId, createdBy: updatedBy }));
+      await this.roleUserMapRepo.save(rows);
+      this.logger.debug(`replaceRolesForUser succeeded for user ${userId}`);
+      await this.auditLogService.record({
+        entityType: "user",
+        entityId: userId,
+        action: "update",
+        actorId: updatedBy,
+        changes: { roleIds: { old: before, new: roleIds } },
+      });
+    } catch (err) {
+      this.logger.error(`replaceRolesForUser failed for user ${userId}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
     }
-    const roles = await this.rolesRepo.findScoped({ where: { id: In(roleIds) } });
-    if (roles.length !== roleIds.length) {
-      throw new NotFoundException("One or more roles not found for the current tenant");
-    }
-    const rows = roleIds.map((roleId) => this.roleUserMapRepo.create({ roleId, userId, createdBy: updatedBy }));
-    await this.roleUserMapRepo.save(rows);
   }
 }

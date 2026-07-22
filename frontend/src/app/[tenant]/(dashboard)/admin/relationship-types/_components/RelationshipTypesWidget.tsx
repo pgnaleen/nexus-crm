@@ -22,7 +22,7 @@ interface RelationshipTypesWidgetProps {
 
 type DialogState =
   | { mode: "create" }
-  | { mode: "edit"; relationshipType: RelationshipTypeResponse }
+  | { mode: "edit" | "view"; relationshipType: RelationshipTypeResponse }
   | null;
 
 // Format ISO date string for display
@@ -51,6 +51,7 @@ export function RelationshipTypesWidget({
   const confirmCascadeDelete = useCascadeDeleteConfirm();
   const { showError } = useAlert();
 
+  const canView   = permissions.includes(PERMISSIONS.RELATIONSHIP_TYPE_VIEW);
   const canCreate = permissions.includes(PERMISSIONS.RELATIONSHIP_TYPE_CREATE);
   const canUpdate = permissions.includes(PERMISSIONS.RELATIONSHIP_TYPE_UPDATE);
   const canDelete = permissions.includes(PERMISSIONS.RELATIONSHIP_TYPE_DELETE);
@@ -182,7 +183,17 @@ export function RelationshipTypesWidget({
             </thead>
             <tbody>
               {filteredTypes.map((type) => (
-                <tr key={type.id}>
+                <tr
+                  key={type.id}
+                  className={canUpdate || canView ? "interactive-row" : undefined}
+                  onClick={
+                    canUpdate
+                      ? () => setDialogState({ mode: "edit", relationshipType: type })
+                      : canView
+                        ? () => setDialogState({ mode: "view", relationshipType: type })
+                        : undefined
+                  }
+                >
                   <td style={{ fontWeight: 500 }}>{type.name}</td>
                   <td>{formatDate(type.createdAt)}</td>
                   {showActionsColumn && (

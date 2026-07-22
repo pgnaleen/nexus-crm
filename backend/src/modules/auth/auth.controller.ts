@@ -1,5 +1,5 @@
 import { ActingTenant, AuthSessionResponse, PERMISSIONS, VerifyPasswordResponse } from "@orelia/common";
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Logger, Post, Req, Res, UseGuards } from "@nestjs/common";
 import type { Request, Response } from "express";
 import { ACT_AS_TENANT_COOKIE, ACT_AS_TENANT_TTL_MS } from "../../core/tenant";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
@@ -16,6 +16,8 @@ import type { AuthenticatedUser } from "./types/authenticated-user";
 
 @Controller("auth")
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(private readonly authService: AuthService) {}
 
   @Public()
@@ -25,9 +27,17 @@ export class AuthController {
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthSessionResponse> {
-    const { session, accessToken, refreshToken } = await this.authService.login(dto);
-    this.setAuthCookies(res, accessToken, refreshToken);
-    return session;
+    // Never log dto.password.
+    this.logger.debug(`POST /auth/login called (tenantSlug="${dto.tenantSlug}", username="${dto.username}")`);
+    try {
+      const { session, accessToken, refreshToken } = await this.authService.login(dto);
+      this.setAuthCookies(res, accessToken, refreshToken);
+      this.logger.debug(`POST /auth/login succeeded for user ${session.user.id}`);
+      return session;
+    } catch (err) {
+      this.logger.error(`POST /auth/login failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @Public()
@@ -37,31 +47,53 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthSessionResponse> {
-    const refreshToken = req.cookies?.[REFRESH_COOKIE];
-    const { session, accessToken, refreshToken: newRefreshToken } =
-      await this.authService.refresh(refreshToken);
-    this.setAuthCookies(res, accessToken, newRefreshToken);
-    return session;
+    this.logger.debug("POST /auth/refresh called");
+    try {
+      const refreshToken = req.cookies?.[REFRESH_COOKIE];
+      const { session, accessToken, refreshToken: newRefreshToken } =
+        await this.authService.refresh(refreshToken);
+      this.setAuthCookies(res, accessToken, newRefreshToken);
+      this.logger.debug(`POST /auth/refresh succeeded for user ${session.user.id}`);
+      return session;
+    } catch (err) {
+      this.logger.error(`POST /auth/refresh failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(JwtAuthGuard)
   @Post("logout")
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
-    const refreshToken = req.cookies?.[REFRESH_COOKIE];
-    await this.authService.logout(refreshToken);
-    res.clearCookie(ACCESS_COOKIE);
-    res.clearCookie(REFRESH_COOKIE);
-    // Defense in depth for shared machines -- a mismatched actingUserId
-    // already makes a stale act-as cookie harmless for a different
-    // subsequent login, but clearing it explicitly removes the ambiguity.
-    res.clearCookie(ACT_AS_TENANT_COOKIE);
+    this.logger.debug("POST /auth/logout called");
+    try {
+      const refreshToken = req.cookies?.[REFRESH_COOKIE];
+      await this.authService.logout(refreshToken);
+      res.clearCookie(ACCESS_COOKIE);
+      res.clearCookie(REFRESH_COOKIE);
+      // Defense in depth for shared machines -- a mismatched actingUserId
+      // already makes a stale act-as cookie harmless for a different
+      // subsequent login, but clearing it explicitly removes the ambiguity.
+      res.clearCookie(ACT_AS_TENANT_COOKIE);
+      this.logger.debug("POST /auth/logout succeeded");
+    } catch (err) {
+      this.logger.error(`POST /auth/logout failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(JwtAuthGuard)
   @Get("me")
   async me(@CurrentUser() user: AuthenticatedUser): Promise<AuthSessionResponse> {
-    return this.authService.getSession(user.sub);
+    this.logger.debug(`GET /auth/me called for user ${user.sub}`);
+    try {
+      const session = await this.authService.getSession(user.sub);
+      this.logger.debug(`GET /auth/me succeeded for user ${user.sub}`);
+      return session;
+    } catch (err) {
+      this.logger.error(`GET /auth/me failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   // Confirms the caller's OWN current password -- no permission check beyond
@@ -74,8 +106,16 @@ export class AuthController {
     @Body() dto: VerifyPasswordDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<VerifyPasswordResponse> {
-    const valid = await this.authService.verifyPassword(user.sub, dto.password);
-    return { valid };
+    // Never log dto.password.
+    this.logger.debug(`POST /auth/verify-password called for user ${user.sub}`);
+    try {
+      const valid = await this.authService.verifyPassword(user.sub, dto.password);
+      this.logger.debug(`POST /auth/verify-password result for user ${user.sub}: ${valid ? "valid" : "invalid"}`);
+      return { valid };
+    } catch (err) {
+      this.logger.error(`POST /auth/verify-password failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
@@ -87,27 +127,36 @@ export class AuthController {
     @CurrentUser() user: AuthenticatedUser,
     @Res({ passthrough: true }) res: Response,
   ): Promise<{ tenant: ActingTenant }> {
-    // user.tenantId here is the REAL tenant from the verified main JWT, not
-    // the ambient (possibly already-impersonated) TenantContextService --
-    // deliberately, so this can't be chained/compounded.
-    const { token, tenant } = await this.authService.actAsTenant(user.sub, user.tenantId, dto.tenantId);
+    this.logger.debug(`POST /auth/act-as-tenant called by ${user.sub} targeting tenant ${dto.tenantId}`);
+    try {
+      // user.tenantId here is the REAL tenant from the verified main JWT, not
+      // the ambient (possibly already-impersonated) TenantContextService --
+      // deliberately, so this can't be chained/compounded.
+      const { token, tenant } = await this.authService.actAsTenant(user.sub, user.tenantId, dto.tenantId);
 
-    res.cookie(ACT_AS_TENANT_COOKIE, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: ACT_AS_TENANT_TTL_MS,
-    });
+      res.cookie(ACT_AS_TENANT_COOKIE, token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: ACT_AS_TENANT_TTL_MS,
+      });
 
-    return { tenant };
+      this.logger.debug(`POST /auth/act-as-tenant succeeded, now acting as tenant ${tenant.id}`);
+      return { tenant };
+    } catch (err) {
+      this.logger.error(`POST /auth/act-as-tenant failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(JwtAuthGuard)
   @Post("exit-act-as-tenant")
   @HttpCode(HttpStatus.NO_CONTENT)
   async exitActAsTenant(@Res({ passthrough: true }) res: Response): Promise<void> {
+    this.logger.debug("POST /auth/exit-act-as-tenant called");
     res.clearCookie(ACT_AS_TENANT_COOKIE);
+    this.logger.debug("POST /auth/exit-act-as-tenant succeeded");
   }
 
   private setAuthCookies(res: Response, accessToken: string, refreshToken: string): void {

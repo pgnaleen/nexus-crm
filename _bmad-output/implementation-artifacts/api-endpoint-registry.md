@@ -52,14 +52,23 @@ including which ones had a real pre-existing permission bug fixed during the mov
 
 ## Auth module (`backend/src/modules/auth/`)
 
+**2026-07-22: full module now instrumented**, both layers, every method. Deliberately careful
+never to log a plaintext password, raw access/refresh token, or token hash anywhere — only
+presence/absence booleans, user/tenant ids, and (for refresh-token lookups) whether the token was
+not-found/revoked/expired. **No `AuditLogService` calls added here** — login/refresh/logout are
+session-lifecycle events, not CRUD mutations of a business entity, so they don't fit the audit
+rollout's "significant entity mutation" scope (same reasoning already applied to
+`deal-stage-history.service.ts`'s own exclusion).
+
 | # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | POST | `/auth/verify-password` | RBAC (auth-only — no resource permission, just "must be logged in") | none beyond `JwtAuthGuard` | Confirms the *currently logged-in* user's own current password, without issuing new tokens — used to gate cascade-delete confirmations. | body: `{ password: string }` | `{ valid: boolean }` | `auth.controller.ts::verifyPassword` → `auth.service.ts::verifyPassword` | `lib/api/auth.ts::verifyPassword` — `CascadeDeleteConfirmDialog` via `DialogProvider`'s `useCascadeDeleteConfirm()` | ✅ | Added 2026-07-21 alongside the password-confirm cascade-delete dialog. Reuses the same `bcrypt.compare` check as `login()`. Password is redacted in request logs automatically (existing `RequestLoggerMiddleware` redaction already covers this field name). |
-
-*(This registry entry list is far from a full audit of the Auth module — `/auth/login`,
-`/auth/refresh`, `/auth/logout`, `/auth/me`, `/auth/act-as-tenant`, `/auth/exit-act-as-tenant` all
-predate this document and haven't been added yet. They'll be added when Auth gets its own review
-pass, same as every other not-yet-covered module below.)*
+| 1 | POST | `/auth/login` | Public | none | Authenticate, issue access+refresh cookies. Tracks failed attempts, locks the account for 15 min after 5 in a row. | body: `{tenantSlug, username, password}` | `AuthSessionResponse` | `login` → `auth.service.ts::login` | Login page | ✅ | **2026-07-22**: added full entry/branch/result logging (tenant-not-found, user-not-found/inactive, locked-out, wrong-password-with-attempt-count, success) — had none before. Password never logged. |
+| 2 | POST | `/auth/refresh` | Public (relies on the refresh cookie itself) | none | Rotate the refresh token, issue a new access+refresh pair. | cookie: refresh token | `AuthSessionResponse` | `refresh` → `auth.service.ts::refresh` | `middleware.ts` (proactive), `apiFetch`'s 401-retry path | ✅ | Logs only `tokenProvided` boolean and, on rejection, which of not-found/revoked/expired — never the raw token or its hash. |
+| 3 | POST | `/auth/logout` | Auth-only | `JwtAuthGuard` | Revoke the current refresh token, clear all three cookies. | cookie: refresh token | `204 No Content` | `logout` → `auth.service.ts::logout` | `AccountMenu.tsx` | ✅ | Logs how many token rows were revoked (0 or 1), never the token itself. |
+| 4 | GET | `/auth/me` | Auth-only | `JwtAuthGuard` | Fetch the current session (user, tenant, roles, permissions, acting-tenant). | none | `AuthSessionResponse` | `me` → `auth.service.ts::getSession` | `getServerSession()` on every page load | ✅ | Logs role/permission counts, not the actual permission strings (already available via other endpoints). |
+| 5 | POST | `/auth/verify-password` | Auth-only | `JwtAuthGuard` | Confirms the *currently logged-in* user's own current password, without issuing new tokens — used to gate cascade-delete confirmations. | body: `{password}` | `{valid: boolean}` | `verifyPassword` → `auth.service.ts::verifyPassword` | `CascadeDeleteConfirmDialog` via `useCascadeDeleteConfirm()` | ✅ | Added 2026-07-21, already had logging. Password is also redacted in request logs by the existing `RequestLoggerMiddleware`. |
+| 6 | POST | `/auth/act-as-tenant` | RBAC | `PLATFORM_IMPERSONATE_TENANT` | Issue a short-lived signed impersonation cookie for a System-tenant user acting as another tenant. | body: `{tenantId}` | `{tenant: ActingTenant}` | `actAsTenant` → `auth.service.ts::actAsTenant` | `TenantActingAsSwitcher.tsx` | ✅ | Already had an info-level audit-style log line (`this.logger.log`, kept as-is); now also has debug entry/blocked-branch/result logging matching every other endpoint. |
+| 7 | POST | `/auth/exit-act-as-tenant` | Auth-only | `JwtAuthGuard` | Clear the impersonation cookie. | none | `204 No Content` | `exitActAsTenant` (controller-only, no service method) | `TenantActingAsSwitcher.tsx` | ✅ | **Verified live** (2026-07-22): exercised a wrong-password attempt (confirmed lockout counter incremented, no lockout yet), a correct login, a refresh, a verify-password, and a logout, all through the real API — confirmed the full debug-log trail at both layers with zero password/token/hash leakage anywhere in the output. |
 
 ---
 
@@ -176,6 +185,89 @@ Identical shape to Departments above — same permission-union `findAll`, same C
 | 3 | PATCH | `/deal-sources/:id` | RBAC | `DEAL_SOURCE_UPDATE` | Update a deal source's name/category/active state. | body: `{name?, category?, isActive?}` | `DealSourceResponse` | `update` → `deal-sources.service.ts::update` | `DealSourcesWidget.tsx` (Edit) | ✅ | Records an `audit_logs` update diff. |
 | 4 | DELETE | `/deal-sources/:id` | RBAC | `DEAL_SOURCE_DELETE` | Soft-delete a deal source. | none | `{success: true}` | `remove` → `deal-sources.service.ts::remove` | `DealSourcesWidget.tsx` (Delete) | ✅ | Records an `audit_logs` delete entry. Verified live via the real API — full debug-log trail at both layers, all three audit rows confirmed. |
 
-*(Next sections will be added as each part of the system is reviewed — Teams, Relationship
-Parties, RBAC, Users, Tenants, the rest of Auth — in whatever order the user chooses to go through
-them.)*
+## Teams (`backend/src/modules/teams/teams.controller.ts`)
+
+Simpler permission model than Departments/Deal Sources above — each action gated on its own single
+permission (`TEAMS_VIEW` for list) rather than a permission union.
+
+| # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | GET | `/teams` | RBAC | `TEAMS_VIEW` | List every team. | none | `TeamResponse[]` | `findAll` → `teams.service.ts::findAll` | Teams admin widget | ✅ | **2026-07-22**: added debug logging at both layers — had none before. |
+| 2 | POST | `/teams` | RBAC | `TEAMS_CREATE` | Create a team. | body: `{name}` | `TeamResponse` | `create` → `teams.service.ts::create` | Teams admin widget (Add) | ✅ | Now records an `audit_logs` insert (`entityType: "team"`). |
+| 3 | PATCH | `/teams/:id` | RBAC | `TEAMS_UPDATE` | Rename a team. | body: `{name?}` | `TeamResponse` | `update` → `teams.service.ts::update` | Teams admin widget (Edit) | ✅ | Records an `audit_logs` update diff. |
+| 4 | DELETE | `/teams/:id` | RBAC | `TEAMS_DELETE` | Soft-delete a team. | none | `{success: true}` | `remove` → `teams.service.ts::remove` | Teams admin widget (Delete) | ✅ | Records an `audit_logs` delete entry. Verified live via the real API — full debug-log trail at both layers, all three audit rows confirmed. |
+
+## Relationship Parties (`backend/src/modules/relationship-types/relationship-parties.controller.ts`)
+
+Manages Company/Contact records tagged under a Relationship Type. Audit entries reference the
+underlying `company`/`contact` entity for field-level changes, and a separate `relationship_party`
+entity type for the tagging relationship itself (enable/disable/untag) — untagging never deletes
+the underlying Company/Contact record, only the map row linking it to this Relationship Type.
+
+| # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | GET | `/relationship-types/:relationshipTypeId/parties` | RBAC | any `RELATIONSHIP_*` | List every company/contact tagged under a Relationship Type. | none | `RelationshipPartyResponse[]` | `findAll` → `relationship-parties.service.ts::findAllForType` | `RelationshipViewWidget.tsx` | ✅ | **2026-07-22**: added debug logging at both layers — had none before. |
+| 2 | POST | `.../parties/companies` | RBAC | `RELATIONSHIP_CREATE` | Create a new Company (with optional inline Contacts) tagged under this type, inside one transaction. | body: company fields + `contacts?: []` | `RelationshipPartyResponse` | `addCompany` → `relationship-parties.service.ts::addCompany` | `CompanyFormDialog.tsx` (create) | ✅ | Now records an `audit_logs` insert for the company, plus one per inline contact — had zero audit trail before. |
+| 3 | POST | `.../parties/contacts` | RBAC | `RELATIONSHIP_CREATE` | Create a bare Contact (no company) tagged under this type. | body: contact fields | `RelationshipPartyResponse` | `addContact` → `relationship-parties.service.ts::addContact` | Contact-kind create flow | ✅ | Records an `audit_logs` insert (`entityType: "contact"`). |
+| 4 | PATCH | `.../parties/companies/:mapId` | RBAC | `RELATIONSHIP_UPDATE` | Update a tagged Company's fields. | body: partial company fields | `RelationshipPartyResponse` | `updateCompany` → `relationship-parties.service.ts::updateCompany` | `CompanyFormDialog.tsx` (edit) | ✅ | Records an `audit_logs` update diff (`entityType: "company"`). |
+| 5 | PATCH | `.../parties/contacts/:mapId` | RBAC | `RELATIONSHIP_UPDATE` | Update a tagged Contact's fields. | body: partial contact fields | `RelationshipPartyResponse` | `updateContact` → `relationship-parties.service.ts::updateContact` | Contact-kind edit flow | ✅ | Records an `audit_logs` update diff (`entityType: "contact"`). |
+| 6 | PATCH | `.../parties/:mapId/disable` | RBAC | `RELATIONSHIP_UPDATE` | Deactivate a tagging (party stays, `isActive: false`). | none | `RelationshipPartyResponse` | `disable` → `relationship-parties.service.ts::setActive(false)` | `RelationshipViewWidget.tsx` | ✅ | Records an `audit_logs` update (`entityType: "relationship_party"`, `{isActive: {old, new}}`) — only when the value actually flips. |
+| 7 | PATCH | `.../parties/:mapId/enable` | RBAC | `RELATIONSHIP_UPDATE` | Reactivate a tagging. | none | `RelationshipPartyResponse` | `enable` → `relationship-parties.service.ts::setActive(true)` | `RelationshipViewWidget.tsx` | ✅ | Same as above. |
+| 8 | DELETE | `.../parties/:mapId` | RBAC | `RELATIONSHIP_DELETE` | Untag a Company/Contact from this Relationship Type (soft-delete the map row only). | none | `{success: true}` | `remove` → `relationship-parties.service.ts::remove` | `RelationshipViewWidget.tsx` | ✅ | Records an `audit_logs` delete (`entityType: "relationship_party"`). **Verified live** (2026-07-22): created a real company with an inline contact, updated it, disabled, re-enabled, then removed it via the real API — confirmed the full debug-log trail at both layers and every audit row (company insert, contact insert, company update, two `relationship_party` update rows, one `relationship_party` delete row). |
+
+## RBAC (`backend/src/modules/rbac/rbac.controller.ts`)
+
+Role CRUD + permission assignment. Role-to-permission assignment audits against `entityType:
+"rbac_role"` (`{resourceIds: {old, new}}`); user-to-role assignment audits against `entityType:
+"user"` (see `assignRolesToUser`/`replaceRolesForUser`, called from the Users module, not this
+controller directly).
+
+| # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | GET | `/rbac/roles` | RBAC | `RBAC_VIEW` | List every role with its permission count. | none | `RbacRoleResponse[]` | `findAllRoles` → `rbac.service.ts::findAllRoles` | Roles admin widget | ✅ | **2026-07-22**: added debug logging at both layers across the whole service — had none before. |
+| 2 | GET | `/rbac/resources` | RBAC | `RBAC_VIEW` | List every permission assignable from the current tenant (platform-only ones filtered out unless acting as System). | none | `RbacResourceResponse[]` | `findAllResources` → `rbac.service.ts::findAllResources` | `RolePermissionsDialog.tsx` | ✅ | |
+| 3 | GET | `/rbac/roles/:id/resources` | RBAC | `RBAC_VIEW` or `_UPDATE` | List the permission ids currently granted to a role. | none | `string[]` | `getRoleResourceIds` → `rbac.service.ts::getResourceIdsForRole` | `RolePermissionsDialog.tsx` | ✅ | |
+| 4 | POST | `/rbac/roles` | RBAC | `RBAC_CREATE` | Create a role. | body: `{name, description?}` | `RbacRoleResponse` | `create` → `rbac.service.ts::createRole` | Roles admin widget (Add) | ✅ | Now records an `audit_logs` insert (`entityType: "rbac_role"`). |
+| 5 | PATCH | `/rbac/roles/:id` | RBAC | `RBAC_UPDATE` | Rename/redescribe a role. | body: `{name?, description?}` | `RbacRoleResponse` | `update` → `rbac.service.ts::updateRole` | Roles admin widget (Edit) | ✅ | Records an `audit_logs` update diff. |
+| 6 | PUT | `/rbac/roles/:id/resources` | RBAC | `RBAC_UPDATE` | Full-replace a role's permission set (also blocks assigning platform-only permissions from a non-System tenant). | body: `{resourceIds: string[]}` | `RbacRoleResponse` | `assignResources` → `rbac.service.ts::assignResourcesToRole` | `RolePermissionsDialog.tsx` (Save) | ✅ | Records an `audit_logs` update (`{resourceIds: {old, new}}`) — captures the full before/after set, not just a count. |
+| 7 | DELETE | `/rbac/roles/:id` | RBAC | `RBAC_DELETE` | Delete a role. | none | `{success: true}` | `remove` → `rbac.service.ts::removeRole` | Roles admin widget (Delete) | ✅ | Records an `audit_logs` delete entry. **Verified live** (2026-07-22): created a real role, renamed it, assigned a real permission to it, deleted it, via the real API — confirmed the full debug-log trail at both layers and all four `audit_logs` rows. |
+
+## Users (`backend/src/modules/users/users.controller.ts`)
+
+Handles passwords and sessions — every log line and audit entry was written deliberately to never
+include a plaintext password or password hash, matching the existing redaction precedent already
+used by `RequestLoggerMiddleware` elsewhere in this codebase.
+
+| # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | GET | `/users` | RBAC | `USERS_VIEW` | List every user (summary shape). | none | `UserSummaryResponse[]` | `findAll` → `users.service.ts::findAll` | Users admin widget | ✅ | **2026-07-22**: added debug logging at both layers across the whole service — had none before. |
+| 2 | GET | `/users/:id` | RBAC | `USERS_VIEW`/`_UPDATE` | Fetch one user's full detail. | none | `UserResponse` | `findOne` → `users.service.ts::findOneOrFail` | Edit User dialog | ✅ | |
+| 3 | POST | `/users` | RBAC | `USERS_CREATE` | Create a user (optionally assigning roles). | body: `{username, displayName, loggingEmail, password, status?, mustChangePassword?, extras?, roleIds?}` | `UserResponse` | `create` → `users.service.ts::create` | Users admin widget (Add) | ✅ | Now records an `audit_logs` insert — deliberately excludes the password; only `username`/`displayName`/`status`. |
+| 4 | PATCH | `/users/:id` | RBAC | `USERS_UPDATE` | Update a user's fields and/or full-replace their role set. | body: partial fields + `roleIds?` | `UserResponse` | `update` → `users.service.ts::update` | Edit User dialog | ✅ | Records an `audit_logs` update diff for the entity fields; `roleIds` (if present) is handled separately via `RbacService.replaceRolesForUser`, which audits against `entityType: "user"` itself. |
+| 5 | GET | `/users/:id/roles` | RBAC | `USERS_VIEW`/`_UPDATE` | List a user's currently-assigned role ids. | none | `string[]` | `getRoleIds` → `rbac.service.ts::getRoleIdsForUser` | Edit User dialog | ✅ | |
+| 6 | POST | `/users/:id/reset-password` | RBAC | `USERS_UPDATE` | Admin-initiated password reset (forces `mustChangePassword`). | body: `{password}` | `204 No Content` | `resetPassword` → `users.service.ts::resetPassword` | Users admin widget | ✅ | Records an `audit_logs` update with `{passwordReset: true, mustChangePassword: true}` — never the password itself. |
+| 7 | POST | `/users/me/change-password` | Any authenticated user (no RBAC permission) | Self-service password change; revokes every other active session. | body: `{currentPassword, newPassword}` | `204 No Content` | `changeOwnPassword` → `users.service.ts::changeOwnPassword` | Profile page | ✅ | Records an `audit_logs` update with `{passwordSelfChanged: true}` — never a password. |
+| 8 | PATCH | `/users/:id/disable` | RBAC | `USERS_DISABLE` | Disable a user and revoke all their active refresh tokens. | none | `UserResponse` | `disable` → `users.service.ts::disable` | Users admin widget | ✅ | Records an `audit_logs` status-change update. |
+| 9 | PATCH | `/users/:id/enable` | RBAC | `USERS_DISABLE` | Re-enable a user. | none | `UserResponse` | `enable` → `users.service.ts::enable` | Users admin widget | ✅ | Records an `audit_logs` status-change update. |
+| 10 | DELETE | `/users/:id` | RBAC | `USERS_DELETE` | Soft-delete a user. | none | `{success: true}` | `remove` → `users.service.ts::remove` | Users admin widget | ✅ | Records an `audit_logs` delete entry. **Verified live** (2026-07-22): created a real user, renamed it, reset its password, disabled, re-enabled, deleted it, via the real API — confirmed the full debug-log trail at both layers with zero password/hash leakage anywhere, and all six `audit_logs` rows. |
+
+## Tenants (`backend/src/modules/tenants/tenants.controller.ts`)
+
+**Real gap found and fixed here, not just missing logging**: `create()`/`update()` never set
+`createdBy`/`updatedBy` at all (no `@CurrentUser()` even reached the service) — a direct violation
+of the standing "no insert or update may leave createdBy/updatedBy unset" rule. `remove()` is a
+genuine hard delete (cascades via `ON DELETE CASCADE` on every tenant-owned table's `tenant_id`
+FK) — same shape as `deal-partners.service.ts`'s own hard-delete path, no `deletedBy` applies.
+
+| # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | GET | `/tenants/by-slug/:slug` | Public | none | Resolve a tenant's display name from its slug (login page). | none | `PublicTenantResponse` | `findBySlug` → `tenants.service.ts::findBySlugOrFail` | Login page | ✅ | **2026-07-22**: added debug logging at both layers across the whole service — had none before. |
+| 2 | GET | `/tenants` | RBAC | `TENANTS_VIEW` | List every tenant (summary shape). | none | `TenantSummaryResponse[]` | `findAll` → `tenants.service.ts::findAll` | Tenants admin widget | ✅ | |
+| 3 | GET | `/tenants/plans` | RBAC | `TENANTS_VIEW` | List available plans. | none | `PlanResponse[]` | `findAllPlans` → `tenants.service.ts::findAllPlans` | Tenant Add/Edit dialog | ✅ | |
+| 4 | GET | `/tenants/industries` | RBAC | `TENANTS_VIEW` | List available industries. | none | `IndustryResponse[]` | `findAllIndustries` → `tenants.service.ts::findAllIndustries` | Tenant Add/Edit dialog | ✅ | |
+| 5 | GET | `/tenants/:id` | RBAC | `TENANTS_VIEW`/`_UPDATE` | Fetch one tenant's full detail. | none | `TenantResponse` | `findOne` → `tenants.service.ts::findOneOrFail` | Tenant Edit dialog | ✅ | |
+| 6 | POST | `/tenants` | RBAC | `TENANTS_CREATE` | Create a tenant. | body: `{name, slug, planId, status, phoneNo, contactEmail, industryId?, tagline?, billingEmail?, address?}` | `TenantResponse` | `create` → `tenants.service.ts::create` | Tenants admin widget (Add) | ✅ | **Fixed**: now passes `@CurrentUser()` through and sets `createdBy` (previously always null). Records an `audit_logs` insert. |
+| 7 | PATCH | `/tenants/:id` | RBAC | `TENANTS_UPDATE` | Update a tenant's fields. | body: partial fields | `TenantResponse` | `update` → `tenants.service.ts::update` | Tenants admin widget (Edit) | ✅ | **Fixed**: now sets `updatedBy` (previously always null). Records an `audit_logs` update diff — verified the *actual database row* is unaffected by omitted fields (TypeORM correctly skips undefined columns), though the diff's JSON representation itself can show a stray old-only entry for a DTO field not sent in the request; same minor, pre-existing cosmetic imprecision shared by every other module's identical diff-computation pattern in this rollout, not a data-integrity issue. |
+| 8 | DELETE | `/tenants/:id` | RBAC | `TENANTS_DELETE` | **Hard**-delete a tenant, cascading to every tenant-owned table. | none | `{success: true}` | `remove` → `tenants.service.ts::remove` | Tenants admin widget (Delete) | ✅ | Records an `audit_logs` delete entry before the row (and everything under it) is gone. **Verified live** (2026-07-22): created a real tenant, confirmed `created_by` was a real user id (previously always `null`), renamed it, confirmed `updated_by` was set and the untouched `phone_no`/`contact_email` columns survived intact in the database, deleted it — confirmed the full debug-log trail at both layers and all three `audit_logs` rows. |
+
+*(Next section will be added once the rest of Auth is reviewed.)*

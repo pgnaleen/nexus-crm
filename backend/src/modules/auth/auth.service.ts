@@ -50,36 +50,53 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
   async login(dto: LoginDto): Promise<{ session: AuthSessionResponse } & TokenPair> {
-    const tenant = await this.tenantRepo.findOneBy({ slug: dto.tenantSlug });
-    if (!tenant) {
-      throw new UnauthorizedException("Invalid credentials");
-    }
-
-    const user = await this.userRepo.findOneBy({ tenantId: tenant.id, username: dto.username });
-    if (!user || user.status !== UserStatus.Active) {
-      throw new UnauthorizedException("Invalid credentials");
-    }
-
-    if (user.lockedUntil && user.lockedUntil > new Date()) {
-      throw new UnauthorizedException("Too many failed attempts. Try again in a few minutes.");
-    }
-
-    const passwordMatches = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!passwordMatches) {
-      user.loggingAttempts += 1;
-      if (user.loggingAttempts >= LOGIN_LOCKOUT_THRESHOLD) {
-        user.lockedUntil = new Date(Date.now() + LOGIN_LOCKOUT_DURATION_MS);
+    // Never log dto.password.
+    this.logger.debug(`login called (tenantSlug="${dto.tenantSlug}", username="${dto.username}")`);
+    try {
+      const tenant = await this.tenantRepo.findOneBy({ slug: dto.tenantSlug });
+      if (!tenant) {
+        this.logger.debug(`login blocked: no tenant with slug "${dto.tenantSlug}"`);
+        throw new UnauthorizedException("Invalid credentials");
       }
+
+      const user = await this.userRepo.findOneBy({ tenantId: tenant.id, username: dto.username });
+      if (!user || user.status !== UserStatus.Active) {
+        this.logger.debug(`login blocked: user "${dto.username}" not found or not active for tenant ${tenant.id}`);
+        throw new UnauthorizedException("Invalid credentials");
+      }
+
+      if (user.lockedUntil && user.lockedUntil > new Date()) {
+        this.logger.debug(`login blocked: user ${user.id} is locked out until ${user.lockedUntil.toISOString()}`);
+        throw new UnauthorizedException("Too many failed attempts. Try again in a few minutes.");
+      }
+
+      const passwordMatches = await bcrypt.compare(dto.password, user.passwordHash);
+      if (!passwordMatches) {
+        user.loggingAttempts += 1;
+        if (user.loggingAttempts >= LOGIN_LOCKOUT_THRESHOLD) {
+          user.lockedUntil = new Date(Date.now() + LOGIN_LOCKOUT_DURATION_MS);
+          this.logger.debug(`login: user ${user.id} hit the lockout threshold, locking until ${user.lockedUntil.toISOString()}`);
+        } else {
+          this.logger.debug(`login blocked: wrong password for user ${user.id} (attempt ${user.loggingAttempts}/${LOGIN_LOCKOUT_THRESHOLD})`);
+        }
+        await this.userRepo.save(user);
+        throw new UnauthorizedException("Invalid credentials");
+      }
+
+      user.loggingAttempts = 0;
+      user.lockedUntil = undefined;
+      user.lastLoggingAt = new Date();
       await this.userRepo.save(user);
-      throw new UnauthorizedException("Invalid credentials");
+      this.logger.debug(`login succeeded for user ${user.id}`);
+
+      return await this.issueSession(user, tenant);
+    } catch (err) {
+      if (err instanceof UnauthorizedException) {
+        throw err;
+      }
+      this.logger.error(`login failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
     }
-
-    user.loggingAttempts = 0;
-    user.lockedUntil = undefined;
-    user.lastLoggingAt = new Date();
-    await this.userRepo.save(user);
-
-    return this.issueSession(user, tenant);
   }
 
   /**
@@ -101,33 +118,56 @@ export class AuthService {
   }
 
   async refresh(rawRefreshToken: string | undefined): Promise<{ session: AuthSessionResponse } & TokenPair> {
+    // Never log the raw token -- only its presence/absence and the hash.
+    this.logger.debug(`refresh called (tokenProvided=${!!rawRefreshToken})`);
     if (!rawRefreshToken) {
+      this.logger.debug("refresh blocked: no refresh token cookie present");
       throw new UnauthorizedException("Missing refresh token");
     }
 
-    const tokenHash = hashToken(rawRefreshToken);
-    const existing = await this.refreshTokenRepo.findOneBy({ tokenHash });
-    if (!existing || existing.revokedAt || existing.expiresAt < new Date()) {
-      throw new UnauthorizedException("Refresh token is invalid or expired");
+    try {
+      const tokenHash = hashToken(rawRefreshToken);
+      const existing = await this.refreshTokenRepo.findOneBy({ tokenHash });
+      if (!existing || existing.revokedAt || existing.expiresAt < new Date()) {
+        this.logger.debug(
+          `refresh blocked: token ${!existing ? "not found" : existing.revokedAt ? "already revoked" : "expired"}`,
+        );
+        throw new UnauthorizedException("Refresh token is invalid or expired");
+      }
+
+      existing.revokedAt = new Date();
+      await this.refreshTokenRepo.save(existing);
+
+      const [user, tenant] = await Promise.all([
+        this.userRepo.findOneByOrFail({ id: existing.userId }),
+        this.tenantRepo.findOneByOrFail({ id: existing.tenantId }),
+      ]);
+
+      this.logger.debug(`refresh succeeded for user ${user.id}, rotating refresh token`);
+      return await this.issueSession(user, tenant);
+    } catch (err) {
+      if (err instanceof UnauthorizedException) {
+        throw err;
+      }
+      this.logger.error(`refresh failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
     }
-
-    existing.revokedAt = new Date();
-    await this.refreshTokenRepo.save(existing);
-
-    const [user, tenant] = await Promise.all([
-      this.userRepo.findOneByOrFail({ id: existing.userId }),
-      this.tenantRepo.findOneByOrFail({ id: existing.tenantId }),
-    ]);
-
-    return this.issueSession(user, tenant);
   }
 
   async logout(rawRefreshToken: string | undefined): Promise<void> {
+    this.logger.debug(`logout called (tokenProvided=${!!rawRefreshToken})`);
     if (!rawRefreshToken) {
+      this.logger.debug("logout: no refresh token cookie present, nothing to revoke");
       return;
     }
-    const tokenHash = hashToken(rawRefreshToken);
-    await this.refreshTokenRepo.update({ tokenHash }, { revokedAt: new Date() });
+    try {
+      const tokenHash = hashToken(rawRefreshToken);
+      const result = await this.refreshTokenRepo.update({ tokenHash }, { revokedAt: new Date() });
+      this.logger.debug(`logout succeeded, revoked ${result.affected ?? 0} token row(s)`);
+    } catch (err) {
+      this.logger.error(`logout failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   /**
@@ -142,41 +182,59 @@ export class AuthService {
     callerRealTenantId: string,
     targetTenantId: string,
   ): Promise<{ token: string; tenant: ActingTenant }> {
-    if (!(await this.systemTenantCache.isSystemTenant(callerRealTenantId))) {
-      throw new ForbiddenException("Only the System tenant can act as another tenant");
+    this.logger.debug(`actAsTenant called by ${actingUserId} (real tenant ${callerRealTenantId}) targeting tenant ${targetTenantId}`);
+    try {
+      if (!(await this.systemTenantCache.isSystemTenant(callerRealTenantId))) {
+        this.logger.debug(`actAsTenant blocked: caller's real tenant ${callerRealTenantId} is not the System tenant`);
+        throw new ForbiddenException("Only the System tenant can act as another tenant");
+      }
+
+      const tenant = await this.tenantRepo.findOneBy({ id: targetTenantId });
+      if (!tenant) {
+        this.logger.debug(`actAsTenant blocked: target tenant ${targetTenantId} not found`);
+        throw new NotFoundException("Target tenant not found");
+      }
+
+      const payload: ActAsTenantTokenPayload = {
+        typ: ACT_AS_TENANT_TOKEN_TYPE,
+        actAsTenantId: tenant.id,
+        actingUserId,
+      };
+      const token = this.jwtService.sign(payload, {
+        secret: this.config.get<string>("JWT_ACCESS_SECRET"),
+        expiresIn: ACT_AS_TENANT_TTL_MS / 1000,
+      });
+
+      this.logger.log(
+        `User ${actingUserId} (tenant ${callerRealTenantId}) began acting as tenant ${tenant.id} (${tenant.slug})`,
+      );
+
+      return { token, tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug } };
+    } catch (err) {
+      if (err instanceof ForbiddenException || err instanceof NotFoundException) {
+        throw err;
+      }
+      this.logger.error(`actAsTenant failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
     }
-
-    const tenant = await this.tenantRepo.findOneBy({ id: targetTenantId });
-    if (!tenant) {
-      throw new NotFoundException("Target tenant not found");
-    }
-
-    const payload: ActAsTenantTokenPayload = {
-      typ: ACT_AS_TENANT_TOKEN_TYPE,
-      actAsTenantId: tenant.id,
-      actingUserId,
-    };
-    const token = this.jwtService.sign(payload, {
-      secret: this.config.get<string>("JWT_ACCESS_SECRET"),
-      expiresIn: ACT_AS_TENANT_TTL_MS / 1000,
-    });
-
-    this.logger.log(
-      `User ${actingUserId} (tenant ${callerRealTenantId}) began acting as tenant ${tenant.id} (${tenant.slug})`,
-    );
-
-    return { token, tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug } };
   }
 
   async getSession(userId: string): Promise<AuthSessionResponse> {
-    const user = await this.userRepo.findOneByOrFail({ id: userId });
-    const tenant = await this.tenantRepo.findOneByOrFail({ id: user.tenantId });
-    const [roles, permissions, actingTenant] = await Promise.all([
-      this.rbacService.getRoleNamesForUser(user.id),
-      this.rbacService.getPermissionsForUser(user.id),
-      this.resolveActingTenant(user.tenantId),
-    ]);
-    return this.toSession(user, tenant, roles, permissions, actingTenant);
+    this.logger.debug(`getSession called for user ${userId}`);
+    try {
+      const user = await this.userRepo.findOneByOrFail({ id: userId });
+      const tenant = await this.tenantRepo.findOneByOrFail({ id: user.tenantId });
+      const [roles, permissions, actingTenant] = await Promise.all([
+        this.rbacService.getRoleNamesForUser(user.id),
+        this.rbacService.getPermissionsForUser(user.id),
+        this.resolveActingTenant(user.tenantId),
+      ]);
+      this.logger.debug(`getSession succeeded for user ${userId} (${roles.length} role(s), ${permissions.length} permission(s))`);
+      return this.toSession(user, tenant, roles, permissions, actingTenant);
+    } catch (err) {
+      this.logger.error(`getSession failed for user ${userId}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   /**
@@ -190,6 +248,7 @@ export class AuthService {
     if (ambientTenantId === realTenantId) {
       return null;
     }
+    this.logger.debug(`resolveActingTenant: ambient tenant ${ambientTenantId} differs from real tenant ${realTenantId}`);
     const tenant = await this.tenantRepo.findOneBy({ id: ambientTenantId });
     if (!tenant) {
       return null;
@@ -219,6 +278,8 @@ export class AuthService {
         expiresAt: new Date(Date.now() + parseDurationToMs(refreshExpiresIn)),
       }),
     );
+    // Never log accessToken/refreshToken themselves.
+    this.logger.debug(`issueSession: minted a new access+refresh token pair for user ${user.id}`);
 
     // Login/refresh always issue a session for the caller's real tenant --
     // act-as-tenant is a separate cookie established afterward, never active here.

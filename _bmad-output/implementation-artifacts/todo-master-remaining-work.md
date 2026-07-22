@@ -286,39 +286,71 @@ rest of this session.
 
 ## C. Standing infrastructure rollouts (one-time build items, ship module-by-module)
 
-### Deep debug logging retrofit
-Reference implementation (entry log, branch-level debug lines, result-count log, full
-try/catch+rethrow) is done for: Pickers, Auth (`verify-password`), Relationship Types, Main
-Stages/Sub Stages, `deals.service.ts` (all methods, including `remove`/`moveStage` which were
-found to have zero and partial logging respectively), `deal-notes.*`, `deal-documents.service.ts`,
-`deal-partners.service.ts`, `deal-stage-history.service.ts` — **all of Deals is now fully done.**
-**Departments, Deal Sources done** (2026-07-22) — both controller and service layers instrumented
-for each.
-**Still missing:** Teams, Relationship Parties, RBAC, Users, Tenants, the rest of Auth.
+### Deep debug logging retrofit — ✅ **100% COMPLETE** (2026-07-22)
+Every backend module in the codebase now meets the "Deep debug logging inside every backend
+endpoint" standard: entry log with inputs, a debug line for every conditional branch actually
+taken, a result-count/outcome log on the way out, and the whole method body wrapped in
+try/catch+rethrow (never swallowed) — at **both** the controller and service layer, everywhere.
+Rolled out this session: Deals (all sub-services, including `remove`/`moveStage` which had zero
+and partial logging respectively), Departments, Deal Sources, Teams, Relationship Parties, RBAC,
+Users, Tenants, and the rest of Auth (`login`/`refresh`/`logout`/`me`/`act-as-tenant`/
+`exit-act-as-tenant` — previously only `verify-password` had this). Users and Auth both required
+deliberate care to never log a plaintext password, raw token, or token hash anywhere — verified
+live with zero leakage in both.
 
-### `AuditLogService` rollout
-Done for: Relationship Types (`create`/`update`/`remove`), all of `deals.service.ts`, `deal-notes.*`,
-`deal-documents.service.ts` (insert/delete, entity type `deal_document`), `deal-partners.service.ts`
-(insert/delete, entity type `deal_partner`, also fixed a real gap where `DELETE
-/deals/:dealId/partners/:partnerId` never even received the caller's user id), Departments
-(insert/update/delete, entity type `department`). Deliberately **not** added to
-`deal-stage-history.service.ts` — its own history rows already are the audit trail for stage
-moves; a second entry would be circular.
-**Still missing:** Teams, Relationship Parties, RBAC, Users, Tenants.
-**Verified live** (2026-07-22): exercised move/upload-document/add-partner and Departments/Deal
-Sources create/rename/delete through the real API, confirmed every new debug-log line in `docker
-logs` and every new `audit_logs` row in the database at each step.
+### `AuditLogService` rollout — ✅ **COMPLETE for every module where it applies**
+Done for: Relationship Types, all of Deals (`deals.service.ts`, `deal-notes.*`,
+`deal-documents.service.ts`, `deal-partners.service.ts` — also fixed a real gap where `DELETE
+/deals/:dealId/partners/:partnerId` never received the caller's user id), Departments, Deal
+Sources, Teams, Relationship Parties (with a proper audit-entity split: `company`/`contact` for
+field changes, `relationship_party` for the tagging relationship itself), RBAC (role-permission
+assignment audits the full before/after `resourceIds` set, not just a count), Users, Tenants.
+**Deliberately not added** to `deal-stage-history.service.ts` (its own history rows already are
+the permanent audit trail for stage moves — a second entry would be circular) or to Auth
+(login/refresh/logout are session-lifecycle events, not entity CRUD — outside this rollout's
+scope by design, same reasoning as stage history).
+**Real gaps found and fixed along the way, not just missing logs:** Tenants' `create()`/`update()`
+never set `createdBy`/`updatedBy` at all (no `@CurrentUser()` even reached the service); Deal
+Partners' `remove()` had the same gap.
+**Verified live** across every module: real create/update/delete cycles through the actual API,
+confirmed every debug-log line in `docker logs` and every `audit_logs` row in the database at each
+step, for all 8 modules touched this session.
 
-### API Endpoint Registry (`api-endpoint-registry.md`)
-Deal Documents/Partners/Stage History now have full per-endpoint tables (they only had prose
-summaries before); `/deals/:id/move`'s Debug Logging column corrected from ⬜ to ✅; Departments
-and Deal Sources now each have a full section.
-**Still missing:** Teams, Relationship Parties, RBAC, Users, Tenants, the rest of Auth.
+### API Endpoint Registry (`api-endpoint-registry.md`) — ✅ **COMPLETE**
+Every module now has a full per-endpoint table: Deal Documents/Partners/Stage History (previously
+just prose summaries), Departments, Deal Sources, Teams, Relationship Parties, RBAC, Users,
+Tenants, and the full Auth module (previously only `verify-password` was documented, five other
+real endpoints were undocumented). `/deals/:id/move`'s Debug Logging column corrected from ⬜ to ✅.
 
-### Enforce `createdBy`/`updatedBy` NOT NULL at the DB level (stretch, explicitly do last)
-Only after confirming every service path always sets them (audit via the rollout above) — change
-`created_by`/`updated_by` from `nullable: true` to `NOT NULL` via migration. A blind constraint
-today would break seed/system rows inserted without a real actor.
+### Enforce `createdBy` NOT NULL at the DB level — ⚠️ **attempted, correctly reverted, not viable as originally scoped**
+Every service path was confirmed this session to always set `createdBy` on insert (the
+precondition this task itself required). Tried a `CHECK ("created_by" IS NOT NULL) NOT VALID`
+constraint per-table (the standard Postgres idiom for "enforce going forward without failing on
+existing rows") on all 26 tables that have the column. Migration ran clean, and it correctly
+rejected a fresh test insert with a NULL `created_by`.
+**But live verification caught a real, serious problem before this got left in place**: Postgres
+CHECK constraints re-validate the **entire row** on every UPDATE, not just the columns being
+changed. Every table has real historical rows with a legitimate NULL `created_by` from
+seed/system data (56 in `rbac_resources` alone, plus the seeded admin `users` row, the seeded
+tenants, plans, industries, etc. — exactly what this task's own original note warned about). Once
+the constraint existed, **any future update to one of those rows failed outright** — including
+logging in as the seeded admin account, since `login()` updates `lastLoggingAt`/`loggingAttempts`
+on that same row. Confirmed via the real API: `POST /auth/login` started returning `500
+QueryFailedError: ... violates check constraint "CHK_users_created_by_not_null"`.
+**Reverted immediately** (`migration:revert`, then deleted the migration file) and confirmed login
+works again.
+**Why this is correctly abandoned, not just deferred**: doing this safely would require first
+backfilling every historical NULL `created_by` with a real actor id — but there is no "system"
+user in this schema to attribute seed data to, and inventing a placeholder UUID not tied to a real
+person would misrepresent the audit trail this whole rollout exists to make trustworthy. The
+practical protection already exists at the application layer (every `create()` in the codebase now
+verifiably sets it), which is proportionate to the actual risk — DB-level enforcement here costs
+more (breaks real historical rows) than it protects against (a service path regression that would
+show up immediately in the debug-log trail this session just built out everywhere). Not
+recommended to revisit unless a real "system actor" concept gets added to the schema first.
+`updated_by` was never attempted at all — verified directly against the data that it's correctly,
+expectedly NULL for the majority of rows in every table (most rows have simply never been edited
+since creation), so a NOT NULL constraint there would be actively wrong, not just risky.
 
 ---
 

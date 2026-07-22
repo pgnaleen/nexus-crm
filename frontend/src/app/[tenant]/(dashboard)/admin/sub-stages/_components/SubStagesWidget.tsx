@@ -28,7 +28,7 @@ interface SubStagesWidgetProps {
 
 type DialogState =
   | { mode: "create" }
-  | { mode: "edit"; subStage: DealStageResponse }
+  | { mode: "edit" | "view"; subStage: DealStageResponse }
   | null;
 
 export function SubStagesWidget({
@@ -180,9 +180,13 @@ export function SubStagesWidget({
               {filteredSubStages.map((subStage) => (
                 <tr
                   key={subStage.id}
-                  className={canUpdate ? "interactive-row" : undefined}
+                  className={canUpdate || canView ? "interactive-row" : undefined}
                   onClick={
-                    canUpdate ? () => setDialogState({ mode: "edit", subStage }) : undefined
+                    canUpdate
+                      ? () => setDialogState({ mode: "edit", subStage })
+                      : canView
+                        ? () => setDialogState({ mode: "view", subStage })
+                        : undefined
                   }
                 >
                   <td style={{ fontWeight: 500 }}>{subStage.name}</td>

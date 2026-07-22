@@ -22,7 +22,7 @@ function toFormState(department?: DepartmentResponse): FormState {
 }
 
 interface DepartmentFormDialogProps {
-  mode: "create" | "edit";
+  mode: "create" | "edit" | "view";
   department?: DepartmentResponse;
   onClose: () => void;
   onSaved: (department: DepartmentResponse) => void;
@@ -34,6 +34,7 @@ export function DepartmentFormDialog({
   onClose,
   onSaved,
 }: DepartmentFormDialogProps) {
+  const isViewOnly = mode === "view";
   const [values, setValues] = useState<FormState>(() => toFormState(department));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -80,7 +81,7 @@ export function DepartmentFormDialog({
   return (
     <Dialog
       open
-      title={mode === "create" ? "Add Department" : "Edit Department"}
+      title={mode === "create" ? "Add Department" : mode === "view" ? "View Department" : "Edit Department"}
       onClose={onClose}
       maxWidth="480px"
     >
@@ -92,6 +93,7 @@ export function DepartmentFormDialog({
           name="name"
           value={values.name}
           error={errors.name}
+          disabled={isViewOnly}
           placeholder="e.g. Engineering, Finance, Human Resources"
           onChange={(e) => setField("name", e.target.value)}
         />
@@ -100,6 +102,7 @@ export function DepartmentFormDialog({
           <input
             type="checkbox"
             checked={values.isActive}
+            disabled={isViewOnly}
             onChange={(e) => setField("isActive", e.target.checked)}
           />
           <span>Active — visible when assigning employees to a department</span>
@@ -107,11 +110,13 @@ export function DepartmentFormDialog({
 
         <div className="dialog-actions">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
-            Cancel
+            {isViewOnly ? "Close" : "Cancel"}
           </Button>
-          <Button type="submit" isLoading={isSaving}>
-            {mode === "create" ? "Create department" : "Save changes"}
-          </Button>
+          {!isViewOnly && (
+            <Button type="submit" isLoading={isSaving}>
+              {mode === "create" ? "Create department" : "Save changes"}
+            </Button>
+          )}
         </div>
       </form>
     </Dialog>

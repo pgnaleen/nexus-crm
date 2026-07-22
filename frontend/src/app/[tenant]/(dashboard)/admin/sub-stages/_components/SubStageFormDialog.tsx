@@ -29,7 +29,7 @@ function toFormState(subStage: DealStageResponse | undefined, defaultMainStageId
 }
 
 interface SubStageFormDialogProps {
-  mode: "create" | "edit";
+  mode: "create" | "edit" | "view";
   subStage?: DealStageResponse;
   mainStages: MainStageResponse[];
   onClose: () => void;
@@ -43,6 +43,7 @@ export function SubStageFormDialog({
   onClose,
   onSaved,
 }: SubStageFormDialogProps) {
+  const isViewOnly = mode === "view";
   const [values, setValues] = useState<FormState>(() =>
     toFormState(subStage, mainStages[0]?.id ?? ""),
   );
@@ -95,7 +96,7 @@ export function SubStageFormDialog({
   return (
     <Dialog
       open
-      title={mode === "create" ? "Add Sub Stage" : "Edit Sub Stage"}
+      title={mode === "create" ? "Add Sub Stage" : mode === "view" ? "View Sub Stage" : "Edit Sub Stage"}
       onClose={onClose}
       maxWidth="480px"
     >
@@ -104,14 +105,22 @@ export function SubStageFormDialog({
 
         <div className="field">
           <label>Main stage *</label>
-          <CustomSelect
-            fullWidth
-            label=""
-            value={values.mainStageId}
-            onChange={(val) => setField("mainStageId", val)}
-            options={mainStageOptions}
-          />
-          {errors.mainStageId && <p className="field-error">{errors.mainStageId}</p>}
+          {isViewOnly ? (
+            <div className="field-locked-value">
+              {mainStageOptions.find((opt) => opt.value === values.mainStageId)?.label ?? "—"}
+            </div>
+          ) : (
+            <>
+              <CustomSelect
+                fullWidth
+                label=""
+                value={values.mainStageId}
+                onChange={(val) => setField("mainStageId", val)}
+                options={mainStageOptions}
+              />
+              {errors.mainStageId && <p className="field-error">{errors.mainStageId}</p>}
+            </>
+          )}
         </div>
 
         <TextField
@@ -119,6 +128,7 @@ export function SubStageFormDialog({
           name="name"
           value={values.name}
           error={errors.name}
+          disabled={isViewOnly}
           placeholder="e.g. Qualified, Proposal Sent"
           onChange={(e) => setField("name", e.target.value)}
         />
@@ -128,6 +138,7 @@ export function SubStageFormDialog({
           name="sortOrder"
           type="number"
           value={values.sortOrder}
+          disabled={isViewOnly}
           onChange={(e) => setField("sortOrder", e.target.value)}
         />
 
@@ -135,6 +146,7 @@ export function SubStageFormDialog({
           <input
             type="checkbox"
             checked={values.isWon}
+            disabled={isViewOnly}
             onChange={(e) => setField("isWon", e.target.checked)}
           />
           <span>Won — this stage represents a closed-won outcome</span>
@@ -144,6 +156,7 @@ export function SubStageFormDialog({
           <input
             type="checkbox"
             checked={values.isLost}
+            disabled={isViewOnly}
             onChange={(e) => setField("isLost", e.target.checked)}
           />
           <span>Lost — this stage represents a closed-lost outcome</span>
@@ -151,11 +164,13 @@ export function SubStageFormDialog({
 
         <div className="dialog-actions">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
-            Cancel
+            {isViewOnly ? "Close" : "Cancel"}
           </Button>
-          <Button type="submit" isLoading={isSaving}>
-            {mode === "create" ? "Create sub stage" : "Save changes"}
-          </Button>
+          {!isViewOnly && (
+            <Button type="submit" isLoading={isSaving}>
+              {mode === "create" ? "Create sub stage" : "Save changes"}
+            </Button>
+          )}
         </div>
       </form>
     </Dialog>

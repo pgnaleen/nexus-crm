@@ -20,13 +20,14 @@ function toFormState(team?: TeamResponse): FormState {
 }
 
 interface TeamFormDialogProps {
-  mode: "create" | "edit";
+  mode: "create" | "edit" | "view";
   team?: TeamResponse;
   onClose: () => void;
   onSaved: (team: TeamResponse) => void;
 }
 
 export function TeamFormDialog({ mode, team, onClose, onSaved }: TeamFormDialogProps) {
+  const isViewOnly = mode === "view";
   const [values, setValues] = useState<FormState>(() => toFormState(team));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);

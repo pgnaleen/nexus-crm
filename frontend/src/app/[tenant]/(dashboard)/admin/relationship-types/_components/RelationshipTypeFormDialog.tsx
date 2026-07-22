@@ -20,7 +20,7 @@ function toFormState(type?: RelationshipTypeResponse): FormState {
 }
 
 interface RelationshipTypeFormDialogProps {
-  mode: "create" | "edit";
+  mode: "create" | "edit" | "view";
   relationshipType?: RelationshipTypeResponse;
   onClose: () => void;
   onSaved: (type: RelationshipTypeResponse) => void;
@@ -32,6 +32,7 @@ export function RelationshipTypeFormDialog({
   onClose,
   onSaved,
 }: RelationshipTypeFormDialogProps) {
+  const isViewOnly = mode === "view";
   const [values, setValues] = useState<FormState>(() => toFormState(relationshipType));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -82,7 +83,7 @@ export function RelationshipTypeFormDialog({
   return (
     <Dialog
       open
-      title={mode === "create" ? "Add Relationship Type" : "Edit Relationship Type"}
+      title={mode === "create" ? "Add Relationship Type" : mode === "view" ? "View Relationship Type" : "Edit Relationship Type"}
       onClose={onClose}
       maxWidth="480px"
     >
@@ -94,17 +95,20 @@ export function RelationshipTypeFormDialog({
           name="name"
           value={values.name}
           error={errors.name}
+          disabled={isViewOnly}
           placeholder="e.g. Customer"
           onChange={(e) => handleNameChange(e.target.value)}
         />
 
         <div className="dialog-actions">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
-            Cancel
+            {isViewOnly ? "Close" : "Cancel"}
           </Button>
-          <Button type="submit" isLoading={isSaving}>
-            {mode === "create" ? "Create type" : "Save changes"}
-          </Button>
+          {!isViewOnly && (
+            <Button type="submit" isLoading={isSaving}>
+              {mode === "create" ? "Create type" : "Save changes"}
+            </Button>
+          )}
         </div>
       </form>
     </Dialog>

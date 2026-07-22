@@ -22,7 +22,7 @@ interface DepartmentsWidgetProps {
 
 type DialogState =
   | { mode: "create" }
-  | { mode: "edit"; department: DepartmentResponse }
+  | { mode: "edit" | "view"; department: DepartmentResponse }
   | null;
 
 function formatDate(iso: string): string {
@@ -156,11 +156,13 @@ export function DepartmentsWidget({
               {filteredDepartments.map((department) => (
                 <tr
                   key={department.id}
-                  className={canUpdate ? "interactive-row" : undefined}
+                  className={canUpdate || canView ? "interactive-row" : undefined}
                   onClick={
                     canUpdate
                       ? () => setDialogState({ mode: "edit", department })
-                      : undefined
+                      : canView
+                        ? () => setDialogState({ mode: "view", department })
+                        : undefined
                   }
                 >
                   <td style={{ fontWeight: 500 }}>{department.name}</td>

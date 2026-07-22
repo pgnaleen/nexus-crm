@@ -22,7 +22,7 @@ function toFormState(stage?: MainStageResponse): FormState {
 }
 
 interface MainStageFormDialogProps {
-  mode: "create" | "edit";
+  mode: "create" | "edit" | "view";
   mainStage?: MainStageResponse;
   onClose: () => void;
   onSaved: (stage: MainStageResponse) => void;
@@ -34,6 +34,7 @@ export function MainStageFormDialog({
   onClose,
   onSaved,
 }: MainStageFormDialogProps) {
+  const isViewOnly = mode === "view";
   const [values, setValues] = useState<FormState>(() => toFormState(mainStage));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -86,7 +87,7 @@ export function MainStageFormDialog({
   return (
     <Dialog
       open
-      title={mode === "create" ? "Add Main Stage" : "Edit Main Stage"}
+      title={mode === "create" ? "Add Main Stage" : mode === "view" ? "View Main Stage" : "Edit Main Stage"}
       onClose={onClose}
       maxWidth="480px"
     >
@@ -98,6 +99,7 @@ export function MainStageFormDialog({
           name="name"
           value={values.name}
           error={errors.name}
+          disabled={isViewOnly}
           placeholder="e.g. Lead, In Progress, Won"
           onChange={(e) => setField("name", e.target.value)}
         />
@@ -108,6 +110,7 @@ export function MainStageFormDialog({
           type="number"
           value={values.position}
           error={errors.position}
+          disabled={isViewOnly}
           onChange={(e) => setField("position", e.target.value)}
         />
         <p className="field-hint" style={{ marginTop: "-10px", marginBottom: "18px" }}>
@@ -116,11 +119,13 @@ export function MainStageFormDialog({
 
         <div className="dialog-actions">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
-            Cancel
+            {isViewOnly ? "Close" : "Cancel"}
           </Button>
-          <Button type="submit" isLoading={isSaving}>
-            {mode === "create" ? "Create stage" : "Save changes"}
-          </Button>
+          {!isViewOnly && (
+            <Button type="submit" isLoading={isSaving}>
+              {mode === "create" ? "Create stage" : "Save changes"}
+            </Button>
+          )}
         </div>
       </form>
     </Dialog>

@@ -1,8 +1,9 @@
 import { UserStatus } from "@orelia/common";
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import * as bcrypt from "bcrypt";
 import { Not, Repository } from "typeorm";
+import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { RbacService } from "../rbac/rbac.service";
 import { ChangeOwnPasswordDto } from "./dto/change-own-password.dto";
 import { CreateUserDto } from "./dto/create-user.dto";
@@ -12,17 +13,22 @@ import { User } from "./entities/user.entity";
 import { UsersRepository } from "./users.repository";
 
 const PASSWORD_HASH_ROUNDS = 12;
+const AUDIT_ENTITY_TYPE = "user";
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     private readonly usersRepo: UsersRepository,
     private readonly rbacService: RbacService,
     @InjectRepository(RefreshToken)
     private readonly refreshTokenRepo: Repository<RefreshToken>,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   findAll(): Promise<User[]> {
+    this.logger.debug("findAll called");
     return this.usersRepo.findScoped({ order: { displayName: "ASC" } });
   }
 
@@ -35,119 +41,246 @@ export class UsersService {
   }
 
   async create(dto: CreateUserDto, createdBy: string): Promise<User> {
+    // Never log dto.password -- matches the password/token redaction
+    // precedent used everywhere else in this codebase (RequestLoggerMiddleware).
+    this.logger.debug(`create called by ${createdBy} (username="${dto.username}")`);
     await this.assertUsernameAvailable(dto.username);
 
-    const passwordHash = await bcrypt.hash(dto.password, PASSWORD_HASH_ROUNDS);
-    const user = this.usersRepo.createScoped({
-      username: dto.username,
-      displayName: dto.displayName,
-      loggingEmail: dto.loggingEmail,
-      passwordHash,
-      status: dto.status ?? UserStatus.Active,
-      // No invite-email flow exists yet, so the admin sets the initial
-      // password directly -- mirrors how the seeded admin account works.
-      mustChangePassword: dto.mustChangePassword ?? true,
-      extras: dto.extras,
-      createdBy,
-    });
-    const saved = await this.usersRepo.saveScoped(user);
+    try {
+      const passwordHash = await bcrypt.hash(dto.password, PASSWORD_HASH_ROUNDS);
+      const user = this.usersRepo.createScoped({
+        username: dto.username,
+        displayName: dto.displayName,
+        loggingEmail: dto.loggingEmail,
+        passwordHash,
+        status: dto.status ?? UserStatus.Active,
+        // No invite-email flow exists yet, so the admin sets the initial
+        // password directly -- mirrors how the seeded admin account works.
+        mustChangePassword: dto.mustChangePassword ?? true,
+        extras: dto.extras,
+        createdBy,
+      });
+      const saved = await this.usersRepo.saveScoped(user);
+      this.logger.debug(`create succeeded for user ${saved.id}`);
 
-    if (dto.roleIds && dto.roleIds.length > 0) {
-      await this.rbacService.assignRolesToUser(saved.id, dto.roleIds, createdBy);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: saved.id,
+        action: "insert",
+        actorId: createdBy,
+        changes: { username: dto.username, displayName: dto.displayName, status: saved.status },
+      });
+
+      if (dto.roleIds && dto.roleIds.length > 0) {
+        this.logger.debug(`create: assigning ${dto.roleIds.length} role(s) to new user ${saved.id}`);
+        await this.rbacService.assignRolesToUser(saved.id, dto.roleIds, createdBy);
+      }
+
+      return saved;
+    } catch (err) {
+      this.logger.error(`create failed for username "${dto.username}": ${(err as Error).message}`, (err as Error).stack);
+      throw err;
     }
-
-    return saved;
   }
 
   async update(id: string, dto: UpdateUserDto, updatedBy: string): Promise<User> {
+    this.logger.debug(`update called for user ${id} by ${updatedBy}`);
     // roleIds isn't a User column -- Object.assign-ing it in would just
     // create a stray, TypeORM-ignored property, so it's handled separately
     // via RbacService rather than folded into the entity save below.
     const { roleIds, ...fields } = dto;
     const user = await this.findOneOrFail(id);
-    Object.assign(user, fields, { updatedBy });
-    await this.usersRepo.saveScoped(user);
 
-    if (roleIds !== undefined) {
-      await this.rbacService.replaceRolesForUser(id, roleIds, updatedBy);
+    const before: Record<string, unknown> = {};
+    const userAsRecord = user as unknown as Record<string, unknown>;
+    for (const key of Object.keys(fields)) {
+      before[key] = userAsRecord[key];
     }
 
-    // Re-fetch rather than return the in-memory object -- Object.assign
-    // leaves an omitted dto field as an explicit `undefined` own-property,
-    // which would misreport that field as empty even though save() (which
-    // skips undefined columns) left the DB value untouched.
-    return this.findOneOrFail(id);
+    try {
+      Object.assign(user, fields, { updatedBy });
+      await this.usersRepo.saveScoped(user);
+      this.logger.debug(`update succeeded for user ${id}`);
+
+      const changes: Record<string, { old: unknown; new: unknown }> = {};
+      const updatedAsRecord = user as unknown as Record<string, unknown>;
+      for (const key of Object.keys(fields)) {
+        const newValue = updatedAsRecord[key];
+        if (before[key] !== newValue) {
+          changes[key] = { old: before[key], new: newValue };
+        }
+      }
+      if (Object.keys(changes).length > 0) {
+        await this.auditLogService.record({
+          entityType: AUDIT_ENTITY_TYPE,
+          entityId: id,
+          action: "update",
+          actorId: updatedBy,
+          changes,
+        });
+      }
+
+      if (roleIds !== undefined) {
+        this.logger.debug(`update: replacing roles for user ${id} (${roleIds.length} role(s))`);
+        await this.rbacService.replaceRolesForUser(id, roleIds, updatedBy);
+      }
+
+      // Re-fetch rather than return the in-memory object -- Object.assign
+      // leaves an omitted dto field as an explicit `undefined` own-property,
+      // which would misreport that field as empty even though save() (which
+      // skips undefined columns) left the DB value untouched.
+      return this.findOneOrFail(id);
+    } catch (err) {
+      this.logger.error(`update failed for user ${id}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   async resetPassword(id: string, newPassword: string, updatedBy: string): Promise<void> {
+    this.logger.debug(`resetPassword called for user ${id} by ${updatedBy}`);
     const user = await this.findOneOrFail(id);
-    user.passwordHash = await bcrypt.hash(newPassword, PASSWORD_HASH_ROUNDS);
-    // Admin-initiated reset always forces a change on next login -- the
-    // admin only sets a temporary password, they shouldn't be the one who
-    // gets to pick the user's actual ongoing password.
-    user.mustChangePassword = true;
-    user.updatedBy = updatedBy;
-    await this.usersRepo.saveScoped(user);
+    try {
+      user.passwordHash = await bcrypt.hash(newPassword, PASSWORD_HASH_ROUNDS);
+      // Admin-initiated reset always forces a change on next login -- the
+      // admin only sets a temporary password, they shouldn't be the one who
+      // gets to pick the user's actual ongoing password.
+      user.mustChangePassword = true;
+      user.updatedBy = updatedBy;
+      await this.usersRepo.saveScoped(user);
+      this.logger.debug(`resetPassword succeeded for user ${id}`);
+      // Deliberately no password/hash in changes -- only that a reset happened.
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: id,
+        action: "update",
+        actorId: updatedBy,
+        changes: { passwordReset: true, mustChangePassword: true },
+      });
+    } catch (err) {
+      this.logger.error(`resetPassword failed for user ${id}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   async changeOwnPassword(id: string, dto: ChangeOwnPasswordDto, currentTokenHash: string | undefined): Promise<void> {
+    this.logger.debug(`changeOwnPassword called for user ${id}`);
     const user = await this.findOneOrFail(id);
     const currentMatches = await bcrypt.compare(dto.currentPassword, user.passwordHash);
     if (!currentMatches) {
+      this.logger.debug(`changeOwnPassword blocked: current password did not match for user ${id}`);
       // 403, not 401 -- the caller's session is fine, they just didn't prove
       // the current password. A 401 here would make apiFetch's global
       // refresh-and-retry treat this like an expired access token.
       throw new ForbiddenException("Current password is incorrect");
     }
 
-    user.passwordHash = await bcrypt.hash(dto.newPassword, PASSWORD_HASH_ROUNDS);
-    // Unlike an admin-initiated reset, this IS the user's real chosen
-    // password -- nothing further to force on next login.
-    user.mustChangePassword = false;
-    user.updatedBy = id;
-    await this.usersRepo.saveScoped(user);
+    try {
+      user.passwordHash = await bcrypt.hash(dto.newPassword, PASSWORD_HASH_ROUNDS);
+      // Unlike an admin-initiated reset, this IS the user's real chosen
+      // password -- nothing further to force on next login.
+      user.mustChangePassword = false;
+      user.updatedBy = id;
+      await this.usersRepo.saveScoped(user);
+      this.logger.debug(`changeOwnPassword succeeded for user ${id}`);
 
-    // Revoke every other active session -- old refresh tokens were minted
-    // under the password that just changed. The caller's own token (the
-    // session used to make this change) is spared so they aren't logged out
-    // of the tab they just used.
-    await this.refreshTokenRepo.update(
-      currentTokenHash ? { userId: id, tokenHash: Not(currentTokenHash) } : { userId: id },
-      { revokedAt: new Date() },
-    );
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: id,
+        action: "update",
+        actorId: id,
+        changes: { passwordSelfChanged: true },
+      });
+
+      // Revoke every other active session -- old refresh tokens were minted
+      // under the password that just changed. The caller's own token (the
+      // session used to make this change) is spared so they aren't logged out
+      // of the tab they just used.
+      await this.refreshTokenRepo.update(
+        currentTokenHash ? { userId: id, tokenHash: Not(currentTokenHash) } : { userId: id },
+        { revokedAt: new Date() },
+      );
+      this.logger.debug(`changeOwnPassword: revoked other active session(s) for user ${id}`);
+    } catch (err) {
+      this.logger.error(`changeOwnPassword failed for user ${id}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   async disable(id: string, actingUserId: string): Promise<User> {
+    this.logger.debug(`disable called for user ${id} by ${actingUserId}`);
     if (id === actingUserId) {
+      this.logger.debug(`Blocked: user ${actingUserId} tried to disable their own account`);
       throw new ForbiddenException("You cannot disable your own account");
     }
     const user = await this.findOneOrFail(id);
-    user.status = UserStatus.Disabled;
-    user.updatedBy = actingUserId;
-    await this.usersRepo.saveScoped(user);
-    // Status alone only blocks future logins -- refresh() doesn't currently
-    // check status, so an already-issued refresh token would keep silently
-    // minting new access tokens for a "disabled" user. Revoke every
-    // outstanding token so disabling actually ends their active session,
-    // not just their ability to start a new one.
-    await this.refreshTokenRepo.update({ userId: id }, { revokedAt: new Date() });
-    return this.findOneOrFail(id);
+    try {
+      user.status = UserStatus.Disabled;
+      user.updatedBy = actingUserId;
+      await this.usersRepo.saveScoped(user);
+      // Status alone only blocks future logins -- refresh() doesn't currently
+      // check status, so an already-issued refresh token would keep silently
+      // minting new access tokens for a "disabled" user. Revoke every
+      // outstanding token so disabling actually ends their active session,
+      // not just their ability to start a new one.
+      await this.refreshTokenRepo.update({ userId: id }, { revokedAt: new Date() });
+      this.logger.debug(`disable succeeded for user ${id}, revoked all active sessions`);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: id,
+        action: "update",
+        actorId: actingUserId,
+        changes: { status: { old: "active", new: "disabled" } },
+      });
+      return this.findOneOrFail(id);
+    } catch (err) {
+      this.logger.error(`disable failed for user ${id}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   async enable(id: string, actingUserId: string): Promise<User> {
+    this.logger.debug(`enable called for user ${id} by ${actingUserId}`);
     const user = await this.findOneOrFail(id);
-    user.status = UserStatus.Active;
-    user.updatedBy = actingUserId;
-    await this.usersRepo.saveScoped(user);
-    return this.findOneOrFail(id);
+    try {
+      user.status = UserStatus.Active;
+      user.updatedBy = actingUserId;
+      await this.usersRepo.saveScoped(user);
+      this.logger.debug(`enable succeeded for user ${id}`);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: id,
+        action: "update",
+        actorId: actingUserId,
+        changes: { status: { old: "disabled", new: "active" } },
+      });
+      return this.findOneOrFail(id);
+    } catch (err) {
+      this.logger.error(`enable failed for user ${id}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   async remove(id: string, actingUserId: string): Promise<void> {
+    this.logger.debug(`remove called for user ${id} by ${actingUserId}`);
     if (id === actingUserId) {
+      this.logger.debug(`Blocked: user ${actingUserId} tried to delete their own account`);
       throw new ForbiddenException("You cannot delete your own account");
     }
     const user = await this.findOneOrFail(id);
-    await this.usersRepo.softRemoveScoped(user, actingUserId);
+    try {
+      await this.usersRepo.softRemoveScoped(user, actingUserId);
+      this.logger.debug(`remove succeeded for user ${id}`);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: id,
+        action: "delete",
+        actorId: actingUserId,
+        changes: { username: user.username, displayName: user.displayName },
+      });
+    } catch (err) {
+      this.logger.error(`remove failed for user ${id}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   private async assertUsernameAvailable(username: string): Promise<void> {

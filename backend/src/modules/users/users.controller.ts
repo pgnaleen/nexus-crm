@@ -1,5 +1,5 @@
 import { PERMISSIONS, UserResponse, UserSummaryResponse } from "@orelia/common";
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Logger, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
 import { REFRESH_COOKIE } from "../auth/auth.constants";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
@@ -17,6 +17,8 @@ import { UsersService } from "./users.service";
 
 @Controller("users")
 export class UsersController {
+  private readonly logger = new Logger(UsersController.name);
+
   constructor(
     private readonly usersService: UsersService,
     private readonly rbacService: RbacService,
@@ -26,8 +28,15 @@ export class UsersController {
   @RequirePermission([PERMISSIONS.USERS_VIEW])
   @Get()
   async findAll(): Promise<UserSummaryResponse[]> {
-    const users = await this.usersService.findAll();
-    return users.map((user) => this.toSummaryResponse(user));
+    this.logger.debug("GET /users called");
+    try {
+      const users = await this.usersService.findAll();
+      this.logger.debug(`GET /users returning ${users.length} row(s)`);
+      return users.map((user) => this.toSummaryResponse(user));
+    } catch (err) {
+      this.logger.error(`GET /users failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   // Must be declared after the plain "/" GET route above — not strictly
@@ -37,7 +46,15 @@ export class UsersController {
   @RequirePermission([PERMISSIONS.USERS_VIEW, PERMISSIONS.USERS_UPDATE])
   @Get(":id")
   async findOne(@Param("id", ParseUUIDPipe) id: string): Promise<UserResponse> {
-    return this.toResponse(await this.usersService.findOneOrFail(id));
+    this.logger.debug(`GET /users/${id} called`);
+    try {
+      const user = await this.usersService.findOneOrFail(id);
+      this.logger.debug(`GET /users/${id} succeeded`);
+      return this.toResponse(user);
+    } catch (err) {
+      this.logger.error(`GET /users/${id} failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
@@ -47,8 +64,16 @@ export class UsersController {
     @Body() dto: CreateUserDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<UserResponse> {
-    const created = await this.usersService.create(dto, user.sub);
-    return this.toResponse(created);
+    // Never log dto directly -- it carries a plaintext password.
+    this.logger.debug(`POST /users called by ${user.sub} (username="${dto.username}")`);
+    try {
+      const created = await this.usersService.create(dto, user.sub);
+      this.logger.debug(`POST /users succeeded for user ${created.id}`);
+      return this.toResponse(created);
+    } catch (err) {
+      this.logger.error(`POST /users failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
@@ -59,16 +84,31 @@ export class UsersController {
     @Body() dto: UpdateUserDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<UserResponse> {
-    const updated = await this.usersService.update(id, dto, user.sub);
-    return this.toResponse(updated);
+    this.logger.debug(`PATCH /users/${id} called by ${user.sub}`);
+    try {
+      const updated = await this.usersService.update(id, dto, user.sub);
+      this.logger.debug(`PATCH /users/${id} succeeded`);
+      return this.toResponse(updated);
+    } catch (err) {
+      this.logger.error(`PATCH /users/${id} failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
   @RequirePermission([PERMISSIONS.USERS_VIEW, PERMISSIONS.USERS_UPDATE])
   @Get(":id/roles")
   async getRoleIds(@Param("id", ParseUUIDPipe) id: string): Promise<string[]> {
-    await this.usersService.findOneOrFail(id);
-    return this.rbacService.getRoleIdsForUser(id);
+    this.logger.debug(`GET /users/${id}/roles called`);
+    try {
+      await this.usersService.findOneOrFail(id);
+      const ids = await this.rbacService.getRoleIdsForUser(id);
+      this.logger.debug(`GET /users/${id}/roles returning ${ids.length} id(s)`);
+      return ids;
+    } catch (err) {
+      this.logger.error(`GET /users/${id}/roles failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
@@ -80,7 +120,15 @@ export class UsersController {
     @Body() dto: ResetPasswordDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<void> {
-    await this.usersService.resetPassword(id, dto.password, user.sub);
+    // Never log dto.password.
+    this.logger.debug(`POST /users/${id}/reset-password called by ${user.sub}`);
+    try {
+      await this.usersService.resetPassword(id, dto.password, user.sub);
+      this.logger.debug(`POST /users/${id}/reset-password succeeded`);
+    } catch (err) {
+      this.logger.error(`POST /users/${id}/reset-password failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   // No PermissionsGuard/RequirePermission here -- any authenticated user
@@ -93,9 +141,17 @@ export class UsersController {
     @CurrentUser() user: AuthenticatedUser,
     @Req() req: Request,
   ): Promise<void> {
-    const rawRefreshToken = req.cookies?.[REFRESH_COOKIE];
-    const currentTokenHash = rawRefreshToken ? hashToken(rawRefreshToken) : undefined;
-    await this.usersService.changeOwnPassword(user.sub, dto, currentTokenHash);
+    // Never log dto.currentPassword/newPassword.
+    this.logger.debug(`POST /users/me/change-password called by ${user.sub}`);
+    try {
+      const rawRefreshToken = req.cookies?.[REFRESH_COOKIE];
+      const currentTokenHash = rawRefreshToken ? hashToken(rawRefreshToken) : undefined;
+      await this.usersService.changeOwnPassword(user.sub, dto, currentTokenHash);
+      this.logger.debug(`POST /users/me/change-password succeeded for ${user.sub}`);
+    } catch (err) {
+      this.logger.error(`POST /users/me/change-password failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
@@ -105,8 +161,15 @@ export class UsersController {
     @Param("id", ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<UserResponse> {
-    const updated = await this.usersService.disable(id, user.sub);
-    return this.toResponse(updated);
+    this.logger.debug(`PATCH /users/${id}/disable called by ${user.sub}`);
+    try {
+      const updated = await this.usersService.disable(id, user.sub);
+      this.logger.debug(`PATCH /users/${id}/disable succeeded`);
+      return this.toResponse(updated);
+    } catch (err) {
+      this.logger.error(`PATCH /users/${id}/disable failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
@@ -116,8 +179,15 @@ export class UsersController {
     @Param("id", ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<UserResponse> {
-    const updated = await this.usersService.enable(id, user.sub);
-    return this.toResponse(updated);
+    this.logger.debug(`PATCH /users/${id}/enable called by ${user.sub}`);
+    try {
+      const updated = await this.usersService.enable(id, user.sub);
+      this.logger.debug(`PATCH /users/${id}/enable succeeded`);
+      return this.toResponse(updated);
+    } catch (err) {
+      this.logger.error(`PATCH /users/${id}/enable failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
@@ -127,8 +197,15 @@ export class UsersController {
     @Param("id", ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<{ success: true }> {
-    await this.usersService.remove(id, user.sub);
-    return { success: true };
+    this.logger.debug(`DELETE /users/${id} called by ${user.sub}`);
+    try {
+      await this.usersService.remove(id, user.sub);
+      this.logger.debug(`DELETE /users/${id} succeeded`);
+      return { success: true };
+    } catch (err) {
+      this.logger.error(`DELETE /users/${id} failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   private toSummaryResponse(user: User): UserSummaryResponse {

@@ -44,7 +44,7 @@ function toFormState(source?: DealSourceResponse): FormState {
 }
 
 interface DealSourceFormDialogProps {
-  mode: "create" | "edit";
+  mode: "create" | "edit" | "view";
   dealSource?: DealSourceResponse;
   onClose: () => void;
   onSaved: (source: DealSourceResponse) => void;
@@ -56,6 +56,7 @@ export function DealSourceFormDialog({
   onClose,
   onSaved,
 }: DealSourceFormDialogProps) {
+  const isViewOnly = mode === "view";
   const [values, setValues] = useState<FormState>(() => toFormState(dealSource));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -109,7 +110,7 @@ export function DealSourceFormDialog({
   return (
     <Dialog
       open
-      title={mode === "create" ? "Add Deal Source" : "Edit Deal Source"}
+      title={mode === "create" ? "Add Deal Source" : mode === "view" ? "View Deal Source" : "Edit Deal Source"}
       onClose={onClose}
       maxWidth="480px"
     >
@@ -121,25 +122,33 @@ export function DealSourceFormDialog({
           name="name"
           value={values.name}
           error={errors.name}
+          disabled={isViewOnly}
           placeholder="e.g. CEO, Partner, Supplier, Customer, Direct"
           onChange={(e) => setField("name", e.target.value)}
         />
 
         <div className="field">
           <label>Category</label>
-          <CustomSelect
-            fullWidth
-            label=""
-            value={values.category}
-            onChange={(val) => setField("category", val as DealSourceCategory | "")}
-            options={CATEGORY_OPTIONS}
-          />
+          {isViewOnly ? (
+            <div className="field-locked-value">
+              {CATEGORY_OPTIONS.find((opt) => opt.value === values.category)?.label ?? "No category"}
+            </div>
+          ) : (
+            <CustomSelect
+              fullWidth
+              label=""
+              value={values.category}
+              onChange={(val) => setField("category", val as DealSourceCategory | "")}
+              options={CATEGORY_OPTIONS}
+            />
+          )}
         </div>
 
         <label className="field-checkbox-row">
           <input
             type="checkbox"
             checked={values.isActive}
+            disabled={isViewOnly}
             onChange={(e) => setField("isActive", e.target.checked)}
           />
           <span>Active — visible when assigning a source to a deal</span>
@@ -147,11 +156,13 @@ export function DealSourceFormDialog({
 
         <div className="dialog-actions">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
-            Cancel
+            {isViewOnly ? "Close" : "Cancel"}
           </Button>
-          <Button type="submit" isLoading={isSaving}>
-            {mode === "create" ? "Create source" : "Save changes"}
-          </Button>
+          {!isViewOnly && (
+            <Button type="submit" isLoading={isSaving}>
+              {mode === "create" ? "Create source" : "Save changes"}
+            </Button>
+          )}
         </div>
       </form>
     </Dialog>

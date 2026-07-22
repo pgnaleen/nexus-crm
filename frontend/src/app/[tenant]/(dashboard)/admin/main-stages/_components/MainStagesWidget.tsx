@@ -22,7 +22,7 @@ interface MainStagesWidgetProps {
 
 type DialogState =
   | { mode: "create" }
-  | { mode: "edit"; mainStage: MainStageResponse }
+  | { mode: "edit" | "view"; mainStage: MainStageResponse }
   | null;
 
 function formatDate(iso: string): string {
@@ -184,11 +184,13 @@ export function MainStagesWidget({
               {filteredStages.map((stage) => (
                 <tr
                   key={stage.id}
-                  className={canUpdate ? "interactive-row" : undefined}
+                  className={canUpdate || canView ? "interactive-row" : undefined}
                   onClick={
                     canUpdate
                       ? () => setDialogState({ mode: "edit", mainStage: stage })
-                      : undefined
+                      : canView
+                        ? () => setDialogState({ mode: "view", mainStage: stage })
+                        : undefined
                   }
                 >
                   <td style={{ color: "var(--color-text-muted)" }}>{stage.position}</td>

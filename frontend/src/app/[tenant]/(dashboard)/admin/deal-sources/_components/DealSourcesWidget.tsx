@@ -22,7 +22,7 @@ interface DealSourcesWidgetProps {
 
 type DialogState =
   | { mode: "create" }
-  | { mode: "edit"; dealSource: DealSourceResponse }
+  | { mode: "edit" | "view"; dealSource: DealSourceResponse }
   | null;
 
 function formatDate(iso: string): string {
@@ -180,11 +180,13 @@ export function DealSourcesWidget({
               {filteredSources.map((source) => (
                 <tr
                   key={source.id}
-                  className={canUpdate ? "interactive-row" : undefined}
+                  className={canUpdate || canView ? "interactive-row" : undefined}
                   onClick={
                     canUpdate
                       ? () => setDialogState({ mode: "edit", dealSource: source })
-                      : undefined
+                      : canView
+                        ? () => setDialogState({ mode: "view", dealSource: source })
+                        : undefined
                   }
                 >
                   <td style={{ fontWeight: 500 }}>{source.name}</td>

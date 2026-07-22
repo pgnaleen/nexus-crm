@@ -1,5 +1,5 @@
 import { CompanyResponse, ContactResponse, PERMISSIONS, RelationshipPartyResponse } from "@orelia/common";
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Logger, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { Company } from "../companies/entities/company.entity";
@@ -22,6 +22,8 @@ const ANY_RELATIONSHIP_PERMISSION = [
 
 @Controller("relationship-types/:relationshipTypeId/parties")
 export class RelationshipPartiesController {
+  private readonly logger = new Logger(RelationshipPartiesController.name);
+
   constructor(private readonly partiesService: RelationshipPartiesService) {}
 
   @UseGuards(PermissionsGuard)
@@ -30,8 +32,15 @@ export class RelationshipPartiesController {
   async findAll(
     @Param("relationshipTypeId", ParseUUIDPipe) relationshipTypeId: string,
   ): Promise<RelationshipPartyResponse[]> {
-    const parties = await this.partiesService.findAllForType(relationshipTypeId);
-    return parties.map((party) => this.toResponse(party));
+    this.logger.debug(`GET /relationship-types/${relationshipTypeId}/parties called`);
+    try {
+      const parties = await this.partiesService.findAllForType(relationshipTypeId);
+      this.logger.debug(`GET /relationship-types/${relationshipTypeId}/parties returning ${parties.length} row(s)`);
+      return parties.map((party) => this.toResponse(party));
+    } catch (err) {
+      this.logger.error(`GET /relationship-types/${relationshipTypeId}/parties failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
@@ -42,8 +51,15 @@ export class RelationshipPartiesController {
     @Body() dto: CreateRelationshipPartyCompanyDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<RelationshipPartyResponse> {
-    const party = await this.partiesService.addCompany(relationshipTypeId, dto, user.sub);
-    return this.toResponse(party);
+    this.logger.debug(`POST .../parties/companies called for type ${relationshipTypeId} by ${user.sub}`);
+    try {
+      const party = await this.partiesService.addCompany(relationshipTypeId, dto, user.sub);
+      this.logger.debug(`POST .../parties/companies succeeded, party ${party.id}`);
+      return this.toResponse(party);
+    } catch (err) {
+      this.logger.error(`POST .../parties/companies failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
@@ -54,8 +70,15 @@ export class RelationshipPartiesController {
     @Body() dto: CreateRelationshipPartyContactDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<RelationshipPartyResponse> {
-    const party = await this.partiesService.addContact(relationshipTypeId, dto, user.sub);
-    return this.toResponse(party);
+    this.logger.debug(`POST .../parties/contacts called for type ${relationshipTypeId} by ${user.sub}`);
+    try {
+      const party = await this.partiesService.addContact(relationshipTypeId, dto, user.sub);
+      this.logger.debug(`POST .../parties/contacts succeeded, party ${party.id}`);
+      return this.toResponse(party);
+    } catch (err) {
+      this.logger.error(`POST .../parties/contacts failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
@@ -67,8 +90,15 @@ export class RelationshipPartiesController {
     @Body() dto: UpdateRelationshipPartyCompanyDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<RelationshipPartyResponse> {
-    const party = await this.partiesService.updateCompany(relationshipTypeId, mapId, dto, user.sub);
-    return this.toResponse(party);
+    this.logger.debug(`PATCH .../parties/companies/${mapId} called by ${user.sub}`);
+    try {
+      const party = await this.partiesService.updateCompany(relationshipTypeId, mapId, dto, user.sub);
+      this.logger.debug(`PATCH .../parties/companies/${mapId} succeeded`);
+      return this.toResponse(party);
+    } catch (err) {
+      this.logger.error(`PATCH .../parties/companies/${mapId} failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
@@ -80,8 +110,15 @@ export class RelationshipPartiesController {
     @Body() dto: UpdateRelationshipPartyContactDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<RelationshipPartyResponse> {
-    const party = await this.partiesService.updateContact(relationshipTypeId, mapId, dto, user.sub);
-    return this.toResponse(party);
+    this.logger.debug(`PATCH .../parties/contacts/${mapId} called by ${user.sub}`);
+    try {
+      const party = await this.partiesService.updateContact(relationshipTypeId, mapId, dto, user.sub);
+      this.logger.debug(`PATCH .../parties/contacts/${mapId} succeeded`);
+      return this.toResponse(party);
+    } catch (err) {
+      this.logger.error(`PATCH .../parties/contacts/${mapId} failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
@@ -92,8 +129,15 @@ export class RelationshipPartiesController {
     @Param("mapId", ParseUUIDPipe) mapId: string,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<RelationshipPartyResponse> {
-    const party = await this.partiesService.setActive(relationshipTypeId, mapId, false, user.sub);
-    return this.toResponse(party);
+    this.logger.debug(`PATCH .../parties/${mapId}/disable called by ${user.sub}`);
+    try {
+      const party = await this.partiesService.setActive(relationshipTypeId, mapId, false, user.sub);
+      this.logger.debug(`PATCH .../parties/${mapId}/disable succeeded`);
+      return this.toResponse(party);
+    } catch (err) {
+      this.logger.error(`PATCH .../parties/${mapId}/disable failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
@@ -104,8 +148,15 @@ export class RelationshipPartiesController {
     @Param("mapId", ParseUUIDPipe) mapId: string,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<RelationshipPartyResponse> {
-    const party = await this.partiesService.setActive(relationshipTypeId, mapId, true, user.sub);
-    return this.toResponse(party);
+    this.logger.debug(`PATCH .../parties/${mapId}/enable called by ${user.sub}`);
+    try {
+      const party = await this.partiesService.setActive(relationshipTypeId, mapId, true, user.sub);
+      this.logger.debug(`PATCH .../parties/${mapId}/enable succeeded`);
+      return this.toResponse(party);
+    } catch (err) {
+      this.logger.error(`PATCH .../parties/${mapId}/enable failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
@@ -116,8 +167,15 @@ export class RelationshipPartiesController {
     @Param("mapId", ParseUUIDPipe) mapId: string,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<{ success: true }> {
-    await this.partiesService.remove(relationshipTypeId, mapId, user.sub);
-    return { success: true };
+    this.logger.debug(`DELETE .../parties/${mapId} called by ${user.sub}`);
+    try {
+      await this.partiesService.remove(relationshipTypeId, mapId, user.sub);
+      this.logger.debug(`DELETE .../parties/${mapId} succeeded`);
+      return { success: true };
+    } catch (err) {
+      this.logger.error(`DELETE .../parties/${mapId} failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   private toResponse(party: RelationshipCompanyContactMap): RelationshipPartyResponse {
