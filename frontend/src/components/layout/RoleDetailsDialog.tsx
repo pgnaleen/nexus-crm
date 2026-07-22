@@ -72,7 +72,7 @@ export function RoleDetailsDialog({ role, resources, onClose }: RoleDetailsDialo
                 {groupResources.map((resource) => (
                   <div key={resource.id} className="permissions-view-row">
                     <span className="role-details-check" aria-hidden="true">
-                      âœ“
+                      ✓
                     </span>
                     <span>{resource.name.replace(`${prefix}:`, "")}</span>
                     <span className={`permissions-risk-tag permissions-risk-tag--${resource.riskLevel}`}>

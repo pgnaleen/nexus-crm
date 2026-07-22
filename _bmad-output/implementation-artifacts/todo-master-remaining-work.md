@@ -354,13 +354,29 @@ since creation), so a NOT NULL constraint there would be actively wrong, not jus
 
 ---
 
-## D. Deferred UX item
+## D. Read-only View-mode for admin section dialogs — ✅ **COMPLETE, all 9 sections** (2026-07-22)
 
-**Read-only View-mode for other admin sections' Form dialogs.** Deals already has this
-(`ViewDealDialog`). The ~9 other admin sections (Departments, Main Stages, Sub Stages, Deal
-Sources, Relationship Types, Teams, Tenants, Users, Roles) still open nothing on row click for a
-View-only user — deferred pending the debug-logging/audit-log rollout above, not urgent for
-"production ready," but a real gap for any View-only role today.
+Deals already had this (`ViewDealDialog`). Of the other 9 admin sections:
+- **Tenants, Users, Roles were already done** before this pass started — each has its own
+  dedicated `*DetailsDialog` component (`TenantDetailsDialog.tsx`, `UserDetailsDialog.tsx`,
+  `RoleDetailsDialog.tsx`), already correctly gated on the resource's own `_VIEW` permission, row
+  click already wired up. The doc just hadn't been updated to reflect that. (Also fixed a small,
+  unrelated, genuinely broken mojibake character — `âœ“` instead of `✓` — found incidentally while
+  verifying `RoleDetailsDialog.tsx`.)
+- **Departments, Main Stages, Sub Stages, Deal Sources, Relationship Types, Teams** built this
+  session: each `*FormDialog` gained a `mode: "create" | "edit" | "view"` (widened from just
+  create/edit), disabling every input and swapping the Save button for a single Close button when
+  `mode === "view"`; each corresponding `*Widget.tsx` now opens `{mode: "view"}` on row click for a
+  `canView`-but-not-`canUpdate` user instead of doing nothing. Two fields (Sub Stages' Main Stage
+  picker, Tenants-adjacent Deal Source's category, Tenant's Plan/Industry/Status) use the
+  pre-existing `.field-locked-value` CSS class for a static read-only display instead of the
+  interactive `CustomSelect`, since that shared component has no `disabled` prop of its own —
+  matching the same "locked field" convention already established in `AddDealDialog`.
+  Relationship Types also needed its own `canView` permission check added (`RELATIONSHIP_TYPE_VIEW`
+  existed as a permission but the widget never checked it) and its row made clickable for the
+  first time (it previously had no row-click behavior at all, edit-icon-only).
+Every dialog typechecks clean against the tracked baseline. Not click-tested — same
+browser-automation limitation as the rest of this session.
 
 ---
 
