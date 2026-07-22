@@ -298,11 +298,28 @@ file first (structure: one JSON file per language, organized by feature/componen
 `{ "funnel": { "title": "Funnel", "addNewDeal": "Add New Deal" }, "addDealDialog": { "tabs": {
 "dealInfo": "Deal Information" }, "errors": { "dealNameRequired": "Deal name is required" } } }`),
 then reference it by key. Additional language files are added later as siblings to the English
-one, same key structure; the UI switches file based on the user's language selection. The exact
-lookup mechanism/library (e.g. `next-intl`) is a decision for whoever builds the first real
-i18n-enabled feature — not decided yet, don't assume one.
+one, same key structure; the UI switches file based on the user's language selection.
 
-Retrofitting every *already-built* section (all 9+ admin sections, Relationships, Deals) to this
-is tracked in `_bmad-output/implementation-artifacts/todo-system-wide-i18n-and-permissions.md`,
-not done piecemeal here. New features from now on must be built with this from the start —
+**Mechanism decided ✅**: lightweight custom solution, no new npm dependency (`next-intl`/
+`react-i18next` were considered and rejected). `frontend/src/locales/en.json` is the single
+English dictionary — one file per language, nested by feature/component exactly as shown above.
+`t(key, vars?)` in `frontend/src/lib/i18n.ts` does the dot-path lookup (e.g.
+`t("departments.dialog.saveButton")`) with `{placeholder}` interpolation (e.g.
+`t("departments.deleteConfirm.message", { name: department.name })`); it falls back to returning
+the raw key if a path doesn't resolve, so a missing translation is visibly wrong rather than
+silently blank. It's a plain synchronous function (no Context/Provider, no hook) so the same
+`import { t } from "@/lib/i18n"` call works identically in Server and Client Components — there is
+only one language today, so there is no active-locale state to thread through yet. When a second
+language is added, `dictionary` in `i18n.ts` becomes a lookup keyed by the active locale (cookie or
+route param) instead of a hardcoded constant; call sites do not change.
+
+Proven end-to-end on Departments (`departments` namespace in `en.json`,
+`DepartmentsWidget.tsx`/`DepartmentFormDialog.tsx` fully retrofitted) as the reference
+implementation for retrofitting every other section.
+
+Retrofitting every other *already-built* section (Tenants/Roles/Users/Teams, Relationship
+Types/Deal Sources/Main Stages/Sub Stages, Relationships, Deals, Employee Management, and shared
+UI primitives' own built-in text) to this is tracked in
+`_bmad-output/implementation-artifacts/todo-system-wide-i18n-and-permissions.md`, not done
+piecemeal here. New features from now on must be built with this from the start —
 see `_bmad-output/planning-artifacts/feature-development-guideline.md` for the full checklist.

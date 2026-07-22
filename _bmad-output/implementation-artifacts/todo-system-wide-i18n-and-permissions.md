@@ -122,8 +122,19 @@ Every section built before this rule existed hardcodes its own UI strings. Retro
 at a time, verified in the browser after each (language switch — even with only the English file
 existing — must render identically to today, since the fallback/default language is English).
 
+**Mechanism decided and built ✅** — see `CLAUDE.md`'s Internationalization section for the full
+writeup. Summary: lightweight custom solution, no new npm dependency. Single English dictionary
+at `frontend/src/locales/en.json` (nested by feature/component); `t(key, vars?)` in
+`frontend/src/lib/i18n.ts` does the dot-path lookup + `{placeholder}` interpolation, works
+identically in Server and Client Components (plain function, no Context/Provider needed since
+there's only one language today). Proven end-to-end on Departments (below) as the reference
+implementation every other section's retrofit should copy.
+
+- [x] **Departments** — done, reference implementation (`departments` namespace in `en.json`,
+  `DepartmentsWidget.tsx` + `DepartmentFormDialog.tsx` fully retrofitted, zero new typecheck
+  errors, verified compiling live in the dev container).
 - [ ] **Tenants, Roles, Users, Teams** (System Administration group)
-- [ ] **Relationship Types, Deal Sources, Main Stages, Sub Stages, Departments** (CRM
+- [ ] **Relationship Types, Deal Sources, Main Stages, Sub Stages** (remainder of CRM
   Configuration group)
 - [ ] **Relationships** (dynamic per-relationship-type pages, `CompanyFormDialog`/
   `ContactFormDialog`)
@@ -135,8 +146,3 @@ existing — must render identically to today, since the fallback/default langua
   `AlertDialog` (`DialogProvider`), `SearchSelect`/`MultiSelect`/`CustomSelect` placeholder
   defaults, toast messages (`ToastProvider`) — anything a shared component renders itself (not
   passed in as a prop) needs its own default-label lookup too, not just the pages that use them.
-
-Decide and stand up the actual i18n mechanism (library choice, where language files live, how
-the active language is selected/persisted, server-vs-client rendering implications for Next.js
-App Router) as its own first step here — don't let the first section's retrofit accidentally
-become the de-facto architecture decision without it being deliberate.

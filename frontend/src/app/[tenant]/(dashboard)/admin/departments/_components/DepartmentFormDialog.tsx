@@ -8,6 +8,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import { minLength, required, validate } from "@/lib/validation";
+import { t } from "@/lib/i18n";
 
 interface FormState {
   name: string;
@@ -72,7 +73,7 @@ export function DepartmentFormDialog({
       onSaved(saved);
       onClose();
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : "Failed to save department");
+      setFormError(err instanceof ApiError ? err.message : t("departments.dialog.errors.saveFailed"));
     } finally {
       setIsSaving(false);
     }
@@ -81,7 +82,13 @@ export function DepartmentFormDialog({
   return (
     <Dialog
       open
-      title={mode === "create" ? "Add Department" : mode === "view" ? "View Department" : "Edit Department"}
+      title={
+        mode === "create"
+          ? t("departments.dialog.addTitle")
+          : mode === "view"
+            ? t("departments.dialog.viewTitle")
+            : t("departments.dialog.editTitle")
+      }
       onClose={onClose}
       maxWidth="480px"
     >
@@ -89,12 +96,12 @@ export function DepartmentFormDialog({
         {formError && <p className="field-error">{formError}</p>}
 
         <TextField
-          label="Name *"
+          label={t("departments.dialog.nameLabel")}
           name="name"
           value={values.name}
           error={errors.name}
           disabled={isViewOnly}
-          placeholder="e.g. Engineering, Finance, Human Resources"
+          placeholder={t("departments.dialog.namePlaceholder")}
           onChange={(e) => setField("name", e.target.value)}
         />
 
@@ -105,16 +112,16 @@ export function DepartmentFormDialog({
             disabled={isViewOnly}
             onChange={(e) => setField("isActive", e.target.checked)}
           />
-          <span>Active — visible when assigning employees to a department</span>
+          <span>{t("departments.dialog.activeLabel")}</span>
         </label>
 
         <div className="dialog-actions">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
-            {isViewOnly ? "Close" : "Cancel"}
+            {isViewOnly ? t("common.actions.close") : t("common.actions.cancel")}
           </Button>
           {!isViewOnly && (
             <Button type="submit" isLoading={isSaving}>
-              {mode === "create" ? "Create department" : "Save changes"}
+              {mode === "create" ? t("departments.dialog.createButton") : t("departments.dialog.saveButton")}
             </Button>
           )}
         </div>

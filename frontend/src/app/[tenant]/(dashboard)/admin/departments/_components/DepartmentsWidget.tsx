@@ -9,6 +9,7 @@ import { ApiError } from "@/lib/api/client";
 import { EditIcon, SearchIcon, TrashIcon } from "@/components/ui/icons";
 import { TenantActingAsSwitcher } from "@/components/layout/TenantActingAsSwitcher";
 import { useConfirm, useAlert } from "@/components/providers/DialogProvider";
+import { t } from "@/lib/i18n";
 import { DepartmentFormDialog } from "./DepartmentFormDialog";
 
 interface DepartmentsWidgetProps {
@@ -73,9 +74,9 @@ export function DepartmentsWidget({
 
   async function initiateDelete(department: DepartmentResponse) {
     const ok = await confirm({
-      title: "Delete Department",
-      message: `Are you sure you want to delete "${department.name}"? This cannot be undone.`,
-      confirmLabel: "Delete",
+      title: t("departments.deleteConfirm.title"),
+      message: t("departments.deleteConfirm.message", { name: department.name }),
+      confirmLabel: t("departments.deleteConfirm.confirmLabel"),
       isDestructive: true,
     });
     if (!ok) return;
@@ -86,7 +87,7 @@ export function DepartmentsWidget({
       setDepartments((current) => current.filter((item) => item.id !== department.id));
       router.refresh();
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : "Failed to delete department");
+      showError(err instanceof ApiError ? err.message : t("departments.errors.deleteFailed"));
     } finally {
       setDeletingId(null);
     }
@@ -104,8 +105,8 @@ export function DepartmentsWidget({
 
       <div className="funnel-header-top">
         <div className="funnel-header-left">
-          <h1 className="funnel-title">Department Management</h1>
-          <p className="funnel-subtitle">Configure organizational departments</p>
+          <h1 className="funnel-title">{t("departments.title")}</h1>
+          <p className="funnel-subtitle">{t("departments.subtitle")}</p>
         </div>
         {canCreate && (
           <button
@@ -113,7 +114,7 @@ export function DepartmentsWidget({
             className="funnel-add-btn"
             onClick={() => setDialogState({ mode: "create" })}
           >
-            Add Department
+            {t("departments.addButton")}
           </button>
         )}
       </div>
@@ -124,7 +125,7 @@ export function DepartmentsWidget({
             <SearchIcon />
             <input
               type="text"
-              placeholder="Search departments..."
+              placeholder={t("departments.searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -135,21 +136,21 @@ export function DepartmentsWidget({
       <div className="content-card">
         {filteredDepartments.length === 0 ? (
           <div className="empty-state">
-            <p className="empty-state-title">No departments found</p>
+            <p className="empty-state-title">{t("departments.emptyState.title")}</p>
             <p className="empty-state-message">
               {departments.length === 0
-                ? "No departments exist yet. Add your first department."
-                : "No departments match your search."}
+                ? t("departments.emptyState.noneExist")
+                : t("departments.emptyState.noMatch")}
             </p>
           </div>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Status</th>
-                <th>Created</th>
-                {showActionsColumn && <th aria-label="Actions" />}
+                <th>{t("departments.table.name")}</th>
+                <th>{t("departments.table.status")}</th>
+                <th>{t("departments.table.created")}</th>
+                {showActionsColumn && <th aria-label={t("departments.table.actions")} />}
               </tr>
             </thead>
             <tbody>
@@ -174,7 +175,9 @@ export function DepartmentsWidget({
                         color: department.isActive ? "#1a9c5f" : "#6b7280",
                       }}
                     >
-                      {department.isActive ? "Active" : "Inactive"}
+                      {department.isActive
+                        ? t("departments.table.statusActive")
+                        : t("departments.table.statusInactive")}
                     </span>
                   </td>
                   <td>{formatDate(department.createdAt)}</td>
@@ -184,7 +187,7 @@ export function DepartmentsWidget({
                         <button
                           type="button"
                           className="icon-btn"
-                          aria-label={`Edit ${department.name}`}
+                          aria-label={t("departments.editAriaLabel", { name: department.name })}
                           onClick={(e) => {
                             e.stopPropagation();
                             setDialogState({ mode: "edit", department });
@@ -197,7 +200,7 @@ export function DepartmentsWidget({
                         <button
                           type="button"
                           className="icon-btn icon-btn-danger"
-                          aria-label={`Delete ${department.name}`}
+                          aria-label={t("departments.deleteAriaLabel", { name: department.name })}
                           onClick={(e) => {
                             e.stopPropagation();
                             initiateDelete(department);

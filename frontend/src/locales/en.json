@@ -1,0 +1,51 @@
+{
+  "common": {
+    "actions": {
+      "cancel": "Cancel",
+      "close": "Close",
+      "save": "Save"
+    }
+  },
+  "departments": {
+    "title": "Department Management",
+    "subtitle": "Configure organizational departments",
+    "addButton": "Add Department",
+    "searchPlaceholder": "Search departments...",
+    "table": {
+      "name": "Name",
+      "status": "Status",
+      "created": "Created",
+      "actions": "Actions",
+      "statusActive": "Active",
+      "statusInactive": "Inactive"
+    },
+    "emptyState": {
+      "title": "No departments found",
+      "noneExist": "No departments exist yet. Add your first department.",
+      "noMatch": "No departments match your search."
+    },
+    "editAriaLabel": "Edit {name}",
+    "deleteAriaLabel": "Delete {name}",
+    "deleteConfirm": {
+      "title": "Delete Department",
+      "message": "Are you sure you want to delete \"{name}\"? This cannot be undone.",
+      "confirmLabel": "Delete"
+    },
+    "errors": {
+      "deleteFailed": "Failed to delete department"
+    },
+    "dialog": {
+      "addTitle": "Add Department",
+      "editTitle": "Edit Department",
+      "viewTitle": "View Department",
+      "nameLabel": "Name *",
+      "namePlaceholder": "e.g. Engineering, Finance, Human Resources",
+      "activeLabel": "Active — visible when assigning employees to a department",
+      "createButton": "Create department",
+      "saveButton": "Save changes",
+      "errors": {
+        "saveFailed": "Failed to save department"
+      }
+    }
+  }
+}
