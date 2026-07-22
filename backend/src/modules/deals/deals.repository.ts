@@ -19,6 +19,12 @@ export class DealsRepository extends BaseTenantRepository<Deal> {
       .leftJoinAndSelect("deal.currentStage", "currentStage")
       .leftJoinAndSelect("deal.mainStage", "mainStage")
       .leftJoinAndSelect("deal.owner", "owner")
+      .leftJoinAndSelect("deal.preSalesPerson", "preSalesPerson")
+      .leftJoinAndSelect("deal.pmo", "pmo")
+      .leftJoinAndSelect("deal.source", "source")
+      .leftJoinAndSelect("deal.department", "department")
+      .leftJoinAndSelect("deal.primaryContact", "primaryContact")
+      .leftJoinAndSelect("deal.contact", "contact")
       .orderBy("deal.createdAt", "DESC");
 
     if (mainStageId) {
@@ -28,10 +34,29 @@ export class DealsRepository extends BaseTenantRepository<Deal> {
     return qb.getMany();
   }
 
+  // For display only -- see DealsService for why this must never be the
+  // entity passed to save()/softRemove(). Loading relations and then saving
+  // that same entity instance causes TypeORM to null out every
+  // relation-backed FK column on the row, regardless of what actually
+  // changed (confirmed empirically: reproduced with as few as one relation
+  // loaded, gone entirely with zero relations loaded). Mutations must load
+  // a bare entity via findOneScoped() instead, and re-fetch through this
+  // method afterward only to build the response.
   findOneWithRelations(id: string): Promise<Deal | null> {
     return this.findOneScoped({
       where: { id },
-      relations: ["company", "currentStage", "mainStage", "owner"],
+      relations: [
+        "company",
+        "currentStage",
+        "mainStage",
+        "owner",
+        "preSalesPerson",
+        "pmo",
+        "source",
+        "department",
+        "primaryContact",
+        "contact",
+      ],
     });
   }
 
@@ -41,10 +66,11 @@ export class DealsRepository extends BaseTenantRepository<Deal> {
     return this.queryBuilderScoped("deal").withDeleted().getCount();
   }
 
-  async softRemoveScoped(deal: Deal): Promise<void> {
+  async softRemoveScoped(deal: Deal, actorId?: string): Promise<void> {
     if (deal.tenantId !== this.tenantContext.getTenantId()) {
       throw new ForbiddenException("Entity does not belong to the current tenant");
     }
     await this.repo.softRemove(deal);
+    await this.repo.update(deal.id, { deletedBy: actorId });
   }
 }

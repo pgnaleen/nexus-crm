@@ -24,3 +24,11 @@ export interface AuthSessionResponse {
 
 export type MeResponse = AuthSessionResponse;
 export type LoginResponse = AuthSessionResponse;
+
+export interface VerifyPasswordRequest {
+  password: string;
+}
+
+export interface VerifyPasswordResponse {
+  valid: boolean;
+}

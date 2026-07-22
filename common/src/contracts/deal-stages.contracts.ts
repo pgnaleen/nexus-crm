@@ -7,7 +7,10 @@ export interface CreateMainStageRequest {
 
 export type UpdateMainStageRequest = Partial<CreateMainStageRequest>;
 
-export type MainStageResponse = IMainStage;
+export interface MainStageResponse extends IMainStage {
+  /** Active (non-deleted) Sub Stages under this Main Stage -- deleting it cascades to these. */
+  dependentCount: number;
+}
 
 export interface CreateDealStageRequest {
   name: string;

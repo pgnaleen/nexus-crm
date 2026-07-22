@@ -1,3 +1,5 @@
+import type { DealStatus } from "@orelia/common";
+
 export const FUNNEL_STAGES = [
   "New Lead",
   "Qualified",
@@ -29,6 +31,13 @@ export interface FunnelLead {
   stage: string;
   date: string;
   assignee: string;
+  // Optional -- only populated when converting a real DealResponse (see
+  // dealToFunnelLead in FunnelSourceTabs.tsx). Left out of the legacy mock
+  // data below rather than backfilling ~60 fake entries for a board that no
+  // longer reads from this file.
+  code?: string;
+  country?: string;
+  status?: DealStatus;
 }
 
 export interface FunnelSource {

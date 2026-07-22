@@ -1,11 +1,15 @@
 import type {
   CreateDealDocumentRequest,
+  CreateDealNoteRequest,
   CreateDealRequest,
+  DealDependentsCountResponse,
   DealDocumentResponse,
+  DealNoteResponse,
   DealPartnerResponse,
   DealResponse,
   DealStageHistoryResponse,
   MoveDealStageRequest,
+  UpdateDealNoteRequest,
   UpdateDealRequest,
 } from "@orelia/common";
 import { ApiError, apiFetch } from "./client";
@@ -15,6 +19,10 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 export function listDeals(mainStageId?: string): Promise<DealResponse[]> {
   const query = mainStageId ? `?mainStageId=${encodeURIComponent(mainStageId)}` : "";
   return apiFetch<DealResponse[]>(`/deals${query}`);
+}
+
+export function getDeal(id: string): Promise<DealResponse> {
+  return apiFetch<DealResponse>(`/deals/${id}`);
 }
 
 export function createDeal(payload: CreateDealRequest): Promise<DealResponse> {
@@ -27,6 +35,10 @@ export function updateDeal(id: string, payload: UpdateDealRequest): Promise<Deal
 
 export function deleteDeal(id: string): Promise<{ success: true }> {
   return apiFetch<{ success: true }>(`/deals/${id}`, { method: "DELETE" });
+}
+
+export function getDealDependentsCount(id: string): Promise<DealDependentsCountResponse> {
+  return apiFetch<DealDependentsCountResponse>(`/deals/${id}/dependents-count`);
 }
 
 export function moveDeal(id: string, payload: MoveDealStageRequest): Promise<DealResponse> {
@@ -92,4 +104,23 @@ export function addDealPartnerContact(dealId: string, contactId: string): Promis
 
 export function removeDealPartner(dealId: string, partnerId: string): Promise<{ success: true }> {
   return apiFetch<{ success: true }>(`/deals/${dealId}/partners/${partnerId}`, { method: "DELETE" });
+}
+
+export function listDealNotes(dealId: string): Promise<DealNoteResponse[]> {
+  return apiFetch<DealNoteResponse[]>(`/deals/${dealId}/notes`);
+}
+
+export function createDealNote(dealId: string, payload: CreateDealNoteRequest): Promise<DealNoteResponse> {
+  return apiFetch<DealNoteResponse>(`/deals/${dealId}/notes`, { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function updateDealNote(
+  dealId: string,
+  noteId: string,
+  payload: UpdateDealNoteRequest,
+): Promise<DealNoteResponse> {
+  return apiFetch<DealNoteResponse>(`/deals/${dealId}/notes/${noteId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }

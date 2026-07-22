@@ -49,11 +49,10 @@ export function DepartmentsWidget({
   const confirm = useConfirm();
   const { showError } = useAlert();
 
-  const hasManage = permissions.includes(PERMISSIONS.DEPARTMENT_MANAGE);
-  const canView   = hasManage || permissions.includes(PERMISSIONS.DEPARTMENT_VIEW);
-  const canCreate = hasManage || permissions.includes(PERMISSIONS.DEPARTMENT_CREATE);
-  const canUpdate = hasManage || permissions.includes(PERMISSIONS.DEPARTMENT_UPDATE);
-  const canDelete = hasManage || permissions.includes(PERMISSIONS.DEPARTMENT_DELETE);
+  const canView   = permissions.includes(PERMISSIONS.DEPARTMENT_VIEW);
+  const canCreate = permissions.includes(PERMISSIONS.DEPARTMENT_CREATE);
+  const canUpdate = permissions.includes(PERMISSIONS.DEPARTMENT_UPDATE);
+  const canDelete = permissions.includes(PERMISSIONS.DEPARTMENT_DELETE);
   const canImpersonate =
     isPlatformSession && permissions.includes(PERMISSIONS.PLATFORM_IMPERSONATE_TENANT);
   const showActionsColumn = canUpdate || canDelete;

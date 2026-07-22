@@ -1,4 +1,4 @@
-import { ActingTenant, AuthSessionResponse, PERMISSIONS } from "@orelia/common";
+import { ActingTenant, AuthSessionResponse, PERMISSIONS, VerifyPasswordResponse } from "@orelia/common";
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, Res, UseGuards } from "@nestjs/common";
 import type { Request, Response } from "express";
 import { ACT_AS_TENANT_COOKIE, ACT_AS_TENANT_TTL_MS } from "../../core/tenant";
@@ -10,6 +10,7 @@ import { CurrentUser } from "./decorators/current-user.decorator";
 import { Public } from "./decorators/public.decorator";
 import { ActAsTenantDto } from "./dto/act-as-tenant.dto";
 import { LoginDto } from "./dto/login.dto";
+import { VerifyPasswordDto } from "./dto/verify-password.dto";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import type { AuthenticatedUser } from "./types/authenticated-user";
 
@@ -61,6 +62,20 @@ export class AuthController {
   @Get("me")
   async me(@CurrentUser() user: AuthenticatedUser): Promise<AuthSessionResponse> {
     return this.authService.getSession(user.sub);
+  }
+
+  // Confirms the caller's OWN current password -- no permission check beyond
+  // being logged in, since every user needs this for cascade-delete
+  // confirmations regardless of what resource permissions they hold.
+  @UseGuards(JwtAuthGuard)
+  @Post("verify-password")
+  @HttpCode(HttpStatus.OK)
+  async verifyPassword(
+    @Body() dto: VerifyPasswordDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<VerifyPasswordResponse> {
+    const valid = await this.authService.verifyPassword(user.sub, dto.password);
+    return { valid };
   }
 
   @UseGuards(PermissionsGuard)

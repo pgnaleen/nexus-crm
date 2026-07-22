@@ -4,7 +4,7 @@ import { Column, CreateDateColumn, DeleteDateColumn, PrimaryGeneratedColumn, Upd
  * Base for platform-level tables (no tenant_id — shared/global, e.g. Tenants
  * itself, Plans, Industries).
  *
- * createdBy/updatedBy are plain uuid columns, not `@ManyToOne` relations to
+ * createdBy/updatedBy/deletedBy are plain uuid columns, not `@ManyToOne` relations to
  * User — a relation here would import User, and User's own module chain
  * (via TenantOwnedEntity) loops back to Tenant, which extends this class.
  * That cycle crashes at runtime ("Class extends value undefined") even
@@ -31,4 +31,7 @@ export abstract class AuditedEntity {
 
   @DeleteDateColumn()
   deletedAt?: Date;
+
+  @Column({ type: "uuid", nullable: true })
+  deletedBy?: string;
 }

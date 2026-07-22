@@ -3,6 +3,8 @@ import { APP_INTERCEPTOR } from "@nestjs/core";
 import { JwtModule } from "@nestjs/jwt";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { Tenant } from "../modules/tenants/entities/tenant.entity";
+import { AuditLog } from "./audit-log/audit-log.entity";
+import { AuditLogService } from "./audit-log/audit-log.service";
 import { SystemTenantCache, TenantContextInterceptor, TenantContextService } from "./tenant";
 
 @Global()
@@ -14,15 +16,16 @@ import { SystemTenantCache, TenantContextInterceptor, TenantContextService } fro
   // TenantsModule/AuthModule. JwtModule.register({}) takes no secret here --
   // secrets are passed per sign()/verify() call, so re-registering it is
   // cheap and doesn't duplicate config (AuthModule already does the same).
-  imports: [TypeOrmModule.forFeature([Tenant]), JwtModule.register({})],
+  imports: [TypeOrmModule.forFeature([Tenant, AuditLog]), JwtModule.register({})],
   providers: [
     TenantContextService,
     SystemTenantCache,
+    AuditLogService,
     {
       provide: APP_INTERCEPTOR,
       useClass: TenantContextInterceptor,
     },
   ],
-  exports: [TenantContextService, SystemTenantCache],
+  exports: [TenantContextService, SystemTenantCache, AuditLogService],
 })
 export class CoreModule {}

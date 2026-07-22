@@ -15,7 +15,6 @@ export class DepartmentsController {
 
   @UseGuards(PermissionsGuard)
   @RequirePermission([
-    PERMISSIONS.DEPARTMENT_MANAGE,
     PERMISSIONS.DEPARTMENT_VIEW,
     PERMISSIONS.DEPARTMENT_CREATE,
     PERMISSIONS.DEPARTMENT_UPDATE,
@@ -27,8 +26,11 @@ export class DepartmentsController {
     return departments.map((department) => this.toResponse(department));
   }
 
+  // The dropdown/filter listing (formerly GET /departments/picker) now lives
+  // in PickersController -- see backend/src/modules/pickers/pickers.controller.ts.
+
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.DEPARTMENT_MANAGE, PERMISSIONS.DEPARTMENT_CREATE])
+  @RequirePermission([PERMISSIONS.DEPARTMENT_CREATE])
   @Post()
   async create(
     @Body() dto: CreateDepartmentDto,
@@ -39,7 +41,7 @@ export class DepartmentsController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.DEPARTMENT_MANAGE, PERMISSIONS.DEPARTMENT_UPDATE])
+  @RequirePermission([PERMISSIONS.DEPARTMENT_UPDATE])
   @Patch(":id")
   async update(
     @Param("id", ParseUUIDPipe) id: string,
@@ -51,10 +53,13 @@ export class DepartmentsController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.DEPARTMENT_MANAGE, PERMISSIONS.DEPARTMENT_DELETE])
+  @RequirePermission([PERMISSIONS.DEPARTMENT_DELETE])
   @Delete(":id")
-  async remove(@Param("id", ParseUUIDPipe) id: string): Promise<{ success: true }> {
-    await this.departmentsService.remove(id);
+  async remove(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ success: true }> {
+    await this.departmentsService.remove(id, user.sub);
     return { success: true };
   }
 

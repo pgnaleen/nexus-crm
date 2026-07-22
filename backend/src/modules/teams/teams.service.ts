@@ -35,8 +35,8 @@ export class TeamsService {
     return this.findOneOrFail(id);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, userId: string): Promise<void> {
     const team = await this.findOneOrFail(id);
-    await this.teamsRepo.softRemoveScoped(team);
+    await this.teamsRepo.softRemoveScoped(team, userId);
   }
 }

@@ -8,7 +8,7 @@ import { deleteMainStage } from "@/lib/api/main-stages";
 import { ApiError } from "@/lib/api/client";
 import { EditIcon, SearchIcon, TrashIcon } from "@/components/ui/icons";
 import { TenantActingAsSwitcher } from "@/components/layout/TenantActingAsSwitcher";
-import { useConfirm, useAlert } from "@/components/providers/DialogProvider";
+import { useCascadeDeleteConfirm, useConfirm, useAlert } from "@/components/providers/DialogProvider";
 import { MainStageFormDialog } from "./MainStageFormDialog";
 
 interface MainStagesWidgetProps {
@@ -47,13 +47,13 @@ export function MainStagesWidget({
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const confirm = useConfirm();
+  const confirmCascadeDelete = useCascadeDeleteConfirm();
   const { showError } = useAlert();
 
-  const hasManage = permissions.includes(PERMISSIONS.MAIN_STAGE_MANAGE);
-  const canView   = hasManage || permissions.includes(PERMISSIONS.MAIN_STAGE_VIEW);
-  const canCreate = hasManage || permissions.includes(PERMISSIONS.MAIN_STAGE_CREATE);
-  const canUpdate = hasManage || permissions.includes(PERMISSIONS.MAIN_STAGE_UPDATE);
-  const canDelete = hasManage || permissions.includes(PERMISSIONS.MAIN_STAGE_DELETE);
+  const canView   = permissions.includes(PERMISSIONS.MAIN_STAGE_VIEW);
+  const canCreate = permissions.includes(PERMISSIONS.MAIN_STAGE_CREATE);
+  const canUpdate = permissions.includes(PERMISSIONS.MAIN_STAGE_UPDATE);
+  const canDelete = permissions.includes(PERMISSIONS.MAIN_STAGE_DELETE);
   const canImpersonate =
     isPlatformSession && permissions.includes(PERMISSIONS.PLATFORM_IMPERSONATE_TENANT);
   const showActionsColumn = canUpdate || canDelete;
@@ -73,12 +73,20 @@ export function MainStagesWidget({
   }
 
   async function initiateDelete(stage: MainStageResponse) {
-    const ok = await confirm({
-      title: "Delete Main Stage",
-      message: `Are you sure you want to delete "${stage.name}"? This cannot be undone.`,
-      confirmLabel: "Delete",
-      isDestructive: true,
-    });
+    const hasDependents = stage.dependentCount > 0;
+    const ok = hasDependents
+      ? await confirmCascadeDelete({
+          title: "Delete Main Stage",
+          warningMessage: `Deleting "${stage.name}" will also delete ${stage.dependentCount} ${
+            stage.dependentCount === 1 ? "sub-stage" : "sub-stages"
+          } under it. This action cannot be undone.`,
+        })
+      : await confirm({
+          title: "Delete Main Stage",
+          message: `Are you sure you want to delete "${stage.name}"? This cannot be undone.`,
+          confirmLabel: "Delete",
+          isDestructive: true,
+        });
     if (!ok) return;
 
     setDeletingId(stage.id);
@@ -184,7 +192,18 @@ export function MainStagesWidget({
                   }
                 >
                   <td style={{ color: "var(--color-text-muted)" }}>{stage.position}</td>
-                  <td style={{ fontWeight: 500 }}>{stage.name}</td>
+                  <td style={{ fontWeight: 500 }}>
+                    {stage.name}
+                    {stage.dependentCount === 0 && (
+                      <span
+                        className="status-badge"
+                        style={{ background: "#fff7e6", color: "#b8860b", marginLeft: "8px" }}
+                        title="Deals can't move into this stage until it has at least one sub stage"
+                      >
+                        No sub stages
+                      </span>
+                    )}
+                  </td>
                   <td>{formatDate(stage.createdAt)}</td>
                   {showActionsColumn && (
                     <td className="table-actions">

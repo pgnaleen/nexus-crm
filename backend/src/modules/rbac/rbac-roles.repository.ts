@@ -13,10 +13,11 @@ export class RbacRolesRepository extends BaseTenantRepository<RbacRole> {
     super(repo, tenantContext);
   }
 
-  async softRemoveScoped(role: RbacRole): Promise<void> {
+  async softRemoveScoped(role: RbacRole, actorId?: string): Promise<void> {
     if (role.tenantId !== this.tenantContext.getTenantId()) {
       throw new ForbiddenException("Entity does not belong to the current tenant");
     }
     await this.repo.softRemove(role);
+    await this.repo.update(role.id, { deletedBy: actorId });
   }
 }

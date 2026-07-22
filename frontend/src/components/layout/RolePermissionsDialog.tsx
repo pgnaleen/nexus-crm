@@ -29,6 +29,53 @@ export function groupByPrefix(resources: RbacResourceResponse[]): Map<string, Rb
   return new Map([...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])));
 }
 
+// Permission keys are raw, un-cased snake_case prefixes (e.g. "deals", "main_stage") -- this is
+// the only place a friendlier admin-facing name is applied; the underlying key/DB value is
+// unchanged, so nothing else needs to know about this mapping. "deals" -> "Funnel" specifically
+// because that's what this feature is called everywhere else in the product.
+const RESOURCE_DISPLAY_NAME: Record<string, string> = {
+  platform: "Platform",
+  tenants: "Tenants",
+  users: "Users",
+  rbac: "Roles",
+  teams: "Teams",
+  companies: "Companies",
+  contacts: "Contacts",
+  deals: "Funnel",
+  deal_stages: "Deal Stages",
+  relationship_type: "Relationship Types",
+  relationship: "Relationships",
+  deal_source: "Deal Sources",
+  main_stage: "Main Stages",
+  department: "Departments",
+  sub_stage: "Sub Stages",
+};
+
+// Action suffix -> display label. The underlying permission key stays "_update" (renaming ~40
+// existing keys to "_edit" across the whole backend would be a much larger, riskier change for
+// a purely cosmetic difference) -- this mapping is what actually shows "Edit" in the UI, matching
+// the supervisor's View/Create/Edit/Delete wording without touching the DB-level key names.
+const ACTION_DISPLAY_NAME: Record<string, string> = {
+  view: "View",
+  read: "View", // legacy naming on a few resources, same meaning as "view"
+  create: "Create",
+  update: "Edit",
+  delete: "Delete",
+  manage: "Manage", // being phased out; still shown as-is for any role that still holds one
+  disable: "Disable",
+  "stage:update": "Move Stage",
+  "impersonate-tenant": "Impersonate Tenant",
+};
+
+function displayNameForPrefix(prefix: string): string {
+  return RESOURCE_DISPLAY_NAME[prefix] ?? prefix;
+}
+
+function displayNameForAction(prefix: string, fullName: string): string {
+  const action = fullName.slice(prefix.length + 1);
+  return ACTION_DISPLAY_NAME[action] ?? action;
+}
+
 type LevelFilter = "all" | "tenant" | "platform";
 type RiskFilter = "all" | RbacRiskLevel;
 
@@ -202,7 +249,7 @@ export function RolePermissionsDialog({ role, resources, onClose, onSaved }: Rol
                       onChange={() => toggleGroup(groupResources, isAllSelected)}
                       disabled={isSaving}
                     />
-                    <span>{prefix}</span>
+                    <span>{displayNameForPrefix(prefix)}</span>
                   </label>
                   <span className="permissions-group-count">
                     {groupResources.filter(res => selectedIds.has(res.id)).length} / {groupResources.length}
@@ -218,7 +265,7 @@ export function RolePermissionsDialog({ role, resources, onClose, onSaved }: Rol
                         onChange={() => toggle(resource.id)}
                         disabled={isSaving}
                       />
-                      <span>{resource.name.replace(`${prefix}:`, '')}</span>
+                      <span>{displayNameForAction(prefix, resource.name)}</span>
                       <span className={`permissions-risk-tag permissions-risk-tag--${resource.riskLevel}`}>
                         {resource.riskLevel}
                       </span>

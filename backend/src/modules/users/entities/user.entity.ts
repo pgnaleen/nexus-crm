@@ -26,6 +26,13 @@ export class User extends TenantOwnedEntity {
   @DeleteDateColumn()
   deletedAt?: Date;
 
+  @Column({ type: "uuid", nullable: true })
+  deletedBy?: string;
+
+  @ManyToOne(() => User, { onDelete: "SET NULL" })
+  @JoinColumn({ name: "deleted_by" })
+  deletedByUser?: User;
+
   @Column()
   username!: string;
 

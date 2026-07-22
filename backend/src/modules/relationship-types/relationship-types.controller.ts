@@ -15,30 +15,30 @@ export class RelationshipTypesController {
 
   @UseGuards(PermissionsGuard)
   @RequirePermission([
-    PERMISSIONS.RELATIONSHIP_TYPE_MANAGE,
+    PERMISSIONS.RELATIONSHIP_TYPE_VIEW,
     PERMISSIONS.RELATIONSHIP_TYPE_CREATE,
     PERMISSIONS.RELATIONSHIP_TYPE_UPDATE,
     PERMISSIONS.RELATIONSHIP_TYPE_DELETE,
   ])
   @Get()
   async findAll(): Promise<RelationshipTypeResponse[]> {
-    const types = await this.relationshipTypesService.findAll();
-    return types.map((type) => this.toResponse(type));
+    const withCounts = await this.relationshipTypesService.findAllWithDependentCounts();
+    return withCounts.map(({ type, dependentCount }) => this.toResponse(type, dependentCount));
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.RELATIONSHIP_TYPE_MANAGE, PERMISSIONS.RELATIONSHIP_TYPE_CREATE])
+  @RequirePermission([PERMISSIONS.RELATIONSHIP_TYPE_CREATE])
   @Post()
   async create(
     @Body() dto: CreateRelationshipTypeDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<RelationshipTypeResponse> {
     const type = await this.relationshipTypesService.create(dto, user.sub);
-    return this.toResponse(type);
+    return this.toResponse(type, 0);
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.RELATIONSHIP_TYPE_MANAGE, PERMISSIONS.RELATIONSHIP_TYPE_UPDATE])
+  @RequirePermission([PERMISSIONS.RELATIONSHIP_TYPE_UPDATE])
   @Patch(":id")
   async update(
     @Param("id", ParseUUIDPipe) id: string,
@@ -46,22 +46,27 @@ export class RelationshipTypesController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<RelationshipTypeResponse> {
     const type = await this.relationshipTypesService.update(id, dto, user.sub);
-    return this.toResponse(type);
+    const dependentCount = await this.relationshipTypesService.countDependents(id);
+    return this.toResponse(type, dependentCount);
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.RELATIONSHIP_TYPE_MANAGE, PERMISSIONS.RELATIONSHIP_TYPE_DELETE])
+  @RequirePermission([PERMISSIONS.RELATIONSHIP_TYPE_DELETE])
   @Delete(":id")
-  async remove(@Param("id", ParseUUIDPipe) id: string): Promise<{ success: true }> {
-    await this.relationshipTypesService.remove(id);
+  async remove(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ success: true }> {
+    await this.relationshipTypesService.remove(id, user.sub);
     return { success: true };
   }
 
-  private toResponse(type: RelationshipType): RelationshipTypeResponse {
+  private toResponse(type: RelationshipType, dependentCount: number): RelationshipTypeResponse {
     return {
       id: type.id,
       tenantId: type.tenantId,
       name: type.name,
+      dependentCount,
       createdAt: type.createdAt.toISOString(),
       updatedAt: type.updatedAt.toISOString(),
     };

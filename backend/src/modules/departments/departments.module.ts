@@ -10,5 +10,6 @@ import { DepartmentsService } from "./departments.service";
   imports: [TypeOrmModule.forFeature([Department]), RbacModule],
   controllers: [DepartmentsController],
   providers: [DepartmentsService, DepartmentsRepository],
+  exports: [DepartmentsService],
 })
 export class DepartmentsModule {}

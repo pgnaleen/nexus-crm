@@ -3,9 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { PERMISSIONS } from "@orelia/common";
 import { OreliaLogo } from "@/components/brand/OreliaLogo";
-import { ChevronDownIcon, DashboardIcon, FunnelIcon, SettingsIcon, SlidersIcon, UsersGroupIcon, UserIcon, ActivityIcon, BellIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, DashboardIcon, FunnelIcon, SettingsIcon, SlidersIcon, UsersGroupIcon, UserIcon, ActivityIcon } from "@/components/ui/icons";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import type { RelationshipTypeResponse, MainStageResponse } from "@orelia/common";
 
@@ -16,19 +15,28 @@ interface SidebarProps {
   mainStages: MainStageResponse[];
 }
 
-const CRM_CONFIG_ITEMS: { label: string; segment: string; permission?: string; isRoot?: boolean }[] = [
-  { label: "Teams", segment: "teams", permission: PERMISSIONS.TEAMS_MANAGE },
-  { label: "Relationship Types", segment: "relationship-types" },
-  { label: "Deal Sources", segment: "deal-sources", permission: PERMISSIONS.DEAL_SOURCE_MANAGE },
-  { label: "Main Stages", segment: "main-stages", permission: PERMISSIONS.MAIN_STAGE_MANAGE },
-  { label: "Sub Stages", segment: "sub-stages", permission: PERMISSIONS.SUB_STAGE_MANAGE },
+// Items are gated by resource *prefix* (e.g. "department"), not a specific permission key --
+// a user sees the section if they hold ANY permission under that prefix (view/create/update/
+// delete, or manage while it still exists on some resources). This mirrors the same grouping
+// logic RolePermissionsDialog already uses, and means this file never needs editing again just
+// because a resource's specific permission set changes (e.g. Manage being removed).
+function hasAnyPermissionForPrefix(permissions: string[], prefix: string): boolean {
+  return permissions.some((p) => p.startsWith(`${prefix}:`));
+}
+
+const CRM_CONFIG_ITEMS: { label: string; segment: string; prefix?: string; isRoot?: boolean }[] = [
+  { label: "Teams", segment: "teams", prefix: "teams" },
+  { label: "Relationship Types", segment: "relationship-types", prefix: "relationship_type" },
+  { label: "Deal Sources", segment: "deal-sources", prefix: "deal_source" },
+  { label: "Main Stages", segment: "main-stages", prefix: "main_stage" },
+  { label: "Sub Stages", segment: "sub-stages", prefix: "sub_stage" },
 ];
 
-const ADMIN_ITEMS: { label: string; segment: string; permission?: string; isRoot?: boolean }[] = [
-  { label: "Tenants", segment: "tenants", permission: PERMISSIONS.TENANTS_MANAGE },
-  { label: "Roles", segment: "roles", permission: PERMISSIONS.RBAC_MANAGE },
-  { label: "Users", segment: "users", isRoot: true, permission: PERMISSIONS.USERS_MANAGE },
-  { label: "Departments", segment: "departments", permission: PERMISSIONS.DEPARTMENT_MANAGE },
+const ADMIN_ITEMS: { label: string; segment: string; prefix?: string; isRoot?: boolean }[] = [
+  { label: "Tenants", segment: "tenants", prefix: "tenants" },
+  { label: "Roles", segment: "roles", prefix: "rbac" },
+  { label: "Users", segment: "users", isRoot: true, prefix: "users" },
+  { label: "Departments", segment: "departments", prefix: "department" },
 ];
 
 export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages }: SidebarProps) {
@@ -55,17 +63,15 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
   const funnelHref = `/${tenantSlug}/funnel`;
   const isFunnelActive = pathname === funnelHref;
 
-  const calendarHref = `/${tenantSlug}/calendar`;
-  const isCalendarActive = pathname === calendarHref;
-
   const hrHref = `/${tenantSlug}/employees`;
   const isHrActive = pathname === hrHref;
 
+  const canSeeDeals = hasAnyPermissionForPrefix(permissions, "deals");
   const visibleAdminItems = ADMIN_ITEMS.filter(
-    (item) => !item.permission || permissions.includes(item.permission),
+    (item) => !item.prefix || hasAnyPermissionForPrefix(permissions, item.prefix),
   );
   const visibleConfigItems = CRM_CONFIG_ITEMS.filter(
-    (item) => !item.permission || permissions.includes(item.permission),
+    (item) => !item.prefix || hasAnyPermissionForPrefix(permissions, item.prefix),
   );
 
   function handleLinkClick(isActive: boolean) {
@@ -89,56 +95,52 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
         </Link>
 
         {/* FUNNEL ROOT LINK */}
-        <Link 
-          href={funnelHref} 
-          className={isFunnelActive ? "sidebar-link active" : "sidebar-link"}
-          onClick={() => handleLinkClick(isFunnelActive)}
-        >
-          <FunnelIcon size={17} />
-          Funnel
-        </Link>
-
-        {/* CALENDAR ROOT LINK */}
-        <Link 
-          href={calendarHref} 
-          className={isCalendarActive ? "sidebar-link active" : "sidebar-link"}
-          onClick={() => handleLinkClick(isCalendarActive)}
-        >
-          <BellIcon size={17} />
-          Calendar
-        </Link>
+        {canSeeDeals && (
+          <Link
+            href={funnelHref}
+            className={isFunnelActive ? "sidebar-link active" : "sidebar-link"}
+            onClick={() => handleLinkClick(isFunnelActive)}
+          >
+            <FunnelIcon size={17} />
+            Funnel
+          </Link>
+        )}
 
         {/* DEALS GROUP */}
-        <button
-          type="button"
-          className="sidebar-group-toggle"
-          onClick={() => setIsDealsOpen((current) => !current)}
-          aria-expanded={isDealsOpen}
-        >
-          <ActivityIcon size={17} />
-          <span>Deals</span>
-          <span className={isDealsOpen ? "sidebar-chevron open" : "sidebar-chevron"}>
-            <ChevronDownIcon size={14} />
-          </span>
-        </button>
+        {canSeeDeals && (
+          <>
+            <button
+              type="button"
+              className="sidebar-group-toggle"
+              onClick={() => setIsDealsOpen((current) => !current)}
+              aria-expanded={isDealsOpen}
+            >
+              <ActivityIcon size={17} />
+              <span>Deals</span>
+              <span className={isDealsOpen ? "sidebar-chevron open" : "sidebar-chevron"}>
+                <ChevronDownIcon size={14} />
+              </span>
+            </button>
 
-        {isDealsOpen && (
-          <div className="sidebar-submenu">
-            {mainStages.map((stage) => {
-              const href = `/${tenantSlug}/deals/${stage.id}`;
-              const isActive = pathname === href;
-              return (
-                <Link 
-                  key={href} 
-                  href={href} 
-                  className={isActive ? "sidebar-link active" : "sidebar-link"}
-                  onClick={() => handleLinkClick(isActive)}
-                >
-                  {stage.name}
-                </Link>
-              );
-            })}
-          </div>
+            {isDealsOpen && (
+              <div className="sidebar-submenu">
+                {mainStages.map((stage) => {
+                  const href = `/${tenantSlug}/deals/${stage.id}`;
+                  const isActive = pathname === href;
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      className={isActive ? "sidebar-link active" : "sidebar-link"}
+                      onClick={() => handleLinkClick(isActive)}
+                    >
+                      {stage.name}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
 
         {/* RELATIONSHIPS GROUP */}

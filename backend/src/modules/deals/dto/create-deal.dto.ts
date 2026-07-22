@@ -1,17 +1,19 @@
-import { CreateDealRequest, DealPriority, DealType } from "@orelia/common";
+import { CreateDealRequest, DealType } from "@orelia/common";
+import { Type } from "class-transformer";
 import {
+  IsArray,
   IsDateString,
   IsEnum,
-  IsInt,
   IsNumber,
   IsOptional,
   IsString,
   IsUUID,
-  Max,
-  MaxLength,
   Min,
+  MaxLength,
   MinLength,
+  ValidateNested,
 } from "class-validator";
+import { CompetitorEntryDto } from "./competitor-entry.dto";
 
 export class CreateDealDto implements CreateDealRequest {
   @IsString()
@@ -21,10 +23,6 @@ export class CreateDealDto implements CreateDealRequest {
 
   @IsEnum(DealType)
   dealType!: DealType;
-
-  @IsOptional()
-  @IsString()
-  description?: string;
 
   @IsOptional()
   @IsUUID()
@@ -42,16 +40,16 @@ export class CreateDealDto implements CreateDealRequest {
   @IsUUID()
   sourceId?: string;
 
-  @IsOptional()
-  @IsUUID()
-  referredByCompanyId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  referredByEmployeeId?: string;
-
   @IsUUID()
   ownerId!: string;
+
+  @IsOptional()
+  @IsUUID()
+  preSalesPersonId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  pmoId?: string;
 
   @IsOptional()
   @IsUUID()
@@ -61,29 +59,51 @@ export class CreateDealDto implements CreateDealRequest {
   currentStageId!: string;
 
   @IsOptional()
+  @IsUUID()
+  departmentId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  dealCountry?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  customerPainPoint?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  product?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  services?: string;
+
+  @IsOptional()
   @IsNumber()
   @Min(0)
   estimatedValue?: number;
 
   @IsOptional()
-  @IsString()
-  currency?: string;
+  @IsNumber()
+  @Min(0)
+  internalCosts?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  externalCosts?: number;
 
   @IsOptional()
   @IsDateString()
   expectedCloseDate?: string;
 
   @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(100)
-  probability?: number;
-
-  @IsOptional()
-  @IsEnum(DealPriority)
-  priority?: DealPriority;
-
-  @IsOptional()
-  @IsUUID()
-  departmentId?: string;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CompetitorEntryDto)
+  competitors?: CompetitorEntryDto[];
 }

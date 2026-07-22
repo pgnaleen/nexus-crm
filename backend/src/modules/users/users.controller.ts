@@ -23,7 +23,7 @@ export class UsersController {
   ) {}
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission(PERMISSIONS.USERS_MANAGE)
+  @RequirePermission([PERMISSIONS.USERS_VIEW])
   @Get()
   async findAll(): Promise<UserSummaryResponse[]> {
     const users = await this.usersService.findAll();

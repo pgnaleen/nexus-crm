@@ -35,8 +35,8 @@ export class DealSourcesService {
     return this.findOneOrFail(id);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, userId: string): Promise<void> {
     const source = await this.findOneOrFail(id);
-    await this.dealSourcesRepo.softRemoveScoped(source);
+    await this.dealSourcesRepo.softRemoveScoped(source, userId);
   }
 }

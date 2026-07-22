@@ -40,11 +40,13 @@ export function AccountMenu({ tenantName, userDisplayName, tenantSlug }: Account
     setIsLoggingOut(true);
     try {
       await logout();
-      router.push(`/${tenantSlug}`);
-      router.refresh();
     } catch {
-      setIsLoggingOut(false);
+      // Session may already be dead (expired token, refresh already failed
+      // elsewhere) -- logout is a one-way action from the user's
+      // perspective either way, so fall through to the same redirect.
     }
+    router.push(`/${tenantSlug}`);
+    router.refresh();
   }
 
   return (

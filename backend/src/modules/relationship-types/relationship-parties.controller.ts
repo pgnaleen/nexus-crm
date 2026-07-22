@@ -14,7 +14,6 @@ import { RelationshipCompanyContactMap } from "./entities/relationship-company-c
 import { RelationshipPartiesService } from "./relationship-parties.service";
 
 const ANY_RELATIONSHIP_PERMISSION = [
-  PERMISSIONS.RELATIONSHIP_MANAGE,
   PERMISSIONS.RELATIONSHIP_VIEW,
   PERMISSIONS.RELATIONSHIP_CREATE,
   PERMISSIONS.RELATIONSHIP_UPDATE,
@@ -36,7 +35,7 @@ export class RelationshipPartiesController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.RELATIONSHIP_MANAGE, PERMISSIONS.RELATIONSHIP_CREATE])
+  @RequirePermission([PERMISSIONS.RELATIONSHIP_CREATE])
   @Post("companies")
   async addCompany(
     @Param("relationshipTypeId", ParseUUIDPipe) relationshipTypeId: string,
@@ -48,7 +47,7 @@ export class RelationshipPartiesController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.RELATIONSHIP_MANAGE, PERMISSIONS.RELATIONSHIP_CREATE])
+  @RequirePermission([PERMISSIONS.RELATIONSHIP_CREATE])
   @Post("contacts")
   async addContact(
     @Param("relationshipTypeId", ParseUUIDPipe) relationshipTypeId: string,
@@ -60,7 +59,7 @@ export class RelationshipPartiesController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.RELATIONSHIP_MANAGE, PERMISSIONS.RELATIONSHIP_UPDATE])
+  @RequirePermission([PERMISSIONS.RELATIONSHIP_UPDATE])
   @Patch("companies/:mapId")
   async updateCompany(
     @Param("relationshipTypeId", ParseUUIDPipe) relationshipTypeId: string,
@@ -73,7 +72,7 @@ export class RelationshipPartiesController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.RELATIONSHIP_MANAGE, PERMISSIONS.RELATIONSHIP_UPDATE])
+  @RequirePermission([PERMISSIONS.RELATIONSHIP_UPDATE])
   @Patch("contacts/:mapId")
   async updateContact(
     @Param("relationshipTypeId", ParseUUIDPipe) relationshipTypeId: string,
@@ -86,7 +85,7 @@ export class RelationshipPartiesController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.RELATIONSHIP_MANAGE, PERMISSIONS.RELATIONSHIP_UPDATE])
+  @RequirePermission([PERMISSIONS.RELATIONSHIP_UPDATE])
   @Patch(":mapId/disable")
   async disable(
     @Param("relationshipTypeId", ParseUUIDPipe) relationshipTypeId: string,
@@ -98,7 +97,7 @@ export class RelationshipPartiesController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.RELATIONSHIP_MANAGE, PERMISSIONS.RELATIONSHIP_UPDATE])
+  @RequirePermission([PERMISSIONS.RELATIONSHIP_UPDATE])
   @Patch(":mapId/enable")
   async enable(
     @Param("relationshipTypeId", ParseUUIDPipe) relationshipTypeId: string,
@@ -110,13 +109,14 @@ export class RelationshipPartiesController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.RELATIONSHIP_MANAGE, PERMISSIONS.RELATIONSHIP_DELETE])
+  @RequirePermission([PERMISSIONS.RELATIONSHIP_DELETE])
   @Delete(":mapId")
   async remove(
     @Param("relationshipTypeId", ParseUUIDPipe) relationshipTypeId: string,
     @Param("mapId", ParseUUIDPipe) mapId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<{ success: true }> {
-    await this.partiesService.remove(relationshipTypeId, mapId);
+    await this.partiesService.remove(relationshipTypeId, mapId, user.sub);
     return { success: true };
   }
 

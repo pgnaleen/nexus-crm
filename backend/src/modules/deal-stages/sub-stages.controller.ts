@@ -15,7 +15,6 @@ export class SubStagesController {
 
   @UseGuards(PermissionsGuard)
   @RequirePermission([
-    PERMISSIONS.SUB_STAGE_MANAGE,
     PERMISSIONS.SUB_STAGE_VIEW,
     PERMISSIONS.SUB_STAGE_CREATE,
     PERMISSIONS.SUB_STAGE_UPDATE,
@@ -28,7 +27,7 @@ export class SubStagesController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.SUB_STAGE_MANAGE, PERMISSIONS.SUB_STAGE_CREATE])
+  @RequirePermission([PERMISSIONS.SUB_STAGE_CREATE])
   @Post()
   async create(
     @Body() dto: CreateSubStageDto,
@@ -39,7 +38,7 @@ export class SubStagesController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.SUB_STAGE_MANAGE, PERMISSIONS.SUB_STAGE_UPDATE])
+  @RequirePermission([PERMISSIONS.SUB_STAGE_UPDATE])
   @Patch(":id")
   async update(
     @Param("id", ParseUUIDPipe) id: string,
@@ -51,10 +50,13 @@ export class SubStagesController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.SUB_STAGE_MANAGE, PERMISSIONS.SUB_STAGE_DELETE])
+  @RequirePermission([PERMISSIONS.SUB_STAGE_DELETE])
   @Delete(":id")
-  async remove(@Param("id", ParseUUIDPipe) id: string): Promise<{ success: true }> {
-    await this.subStagesService.remove(id);
+  async remove(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ success: true }> {
+    await this.subStagesService.remove(id, user.sub);
     return { success: true };
   }
 

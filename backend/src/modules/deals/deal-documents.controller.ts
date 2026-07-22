@@ -39,7 +39,7 @@ export class DealDocumentsController {
   constructor(private readonly dealDocumentsService: DealDocumentsService) {}
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.DEALS_READ])
+  @RequirePermission([PERMISSIONS.DEALS_VIEW])
   @Get()
   async findAll(@Param("dealId", ParseUUIDPipe) dealId: string): Promise<DealDocumentResponse[]> {
     const documents = await this.dealDocumentsService.findAll(dealId);
@@ -93,8 +93,9 @@ export class DealDocumentsController {
   async remove(
     @Param("dealId", ParseUUIDPipe) dealId: string,
     @Param("documentId", ParseUUIDPipe) documentId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<{ success: true }> {
-    await this.dealDocumentsService.remove(dealId, documentId);
+    await this.dealDocumentsService.remove(dealId, documentId, user.sub);
     return { success: true };
   }
 

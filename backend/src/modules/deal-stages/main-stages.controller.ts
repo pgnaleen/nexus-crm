@@ -15,7 +15,6 @@ export class MainStagesController {
 
   @UseGuards(PermissionsGuard)
   @RequirePermission([
-    PERMISSIONS.MAIN_STAGE_MANAGE,
     PERMISSIONS.MAIN_STAGE_VIEW,
     PERMISSIONS.MAIN_STAGE_CREATE,
     PERMISSIONS.MAIN_STAGE_UPDATE,
@@ -23,23 +22,23 @@ export class MainStagesController {
   ])
   @Get()
   async findAll(): Promise<MainStageResponse[]> {
-    const stages = await this.mainStagesService.findAll();
-    return stages.map((stage) => this.toResponse(stage));
+    const withCounts = await this.mainStagesService.findAllWithDependentCounts();
+    return withCounts.map(({ stage, dependentCount }) => this.toResponse(stage, dependentCount));
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.MAIN_STAGE_MANAGE, PERMISSIONS.MAIN_STAGE_CREATE])
+  @RequirePermission([PERMISSIONS.MAIN_STAGE_CREATE])
   @Post()
   async create(
     @Body() dto: CreateMainStageDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<MainStageResponse> {
     const stage = await this.mainStagesService.create(dto, user.sub);
-    return this.toResponse(stage);
+    return this.toResponse(stage, 0);
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.MAIN_STAGE_MANAGE, PERMISSIONS.MAIN_STAGE_UPDATE])
+  @RequirePermission([PERMISSIONS.MAIN_STAGE_UPDATE])
   @Patch(":id")
   async update(
     @Param("id", ParseUUIDPipe) id: string,
@@ -47,23 +46,28 @@ export class MainStagesController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<MainStageResponse> {
     const stage = await this.mainStagesService.update(id, dto, user.sub);
-    return this.toResponse(stage);
+    const dependentCount = await this.mainStagesService.countDependents(id);
+    return this.toResponse(stage, dependentCount);
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.MAIN_STAGE_MANAGE, PERMISSIONS.MAIN_STAGE_DELETE])
+  @RequirePermission([PERMISSIONS.MAIN_STAGE_DELETE])
   @Delete(":id")
-  async remove(@Param("id", ParseUUIDPipe) id: string): Promise<{ success: true }> {
-    await this.mainStagesService.remove(id);
+  async remove(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ success: true }> {
+    await this.mainStagesService.remove(id, user.sub);
     return { success: true };
   }
 
-  private toResponse(stage: MainStage): MainStageResponse {
+  private toResponse(stage: MainStage, dependentCount: number): MainStageResponse {
     return {
       id: stage.id,
       tenantId: stage.tenantId,
       name: stage.name,
       position: stage.position,
+      dependentCount,
       createdAt: stage.createdAt.toISOString(),
       updatedAt: stage.updatedAt.toISOString(),
     };

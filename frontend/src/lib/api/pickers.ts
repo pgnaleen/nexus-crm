@@ -2,13 +2,13 @@ import type { CompanyPickerResponse, ContactPickerResponse, EmployeePickerRespon
 import { apiFetch } from "./client";
 
 export function listCompaniesPicker(): Promise<CompanyPickerResponse[]> {
-  return apiFetch<CompanyPickerResponse[]>("/companies/picker");
+  return apiFetch<CompanyPickerResponse[]>("/pickers/companies");
 }
 
 export function listContactsPicker(): Promise<ContactPickerResponse[]> {
-  return apiFetch<ContactPickerResponse[]>("/contacts/picker");
+  return apiFetch<ContactPickerResponse[]>("/pickers/contacts");
 }
 
 export function listEmployeesPicker(): Promise<EmployeePickerResponse[]> {
-  return apiFetch<EmployeePickerResponse[]>("/employees/picker");
+  return apiFetch<EmployeePickerResponse[]>("/pickers/employees");
 }

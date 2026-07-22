@@ -15,7 +15,6 @@ export class DealSourcesController {
 
   @UseGuards(PermissionsGuard)
   @RequirePermission([
-    PERMISSIONS.DEAL_SOURCE_MANAGE,
     PERMISSIONS.DEAL_SOURCE_VIEW,
     PERMISSIONS.DEAL_SOURCE_CREATE,
     PERMISSIONS.DEAL_SOURCE_UPDATE,
@@ -28,7 +27,7 @@ export class DealSourcesController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.DEAL_SOURCE_MANAGE, PERMISSIONS.DEAL_SOURCE_CREATE])
+  @RequirePermission([PERMISSIONS.DEAL_SOURCE_CREATE])
   @Post()
   async create(
     @Body() dto: CreateDealSourceDto,
@@ -39,7 +38,7 @@ export class DealSourcesController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.DEAL_SOURCE_MANAGE, PERMISSIONS.DEAL_SOURCE_UPDATE])
+  @RequirePermission([PERMISSIONS.DEAL_SOURCE_UPDATE])
   @Patch(":id")
   async update(
     @Param("id", ParseUUIDPipe) id: string,
@@ -51,10 +50,13 @@ export class DealSourcesController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.DEAL_SOURCE_MANAGE, PERMISSIONS.DEAL_SOURCE_DELETE])
+  @RequirePermission([PERMISSIONS.DEAL_SOURCE_DELETE])
   @Delete(":id")
-  async remove(@Param("id", ParseUUIDPipe) id: string): Promise<{ success: true }> {
-    await this.dealSourcesService.remove(id);
+  async remove(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ success: true }> {
+    await this.dealSourcesService.remove(id, user.sub);
     return { success: true };
   }
 

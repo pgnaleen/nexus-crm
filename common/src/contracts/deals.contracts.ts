@@ -1,27 +1,35 @@
-import { DealPriority, DealType, DocumentType } from "../enums";
+import { DealType, DocumentType } from "../enums";
 import { IDeal } from "../types";
+
+export interface CompetitorEntryRequest {
+  name: string;
+  details: string;
+}
 
 export interface CreateDealRequest {
   name: string;
   dealType: DealType;
-  description?: string;
   // The customer: exactly one of companyId (company customer) or contactId
   // (bare contact, no company) must be provided.
   companyId?: string;
   primaryContactId?: string;
   contactId?: string;
   sourceId?: string;
-  referredByCompanyId?: string;
-  referredByEmployeeId?: string;
   ownerId: string;
+  preSalesPersonId?: string;
+  pmoId?: string;
   mainStageId?: string;
   currentStageId: string;
-  estimatedValue?: number;
-  currency?: string;
-  expectedCloseDate?: string;
-  probability?: number;
-  priority?: DealPriority;
   departmentId?: string;
+  dealCountry?: string;
+  customerPainPoint?: string;
+  product?: string;
+  services?: string;
+  estimatedValue?: number;
+  internalCosts?: number;
+  externalCosts?: number;
+  expectedCloseDate?: string;
+  competitors?: CompetitorEntryRequest[];
 }
 
 export type UpdateDealRequest = Partial<Omit<CreateDealRequest, "companyId">>;
@@ -31,11 +39,22 @@ export interface MoveDealStageRequest {
   note?: string;
 }
 
+export interface DealDependentsCountResponse {
+  count: number;
+}
+
 export interface DealResponse extends IDeal {
   companyName?: string;
+  companyCountry?: string | null;
   mainStageName?: string;
   currentStageName?: string;
   ownerName?: string;
+  preSalesPersonName?: string | null;
+  pmoName?: string | null;
+  sourceName?: string | null;
+  departmentName?: string | null;
+  primaryContactName?: string | null;
+  contactName?: string | null;
 }
 
 export interface CreateDealDocumentRequest {
@@ -80,4 +99,20 @@ export interface DealStageHistoryResponse {
   movedByName: string | null;
   movedAt: string;
   note: string | null;
+}
+
+export interface CreateDealNoteRequest {
+  text: string;
+}
+
+export type UpdateDealNoteRequest = CreateDealNoteRequest;
+
+export interface DealNoteResponse {
+  id: string;
+  dealId: string;
+  text: string;
+  authorId: string | null;
+  authorName: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

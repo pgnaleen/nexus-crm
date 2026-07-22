@@ -14,7 +14,7 @@ export class DealPartnersController {
   constructor(private readonly dealPartnersService: DealPartnersService) {}
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.DEALS_READ])
+  @RequirePermission([PERMISSIONS.DEALS_VIEW])
   @Get()
   async findAll(@Param("dealId", ParseUUIDPipe) dealId: string): Promise<DealPartnerResponse[]> {
     const maps = await this.dealPartnersService.findAll(dealId);

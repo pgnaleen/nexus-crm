@@ -41,6 +41,9 @@ const refreshAccessToken = cache(async (): Promise<string | null> => {
 });
 
 export async function serverFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
+  const method = init?.method ?? "GET";
+  const startedAt = Date.now();
+
   const doFetch = (freshAccessToken?: string) => {
     const cookieHeader = freshAccessToken
       ? withCookie(getCookieHeader(), ACCESS_COOKIE, freshAccessToken)
@@ -55,18 +58,32 @@ export async function serverFetch<T>(path: string, init?: RequestInit): Promise<
     });
   };
 
-  let res = await doFetch();
+  try {
+    let res = await doFetch();
 
-  if (res.status === 401) {
-    const freshAccessToken = await refreshAccessToken();
-    if (freshAccessToken) {
-      res = await doFetch(freshAccessToken);
+    if (res.status === 401) {
+      console.log(`[serverFetch] ${method} ${path} -> 401, attempting token refresh`);
+      const freshAccessToken = await refreshAccessToken();
+      if (freshAccessToken) {
+        console.log(`[serverFetch] ${method} ${path} -> refresh succeeded, retrying request`);
+        res = await doFetch(freshAccessToken);
+      } else {
+        console.log(`[serverFetch] ${method} ${path} -> refresh failed, returning null`);
+      }
     }
-  }
 
-  if (!res.ok) {
-    return null;
-  }
+    const duration = Date.now() - startedAt;
 
-  return res.json() as Promise<T>;
+    if (!res.ok) {
+      console.error(`[serverFetch] ${method} ${path} ${res.status} ${duration}ms`);
+      return null;
+    }
+
+    console.log(`[serverFetch] ${method} ${path} ${res.status} ${duration}ms`);
+    return res.json() as Promise<T>;
+  } catch (err) {
+    const duration = Date.now() - startedAt;
+    console.error(`[serverFetch] ${method} ${path} failed after ${duration}ms: ${(err as Error).message}`);
+    throw err;
+  }
 }

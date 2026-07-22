@@ -147,7 +147,7 @@ export class UsersService {
       throw new ForbiddenException("You cannot delete your own account");
     }
     const user = await this.findOneOrFail(id);
-    await this.usersRepo.softRemoveScoped(user);
+    await this.usersRepo.softRemoveScoped(user, actingUserId);
   }
 
   private async assertUsernameAvailable(username: string): Promise<void> {

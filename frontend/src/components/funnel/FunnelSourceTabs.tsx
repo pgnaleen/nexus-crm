@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { type FunnelLead } from "@/lib/data/funnel";
+import { PERMISSIONS } from "@orelia/common";
 import type {
   CompanyPickerResponse,
   ContactPickerResponse,
   DealResponse,
   DealSourceResponse,
-  DepartmentResponse,
+  DepartmentPickerResponse,
   EmployeePickerResponse,
   IndustryResponse,
   RelationshipTypeResponse,
@@ -15,10 +16,11 @@ import type {
 import { FunnelBoard, type FunnelColumn } from "@/components/funnel/FunnelBoard";
 import { AddDealDialog } from "@/components/funnel/AddDealDialog";
 import { DealStageHistoryDialog } from "@/components/funnel/DealStageHistoryDialog";
+import { ViewDealDialog } from "@/components/funnel/ViewDealDialog";
 import { moveDeal } from "@/lib/api/deals";
 import { ApiError } from "@/lib/api/client";
 import { useToast } from "@/components/providers/ToastProvider";
-import { useAlert } from "@/components/providers/DialogProvider";
+import { useAlert, useConfirm } from "@/components/providers/DialogProvider";
 import { SearchIcon } from "@/components/ui/icons";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 
@@ -63,6 +65,9 @@ function dealToFunnelLead(deal: DealResponse, stageIdField: StageIdField): Funne
     stage: deal[stageIdField] ?? "",
     date: deal.expectedCloseDate ?? "",
     assignee: deal.ownerName ?? "Unassigned",
+    code: deal.dealCode,
+    country: deal.dealCountry ?? undefined,
+    status: deal.status,
   };
 }
 
@@ -91,13 +96,25 @@ interface FunnelSourceTabsProps {
   companies: CompanyPickerResponse[];
   employees: EmployeePickerResponse[];
   contacts: ContactPickerResponse[];
-  departments: DepartmentResponse[];
+  departments: DepartmentPickerResponse[];
+  // Distinct country values in use across the tenant's companies, for the
+  // Country filter -- there's no dedicated country lookup table, so this is
+  // derived from companies rather than fetched as its own resource.
+  countries: string[];
   relationshipTypes: RelationshipTypeResponse[];
   industries: IndustryResponse[];
   initialDeals?: DealResponse[];
   title?: string;
   subtitle?: string;
   addButtonLabel?: string;
+  // Needed so the Notes tab in ViewDealDialog knows which notes are the
+  // current user's own (only the author can edit a note) -- passed down
+  // from the page's own getServerSession() call, same convention as
+  // `permissions` being threaded to admin widgets elsewhere in the app.
+  currentUserId?: string;
+  // Gates the Edit/Delete buttons inside ViewDealDialog -- same
+  // `session.permissions` already used everywhere else in the app.
+  permissions?: string[];
 }
 
 export function FunnelSourceTabs({
@@ -109,14 +126,19 @@ export function FunnelSourceTabs({
   employees,
   contacts,
   departments,
+  countries,
   relationshipTypes,
   industries,
   initialDeals = [],
   title = "Funnel",
   subtitle = "Track deals by acquisition source",
   addButtonLabel = "Add New Deal",
+  currentUserId,
+  permissions = [],
 }: FunnelSourceTabsProps) {
   const stageIdField = STAGE_ID_FIELD[stageField];
+  const canCreateDeals = permissions.includes(PERMISSIONS.DEALS_CREATE);
+  const canUpdateDeals = permissions.includes(PERMISSIONS.DEALS_UPDATE);
   const dynamicSources = [
     { id: "all", name: "All" },
     ...dealSources.map((ds) => ({ id: ds.id, name: ds.name })),
@@ -134,9 +156,12 @@ export function FunnelSourceTabs({
   const [country, setCountry] = useState("");
   const [isAddDealOpen, setAddDealOpen] = useState(false);
   const [historyDealId, setHistoryDealId] = useState<string | null>(null);
+  const [viewDealId, setViewDealId] = useState<string | null>(null);
+  const [editDeal, setEditDeal] = useState<DealResponse | null>(null);
 
   const { showToast, dismissToast, flushToast } = useToast();
   const { showError } = useAlert();
+  const confirm = useConfirm();
   const pendingMovesRef = useRef<Map<string, PendingMove>>(new Map());
   const mountedRef = useRef(true);
 
@@ -155,8 +180,43 @@ export function FunnelSourceTabs({
   const hasFilters = search !== "" || department !== "" || country !== "";
 
   const columnNameById = new Map(columns.map((c) => [c.id, c.name]));
+  // Only populated for the Funnel overview board (columns = Main Stages,
+  // each carrying its funnel sequence). Used to detect when a drag-and-drop
+  // move skips over one or more stages in between, so that can be confirmed
+  // before it happens instead of relying on the usual Undo-toast safety net.
+  const columnPositionById = new Map(
+    columns.filter((c) => c.position !== undefined).map((c) => [c.id, c.position as number]),
+  );
 
-  const activeDeals = activeId === "all" ? deals : deals.filter((d) => d.sourceId === activeId);
+  // Names of every Main Stage strictly between fromId and toId (exclusive),
+  // in funnel order. Empty when the move is adjacent (or backing up one
+  // stage), when either side isn't a Main Stage column, or when position
+  // data isn't available -- callers treat an empty result as "not a skip."
+  function skippedStageNames(fromId: string, toId: string): string[] {
+    const fromPos = columnPositionById.get(fromId);
+    const toPos = columnPositionById.get(toId);
+    if (fromPos === undefined || toPos === undefined) return [];
+    const [lo, hi] = fromPos < toPos ? [fromPos, toPos] : [toPos, fromPos];
+    if (hi - lo <= 1) return [];
+    return columns
+      .filter((c) => c.position !== undefined && c.position > lo && c.position < hi)
+      .sort((a, b) => (a.position as number) - (b.position as number))
+      .map((c) => c.name);
+  }
+
+  const departmentOptions = [
+    { value: "", label: "All" },
+    ...departments.map((d) => ({ value: d.id, label: d.name })),
+  ];
+  const countryOptions = [
+    { value: "", label: "All" },
+    ...countries.map((c) => ({ value: c, label: c })),
+  ];
+
+  const activeDeals = deals
+    .filter((d) => activeId === "all" || d.sourceId === activeId)
+    .filter((d) => !department || d.departmentId === department)
+    .filter((d) => !country || d.companyCountry === country);
   const activeLeads = activeDeals.map((deal) => dealToFunnelLead(deal, stageIdField));
   const activeCfg = getTabColor(activeId);
 
@@ -175,7 +235,7 @@ export function FunnelSourceTabs({
     return { subStageId: firstSubStage.id, mainStageId: droppedColumnId };
   }
 
-  function handleMove(dealId: string, droppedColumnId: string) {
+  async function handleMove(dealId: string, droppedColumnId: string) {
     const deal = deals.find((d) => d.id === dealId);
     if (!deal) return;
     const currentColumnId = deal[stageIdField] ?? "";
@@ -185,6 +245,26 @@ export function FunnelSourceTabs({
     if (!target) {
       showError("This stage doesn't have any sub stages configured yet.", "Can't move deal");
       return;
+    }
+
+    // Only the Funnel overview board (Main Stage columns) can skip stages --
+    // the per-Main-Stage boards only ever show that stage's own Sub Stages,
+    // so there's nothing to skip there. A skip bypasses the usual optimistic
+    // move + Undo toast entirely: the user confirms up front instead, and on
+    // confirm the move is persisted immediately.
+    if (stageField === "mainStageName") {
+      const skipped = skippedStageNames(currentColumnId, droppedColumnId);
+      if (skipped.length > 0) {
+        const targetName = columnNameById.get(droppedColumnId) ?? "this stage";
+        const confirmed = await confirm({
+          title: "Skip stage(s)?",
+          message: `This skips ${skipped.join(", ")} — move "${deal.name}" to ${targetName} anyway?`,
+          confirmLabel: "Move anyway",
+        });
+        if (!confirmed) return;
+        void persistMove(dealId, target.subStageId);
+        return;
+      }
     }
 
     const existingPending = pendingMovesRef.current.get(dealId);
@@ -254,62 +334,72 @@ export function FunnelSourceTabs({
     setDeals((prev) => [...prev, deal]);
   }
 
+  function handleDealUpdated(deal: DealResponse) {
+    setDeals((prev) => prev.map((d) => (d.id === deal.id ? deal : d)));
+  }
+
+  function handleDealDeleted(dealId: string) {
+    setDeals((prev) => prev.filter((d) => d.id !== dealId));
+  }
+
   return (
-    <div className="funnel-page">
+    <div className="flex h-full flex-col">
       {/* ── Title ──────────────────────── */}
-      <div className="funnel-header-top">
-        <div className="funnel-header-left">
-          <h1 className="funnel-title">{title}</h1>
-          <p className="funnel-subtitle">{subtitle}</p>
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex flex-col">
+          <h1 className="mx-0 mt-0 mb-0.5 text-[26px] font-bold text-[var(--color-text)]">
+            {title}
+          </h1>
+          <p className="m-0 text-[13.5px] text-[var(--color-text-muted)]">{subtitle}</p>
         </div>
-        <button type="button" className="funnel-add-btn" onClick={() => setAddDealOpen(true)}>
-          {addButtonLabel}
-        </button>
+        {canCreateDeals && (
+          <button
+            type="button"
+            className="cursor-pointer rounded-lg border-0 bg-[var(--color-crm-primary)] px-5 py-2.5 text-[13.5px] font-semibold text-white transition-colors duration-150 hover:bg-[var(--color-crm-primary-hover)]"
+            onClick={() => setAddDealOpen(true)}
+          >
+            {addButtonLabel}
+          </button>
+        )}
       </div>
 
       {/* ── Filters ──────────────────────── */}
-      <div className="funnel-filters-container">
-        <div className="funnel-filters-left">
-          <div className="funnel-filters-search">
-            <SearchIcon />
+      <div className="mb-6 flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[#f8fafc] px-4 py-3">
+        <div className="flex items-center gap-4">
+          <div className="relative w-[280px]">
+            <span className="pointer-events-none absolute left-[10px] top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]">
+              <SearchIcon />
+            </span>
             <input
               type="text"
               placeholder="Search deals..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-[var(--color-border)] bg-white py-2 pl-8 pr-3 font-[inherit] text-[13px] transition-colors duration-150 focus:border-[var(--color-crm-primary)] focus:outline-none"
             />
           </div>
-          <div className="funnel-filters-selects">
+          <div className="flex gap-3">
             <CustomSelect
               label="Department"
               value={department}
               onChange={setDepartment}
-              options={[
-                { value: "", label: "All" },
-                { value: "sales", label: "Sales" },
-                { value: "marketing", label: "Marketing" },
-              ]}
+              options={departmentOptions}
             />
 
             <CustomSelect
               label="Country"
               value={country}
               onChange={setCountry}
-              options={[
-                { value: "", label: "All" },
-                { value: "us", label: "United States" },
-                { value: "uk", label: "United Kingdom" },
-                { value: "au", label: "Australia" },
-              ]}
+              options={countryOptions}
             />
           </div>
         </div>
 
         {hasFilters && (
-          <div className="funnel-filters-right">
+          <div>
             <button
               type="button"
-              className="funnel-clear-btn"
+              className="cursor-pointer rounded-md border-0 bg-transparent px-3 py-1.5 text-[13px] font-medium text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#e2e8f0] hover:text-[var(--color-text)]"
               onClick={() => {
                 setSearch("");
                 setDepartment("");
@@ -322,9 +412,9 @@ export function FunnelSourceTabs({
         )}
       </div>
 
-      <div className="funnel-workspace">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* ── Folder Tabs ──────────────────────── */}
-        <div className="funnel-folder-tabs">
+        <div className="relative z-10 flex items-end gap-1 overflow-x-auto pl-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {dynamicSources.map((src) => {
             const cfg = getTabColor(src.id);
             const isActive = activeId === src.id;
@@ -332,7 +422,11 @@ export function FunnelSourceTabs({
               <button
                 key={src.id}
                 type="button"
-                className={`funnel-folder-tab${isActive ? " funnel-folder-tab-active" : ""}`}
+                className={`flex-shrink-0 cursor-pointer rounded-t-lg border border-b-0 pb-[11px] pt-[9px] px-[18px] text-[12px] font-semibold uppercase tracking-[0.04em] transition-colors duration-150 ${
+                  isActive
+                    ? "border-transparent text-white"
+                    : "border-[var(--color-border)] bg-[#e5e7eb] text-[var(--color-text-muted)] hover:bg-[#d1d5db] hover:text-[var(--color-text)]"
+                }`}
                 style={
                   isActive
                     ? { background: cfg.accent, borderColor: cfg.accent, color: "#fff" }
@@ -348,14 +442,16 @@ export function FunnelSourceTabs({
 
         {/* ── Kanban board container ──────────────────────── */}
         <div
-          className="funnel-board-wrapper"
+          className="flex min-h-0 min-w-0 flex-1 flex-col"
           style={{ borderTop: `3px solid ${activeCfg.accent}` }}
         >
           <FunnelBoard
             leads={activeLeads}
             onMove={handleMove}
             columns={columns}
+            canDrag={canUpdateDeals}
             onShowHistory={(dealId) => setHistoryDealId(dealId)}
+            onViewDeal={(dealId) => setViewDealId(dealId)}
           />
         </div>
       </div>
@@ -379,6 +475,44 @@ export function FunnelSourceTabs({
 
       {historyDealId && (
         <DealStageHistoryDialog dealId={historyDealId} onClose={() => setHistoryDealId(null)} />
+      )}
+
+      {viewDealId && (
+        <ViewDealDialog
+          dealId={viewDealId}
+          currentUserId={currentUserId}
+          permissions={permissions}
+          onClose={() => setViewDealId(null)}
+          onDeleted={(dealId) => {
+            handleDealDeleted(dealId);
+            setViewDealId(null);
+          }}
+          onEdit={(deal) => {
+            setViewDealId(null);
+            setEditDeal(deal);
+          }}
+        />
+      )}
+
+      {editDeal && (
+        <AddDealDialog
+          mode="edit"
+          deal={editDeal}
+          dealSources={dealSources}
+          columns={columns}
+          stageOptions={stageOptions}
+          companies={companies}
+          employees={employees}
+          contacts={contacts}
+          departments={departments}
+          relationshipTypes={relationshipTypes}
+          industries={industries}
+          onClose={() => setEditDeal(null)}
+          onUpdated={(deal) => {
+            handleDealUpdated(deal);
+            setEditDeal(null);
+          }}
+        />
       )}
     </div>
   );

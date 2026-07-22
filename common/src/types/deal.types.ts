@@ -1,5 +1,4 @@
 import {
-  DealPriority,
   DealSourceCategory,
   DealStatus,
   DealType,
@@ -38,29 +37,37 @@ export interface IDealStage {
   mainStageId: string;
 }
 
+export interface ICompetitorEntry {
+  name: string;
+  details: string;
+}
+
 export interface IDeal {
   id: string;
   tenantId: string;
   dealCode: string;
   name: string;
   dealType: DealType;
-  description?: string | null;
   companyId?: string | null;
   primaryContactId?: string | null;
   contactId?: string | null;
   sourceId?: string | null;
-  referredByCompanyId?: string | null;
-  referredByEmployeeId?: string | null;
   ownerId: string;
+  preSalesPersonId?: string | null;
+  pmoId?: string | null;
   mainStageId?: string | null;
   currentStageId: string;
   status: DealStatus;
-  estimatedValue?: number | null;
-  currency?: string | null;
-  expectedCloseDate?: string | null;
-  probability?: number | null;
-  priority?: DealPriority | null;
   departmentId?: string | null;
+  dealCountry?: string | null;
+  customerPainPoint?: string | null;
+  product?: string | null;
+  services?: string | null;
+  estimatedValue?: number | null;
+  internalCosts?: number | null;
+  externalCosts?: number | null;
+  expectedCloseDate?: string | null;
+  competitors?: ICompetitorEntry[] | null;
   // tenderDetailsId deferred until deal_tender_details exists (Tender management,
   // last table on the backlog) — same dependency pattern as Teams_Employee_Map.
 }

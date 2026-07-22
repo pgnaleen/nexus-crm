@@ -13,10 +13,11 @@ export class DepartmentsRepository extends BaseTenantRepository<Department> {
     super(repo, tenantContext);
   }
 
-  async softRemoveScoped(department: Department): Promise<void> {
+  async softRemoveScoped(department: Department, actorId?: string): Promise<void> {
     if (department.tenantId !== this.tenantContext.getTenantId()) {
       throw new ForbiddenException("Entity does not belong to the current tenant");
     }
     await this.repo.softRemove(department);
+    await this.repo.update(department.id, { deletedBy: actorId });
   }
 }

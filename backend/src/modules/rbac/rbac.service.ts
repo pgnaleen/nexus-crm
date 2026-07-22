@@ -94,9 +94,9 @@ export class RbacService {
     return this.findRoleOrFail(id);
   }
 
-  async removeRole(id: string): Promise<void> {
+  async removeRole(id: string, userId: string): Promise<void> {
     const role = await this.findRoleOrFail(id);
-    await this.rolesRepo.softRemoveScoped(role);
+    await this.rolesRepo.softRemoveScoped(role, userId);
   }
 
   /** Resources assignable from the current tenant — isPlatformOnly ones only show up for the System tenant. */

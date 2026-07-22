@@ -13,7 +13,7 @@ export class DealStageHistoryController {
   ) {}
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.DEALS_READ])
+  @RequirePermission([PERMISSIONS.DEALS_VIEW])
   @Get()
   async findAll(@Param("dealId", ParseUUIDPipe) dealId: string): Promise<DealStageHistoryResponse[]> {
     // Tenant + existence check -- the history rows have no tenantId of their

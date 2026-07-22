@@ -37,7 +37,7 @@ export class TenantsController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission(PERMISSIONS.TENANTS_MANAGE)
+  @RequirePermission([PERMISSIONS.TENANTS_VIEW])
   @Get()
   async findAll(): Promise<TenantSummaryResponse[]> {
     const tenants = await this.tenantsService.findAll();
@@ -45,7 +45,7 @@ export class TenantsController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission(PERMISSIONS.TENANTS_MANAGE)
+  @RequirePermission([PERMISSIONS.TENANTS_VIEW])
   @Get("plans")
   async findAllPlans(): Promise<PlanResponse[]> {
     const plans = await this.tenantsService.findAllPlans();
@@ -53,7 +53,7 @@ export class TenantsController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission(PERMISSIONS.TENANTS_MANAGE)
+  @RequirePermission([PERMISSIONS.TENANTS_VIEW])
   @Get("industries")
   async findAllIndustries(): Promise<IndustryResponse[]> {
     const industries = await this.tenantsService.findAllIndustries();

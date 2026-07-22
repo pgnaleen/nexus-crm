@@ -1,4 +1,4 @@
-import { DealPriority, DealStatus, DealType } from "@orelia/common";
+import { DealStatus, DealType } from "@orelia/common";
 import { Check, Column, Entity, JoinColumn, ManyToOne } from "typeorm";
 import { AuditedTenantEntity } from "../../../core/tenant";
 import { Company } from "../../companies/entities/company.entity";
@@ -8,6 +8,11 @@ import { MainStage } from "../../deal-stages/entities/main-stage.entity";
 import { SubStage } from "../../deal-stages/entities/sub-stage.entity";
 import { Department } from "../../departments/entities/department.entity";
 import { Employee } from "../../employees/entities/employee.entity";
+
+export interface CompetitorEntry {
+  name: string;
+  details: string;
+}
 
 @Entity("deals")
 @Check(`("company_id" IS NOT NULL) OR ("contact_id" IS NOT NULL)`)
@@ -20,9 +25,6 @@ export class Deal extends AuditedTenantEntity {
 
   @Column({ type: "enum", enum: DealType })
   dealType!: DealType;
-
-  @Column({ type: "text", nullable: true })
-  description?: string;
 
   // Nullable -- the customer can be a bare contact with no company of its
   // own (contactId below carries that case). The CHECK on this entity
@@ -55,20 +57,6 @@ export class Deal extends AuditedTenantEntity {
   @JoinColumn({ name: "source_id" })
   source?: DealSource;
 
-  @Column({ type: "uuid", nullable: true })
-  referredByCompanyId?: string;
-
-  @ManyToOne(() => Company, { nullable: true, onDelete: "SET NULL" })
-  @JoinColumn({ name: "referred_by_company_id" })
-  referredByCompany?: Company;
-
-  @Column({ type: "uuid", nullable: true })
-  referredByEmployeeId?: string;
-
-  @ManyToOne(() => Employee, { nullable: true, onDelete: "SET NULL" })
-  @JoinColumn({ name: "referred_by_employee_id" })
-  referredByEmployee?: Employee;
-
   @Column({ type: "uuid" })
   ownerId!: string;
 
@@ -79,6 +67,20 @@ export class Deal extends AuditedTenantEntity {
   @ManyToOne(() => Employee)
   @JoinColumn({ name: "owner_id" })
   owner?: Employee;
+
+  @Column({ type: "uuid", nullable: true })
+  preSalesPersonId?: string;
+
+  @ManyToOne(() => Employee, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "pre_sales_person_id" })
+  preSalesPerson?: Employee;
+
+  @Column({ type: "uuid", nullable: true })
+  pmoId?: string;
+
+  @ManyToOne(() => Employee, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "pmo_id" })
+  pmo?: Employee;
 
   @Column({ type: "uuid", nullable: true })
   mainStageId?: string;
@@ -99,27 +101,49 @@ export class Deal extends AuditedTenantEntity {
   @Column({ type: "enum", enum: DealStatus, default: DealStatus.Open })
   status!: DealStatus;
 
-  @Column({ type: "numeric", precision: 14, scale: 2, nullable: true })
-  estimatedValue?: number;
-
-  @Column({ nullable: true })
-  currency?: string;
-
-  @Column({ type: "date", nullable: true })
-  expectedCloseDate?: string;
-
-  @Column({ type: "int", nullable: true })
-  probability?: number;
-
-  @Column({ type: "enum", enum: DealPriority, nullable: true })
-  priority?: DealPriority;
-
   @Column({ type: "uuid", nullable: true })
   departmentId?: string;
 
   @ManyToOne(() => Department, { nullable: true, onDelete: "SET NULL" })
   @JoinColumn({ name: "department_id" })
   department?: Department;
+
+  // Deal Information tab
+  @Column({ nullable: true })
+  dealCountry?: string;
+
+  @Column({ type: "text", nullable: true })
+  customerPainPoint?: string;
+
+  // Delivery tab
+  @Column({ nullable: true })
+  product?: string;
+
+  @Column({ nullable: true })
+  services?: string;
+
+  // Costing tab -- estimatedValue below doubles as "Project Value without
+  // Tax"; Total Cost/Profit/Markup/Margin are deliberately never stored,
+  // only ever derived from these three at read time (frontend already does
+  // this via computeCosting()), so they can never drift out of sync with
+  // the numbers that produced them.
+  @Column({ type: "numeric", precision: 14, scale: 2, nullable: true })
+  estimatedValue?: number;
+
+  @Column({ type: "numeric", precision: 14, scale: 2, nullable: true })
+  internalCosts?: number;
+
+  @Column({ type: "numeric", precision: 14, scale: 2, nullable: true })
+  externalCosts?: number;
+
+  @Column({ type: "date", nullable: true })
+  expectedCloseDate?: string;
+
+  // Competition tab -- a list of free-text blurbs with no need to
+  // query/filter on individually, per the frontend's own design (see
+  // AddDealDialog.tsx), so a single jsonb column rather than a table.
+  @Column({ type: "jsonb", nullable: true })
+  competitors?: CompetitorEntry[];
 
   // tenderDetailsId deferred until deal_tender_details exists (Tender
   // management) — same dependency pattern as Teams_Employee_Map.

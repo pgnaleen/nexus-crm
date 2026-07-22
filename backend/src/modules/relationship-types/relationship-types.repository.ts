@@ -13,10 +13,11 @@ export class RelationshipTypesRepository extends BaseTenantRepository<Relationsh
     super(repo, tenantContext);
   }
 
-  async softRemoveScoped(type: RelationshipType): Promise<void> {
+  async softRemoveScoped(type: RelationshipType, actorId?: string): Promise<void> {
     if (type.tenantId !== this.tenantContext.getTenantId()) {
       throw new ForbiddenException("Entity does not belong to the current tenant");
     }
     await this.repo.softRemove(type);
+    await this.repo.update(type.id, { deletedBy: actorId });
   }
 }

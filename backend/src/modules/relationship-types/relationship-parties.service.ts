@@ -173,8 +173,8 @@ export class RelationshipPartiesService {
     return this.findOneOrFail(relationshipTypeId, mapId);
   }
 
-  async remove(relationshipTypeId: string, mapId: string): Promise<void> {
+  async remove(relationshipTypeId: string, mapId: string, userId: string): Promise<void> {
     const party = await this.findOneOrFail(relationshipTypeId, mapId);
-    await this.partiesRepo.softRemoveScoped(party);
+    await this.partiesRepo.softRemoveScoped(party, userId);
   }
 }

@@ -1,10 +1,17 @@
 import { notFound } from "next/navigation";
 import { FunnelSourceTabs } from "@/components/funnel/FunnelSourceTabs";
+import { getServerSession } from "@/lib/auth/session";
 import { listDealSources } from "@/lib/deal-sources/server";
 import { listDeals } from "@/lib/deals/server";
-import { listDepartments } from "@/lib/departments/server";
 import { listMainStages } from "@/lib/main-stages/server";
-import { listCompaniesPicker, listContactsPicker, listEmployeesPicker, listIndustries } from "@/lib/pickers/server";
+import {
+  listCompaniesPicker,
+  listCompanyCountries,
+  listContactsPicker,
+  listDepartmentsPicker,
+  listEmployeesPicker,
+  listIndustries,
+} from "@/lib/pickers/server";
 import { listRelationshipTypes } from "@/lib/relationship-types/server";
 import { listSubStages } from "@/lib/sub-stages/server";
 
@@ -14,6 +21,7 @@ export default async function MainStageDealsPage({
   params: { tenant: string; id: string };
 }) {
   const [
+    session,
     dealSources,
     mainStages,
     subStages,
@@ -22,9 +30,11 @@ export default async function MainStageDealsPage({
     employees,
     contacts,
     departments,
+    countries,
     relationshipTypes,
     industries,
   ] = await Promise.all([
+    getServerSession(params.tenant),
     listDealSources(),
     listMainStages(),
     listSubStages(),
@@ -32,7 +42,8 @@ export default async function MainStageDealsPage({
     listCompaniesPicker(),
     listEmployeesPicker(),
     listContactsPicker(),
-    listDepartments(),
+    listDepartmentsPicker(),
+    listCompanyCountries(),
     listRelationshipTypes(),
     listIndustries(),
   ]);
@@ -58,6 +69,7 @@ export default async function MainStageDealsPage({
       employees={employees ?? []}
       contacts={contacts ?? []}
       departments={departments ?? []}
+      countries={countries ?? []}
       relationshipTypes={relationshipTypes ?? []}
       industries={industries ?? []}
       initialDeals={deals ?? []}
@@ -67,6 +79,8 @@ export default async function MainStageDealsPage({
           ? "No sub stages exist yet for this stage. Add one under Administration > Sub Stages."
           : `Track deals moving through ${mainStage.name}'s sub stages`
       }
+      currentUserId={session?.user.id}
+      permissions={session?.permissions ?? []}
     />
   );
 }

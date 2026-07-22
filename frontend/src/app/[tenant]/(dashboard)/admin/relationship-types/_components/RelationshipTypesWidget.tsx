@@ -8,7 +8,7 @@ import { deleteRelationshipType } from "@/lib/api/relationship-types";
 import { ApiError } from "@/lib/api/client";
 import { EditIcon, SearchIcon, TrashIcon } from "@/components/ui/icons";
 import { TenantActingAsSwitcher } from "@/components/layout/TenantActingAsSwitcher";
-import { useConfirm, useAlert } from "@/components/providers/DialogProvider";
+import { useCascadeDeleteConfirm, useConfirm, useAlert } from "@/components/providers/DialogProvider";
 import { RelationshipTypeFormDialog } from "./RelationshipTypeFormDialog";
 
 interface RelationshipTypesWidgetProps {
@@ -48,12 +48,12 @@ export function RelationshipTypesWidget({
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const confirm = useConfirm();
+  const confirmCascadeDelete = useCascadeDeleteConfirm();
   const { showError } = useAlert();
 
-  const hasManage = permissions.includes(PERMISSIONS.RELATIONSHIP_TYPE_MANAGE);
-  const canCreate = hasManage || permissions.includes(PERMISSIONS.RELATIONSHIP_TYPE_CREATE);
-  const canUpdate = hasManage || permissions.includes(PERMISSIONS.RELATIONSHIP_TYPE_UPDATE);
-  const canDelete = hasManage || permissions.includes(PERMISSIONS.RELATIONSHIP_TYPE_DELETE);
+  const canCreate = permissions.includes(PERMISSIONS.RELATIONSHIP_TYPE_CREATE);
+  const canUpdate = permissions.includes(PERMISSIONS.RELATIONSHIP_TYPE_UPDATE);
+  const canDelete = permissions.includes(PERMISSIONS.RELATIONSHIP_TYPE_DELETE);
   const canImpersonate =
     isPlatformSession && permissions.includes(PERMISSIONS.PLATFORM_IMPERSONATE_TENANT);
   const showActionsColumn = canUpdate || canDelete;
@@ -73,12 +73,20 @@ export function RelationshipTypesWidget({
   }
 
   async function initiateDelete(type: RelationshipTypeResponse) {
-    const ok = await confirm({
-      title: "Delete Relationship Type",
-      message: `Are you sure you want to delete "${type.name}"? This action cannot be undone.`,
-      confirmLabel: "Delete",
-      isDestructive: true,
-    });
+    const hasDependents = type.dependentCount > 0;
+    const ok = hasDependents
+      ? await confirmCascadeDelete({
+          title: "Delete Relationship Type",
+          warningMessage: `Deleting "${type.name}" will also delete ${type.dependentCount} tagged ${
+            type.dependentCount === 1 ? "Company/Contact" : "Companies/Contacts"
+          } linked to it. This action cannot be undone.`,
+        })
+      : await confirm({
+          title: "Delete Relationship Type",
+          message: `Are you sure you want to delete "${type.name}"? This action cannot be undone.`,
+          confirmLabel: "Delete",
+          isDestructive: true,
+        });
     if (!ok) return;
 
     setDeletingId(type.id);

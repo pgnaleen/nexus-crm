@@ -2,7 +2,6 @@ export * from "./tenant-status.enum";
 export * from "./user-status.enum";
 export * from "./deal-type.enum";
 export * from "./deal-status.enum";
-export * from "./deal-priority.enum";
 export * from "./account-tier.enum";
 export * from "./employee-count-band.enum";
 export * from "./revenue-band.enum";

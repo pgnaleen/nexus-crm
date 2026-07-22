@@ -1,14 +1,22 @@
 import { FunnelSourceTabs } from "@/components/funnel/FunnelSourceTabs";
+import { getServerSession } from "@/lib/auth/session";
 import { listDealSources } from "@/lib/deal-sources/server";
 import { listDeals } from "@/lib/deals/server";
-import { listDepartments } from "@/lib/departments/server";
 import { listMainStages } from "@/lib/main-stages/server";
-import { listCompaniesPicker, listContactsPicker, listEmployeesPicker, listIndustries } from "@/lib/pickers/server";
+import {
+  listCompaniesPicker,
+  listCompanyCountries,
+  listContactsPicker,
+  listDepartmentsPicker,
+  listEmployeesPicker,
+  listIndustries,
+} from "@/lib/pickers/server";
 import { listRelationshipTypes } from "@/lib/relationship-types/server";
 import { listSubStages } from "@/lib/sub-stages/server";
 
-export default async function FunnelPage() {
+export default async function FunnelPage({ params }: { params: { tenant: string } }) {
   const [
+    session,
     dealSources,
     mainStages,
     subStages,
@@ -17,9 +25,11 @@ export default async function FunnelPage() {
     employees,
     contacts,
     departments,
+    countries,
     relationshipTypes,
     industries,
   ] = await Promise.all([
+    getServerSession(params.tenant),
     listDealSources(),
     listMainStages(),
     listSubStages(),
@@ -27,7 +37,8 @@ export default async function FunnelPage() {
     listCompaniesPicker(),
     listEmployeesPicker(),
     listContactsPicker(),
-    listDepartments(),
+    listDepartmentsPicker(),
+    listCompanyCountries(),
     listRelationshipTypes(),
     listIndustries(),
   ]);
@@ -36,7 +47,11 @@ export default async function FunnelPage() {
   // but a deal's currentStageId must be a real Sub Stage -- so the Add Deal
   // dialog gets its own stage list, labeled with the owning Main Stage since
   // it spans every stage in the funnel rather than just one.
-  const columns = (mainStages ?? []).map((stage) => ({ id: stage.id, name: stage.name }));
+  const columns = (mainStages ?? []).map((stage) => ({
+    id: stage.id,
+    name: stage.name,
+    position: stage.position,
+  }));
   const mainStageNameById = new Map((mainStages ?? []).map((stage) => [stage.id, stage.name]));
   // Position first by Main Stage sequence, then by Sub Stage sequence within
   // it -- Sub Stages restart their own sortOrder per Main Stage, so sorting
@@ -63,9 +78,12 @@ export default async function FunnelPage() {
       employees={employees ?? []}
       contacts={contacts ?? []}
       departments={departments ?? []}
+      countries={countries ?? []}
       relationshipTypes={relationshipTypes ?? []}
       industries={industries ?? []}
       initialDeals={deals ?? []}
+      currentUserId={session?.user.id}
+      permissions={session?.permissions ?? []}
     />
   );
 }

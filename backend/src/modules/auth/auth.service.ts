@@ -82,6 +82,24 @@ export class AuthService {
     return this.issueSession(user, tenant);
   }
 
+  /**
+   * Confirms the currently-authenticated user's own password, without
+   * issuing new tokens -- used to gate cascade-delete confirmations (see
+   * CLAUDE.md's cascade-delete rule), not as a login/session mechanism.
+   */
+  async verifyPassword(userId: string, password: string): Promise<boolean> {
+    this.logger.debug(`verifyPassword called for user ${userId}`);
+    try {
+      const user = await this.userRepo.findOneByOrFail({ id: userId });
+      const matches = await bcrypt.compare(password, user.passwordHash);
+      this.logger.debug(`verifyPassword result for user ${userId}: ${matches ? "match" : "no match"}`);
+      return matches;
+    } catch (err) {
+      this.logger.error(`verifyPassword failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
   async refresh(rawRefreshToken: string | undefined): Promise<{ session: AuthSessionResponse } & TokenPair> {
     if (!rawRefreshToken) {
       throw new UnauthorizedException("Missing refresh token");

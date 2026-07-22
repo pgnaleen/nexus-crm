@@ -15,7 +15,7 @@ export class RbacController {
   constructor(private readonly rbacService: RbacService) {}
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission(PERMISSIONS.RBAC_MANAGE)
+  @RequirePermission([PERMISSIONS.RBAC_VIEW])
   @Get("roles")
   async findAllRoles(): Promise<RbacRoleResponse[]> {
     const rows = await this.rbacService.findAllRoles();
@@ -23,7 +23,7 @@ export class RbacController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission(PERMISSIONS.RBAC_MANAGE)
+  @RequirePermission([PERMISSIONS.RBAC_VIEW])
   @Get("resources")
   async findAllResources(): Promise<RbacResourceResponse[]> {
     const resources = await this.rbacService.findAllResources();
@@ -84,8 +84,11 @@ export class RbacController {
   @UseGuards(PermissionsGuard)
   @RequirePermission(PERMISSIONS.RBAC_DELETE)
   @Delete("roles/:id")
-  async remove(@Param("id", ParseUUIDPipe) id: string): Promise<{ success: true }> {
-    await this.rbacService.removeRole(id);
+  async remove(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ success: true }> {
+    await this.rbacService.removeRole(id, user.sub);
     return { success: true };
   }
 

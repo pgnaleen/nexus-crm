@@ -36,12 +36,13 @@ export class DealDocumentsService {
     return this.repo.save(document);
   }
 
-  async remove(dealId: string, documentId: string): Promise<void> {
+  async remove(dealId: string, documentId: string, userId: string): Promise<void> {
     await this.dealsService.findOneOrFail(dealId);
     const document = await this.repo.findOne({ where: { id: documentId, dealId } });
     if (!document) {
       throw new NotFoundException("Deal document not found");
     }
     await this.repo.softRemove(document);
+    await this.repo.update(document.id, { deletedBy: userId });
   }
 }

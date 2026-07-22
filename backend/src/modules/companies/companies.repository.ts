@@ -12,4 +12,16 @@ export class CompaniesRepository extends BaseTenantRepository<Company> {
   ) {
     super(repo, tenantContext);
   }
+
+  // The companies picker caps results at 20, so it can't be relied on for a
+  // complete country list -- this queries distinct values directly instead.
+  async findDistinctCountries(): Promise<string[]> {
+    const rows = await this.queryBuilderScoped("company")
+      .select("DISTINCT company.country", "country")
+      .andWhere("company.country IS NOT NULL")
+      .andWhere("company.country != ''")
+      .orderBy("company.country", "ASC")
+      .getRawMany<{ country: string }>();
+    return rows.map((row) => row.country);
+  }
 }

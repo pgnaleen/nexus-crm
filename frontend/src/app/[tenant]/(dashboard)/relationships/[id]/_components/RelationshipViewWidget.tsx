@@ -81,11 +81,10 @@ export function RelationshipViewWidget({
   const confirm = useConfirm();
   const { showError } = useAlert();
 
-  const hasManage = permissions.includes(PERMISSIONS.RELATIONSHIP_MANAGE);
-  const canView = hasManage || permissions.includes(PERMISSIONS.RELATIONSHIP_VIEW);
-  const canCreate = hasManage || permissions.includes(PERMISSIONS.RELATIONSHIP_CREATE);
-  const canUpdate = hasManage || permissions.includes(PERMISSIONS.RELATIONSHIP_UPDATE);
-  const canDelete = hasManage || permissions.includes(PERMISSIONS.RELATIONSHIP_DELETE);
+  const canView = permissions.includes(PERMISSIONS.RELATIONSHIP_VIEW);
+  const canCreate = permissions.includes(PERMISSIONS.RELATIONSHIP_CREATE);
+  const canUpdate = permissions.includes(PERMISSIONS.RELATIONSHIP_UPDATE);
+  const canDelete = permissions.includes(PERMISSIONS.RELATIONSHIP_DELETE);
   const canImpersonate =
     isPlatformSession && permissions.includes(PERMISSIONS.PLATFORM_IMPERSONATE_TENANT);
   const showActionsColumn = canUpdate || canDelete;

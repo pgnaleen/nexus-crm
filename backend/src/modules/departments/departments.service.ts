@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { CreateDepartmentDto } from "./dto/create-department.dto";
 import { UpdateDepartmentDto } from "./dto/update-department.dto";
 import { Department } from "./entities/department.entity";
@@ -6,10 +6,30 @@ import { DepartmentsRepository } from "./departments.repository";
 
 @Injectable()
 export class DepartmentsService {
+  private readonly logger = new Logger(DepartmentsService.name);
+
   constructor(private readonly departmentsRepo: DepartmentsRepository) {}
 
   async findAll(): Promise<Department[]> {
     return this.departmentsRepo.findScoped({ order: { name: "ASC" } });
+  }
+
+  // Lightweight, broadly-accessible listing for dropdowns/filters (e.g. the
+  // Deals/Funnel department filter) -- unlike findAll(), only active
+  // departments make sense to offer when assigning a deal.
+  async findPicker(): Promise<Department[]> {
+    this.logger.debug("findPicker called");
+    try {
+      const results = await this.departmentsRepo.findScoped({
+        where: { isActive: true },
+        order: { name: "ASC" },
+      });
+      this.logger.debug(`findPicker returning ${results.length} active row(s)`);
+      return results;
+    } catch (err) {
+      this.logger.error(`findPicker failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   async findOneOrFail(id: string): Promise<Department> {
@@ -35,8 +55,8 @@ export class DepartmentsService {
     return this.findOneOrFail(id);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, userId: string): Promise<void> {
     const department = await this.findOneOrFail(id);
-    await this.departmentsRepo.softRemoveScoped(department);
+    await this.departmentsRepo.softRemoveScoped(department, userId);
   }
 }

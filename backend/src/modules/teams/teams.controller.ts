@@ -47,8 +47,11 @@ export class TeamsController {
   @UseGuards(PermissionsGuard)
   @RequirePermission(PERMISSIONS.TEAMS_DELETE)
   @Delete(":id")
-  async remove(@Param("id", ParseUUIDPipe) id: string): Promise<{ success: true }> {
-    await this.teamsService.remove(id);
+  async remove(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ success: true }> {
+    await this.teamsService.remove(id, user.sub);
     return { success: true };
   }
 

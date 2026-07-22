@@ -13,10 +13,11 @@ export class MainStagesRepository extends BaseTenantRepository<MainStage> {
     super(repo, tenantContext);
   }
 
-  async softRemoveScoped(stage: MainStage): Promise<void> {
+  async softRemoveScoped(stage: MainStage, actorId?: string): Promise<void> {
     if (stage.tenantId !== this.tenantContext.getTenantId()) {
       throw new ForbiddenException("Entity does not belong to the current tenant");
     }
     await this.repo.softRemove(stage);
+    await this.repo.update(stage.id, { deletedBy: actorId });
   }
 }

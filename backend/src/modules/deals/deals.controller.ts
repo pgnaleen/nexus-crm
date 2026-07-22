@@ -1,4 +1,4 @@
-import { DealResponse, PERMISSIONS } from "@orelia/common";
+import { DealDependentsCountResponse, DealResponse, PERMISSIONS } from "@orelia/common";
 import {
   Body,
   Controller,
@@ -26,7 +26,7 @@ export class DealsController {
   constructor(private readonly dealsService: DealsService) {}
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.DEALS_READ])
+  @RequirePermission([PERMISSIONS.DEALS_VIEW])
   @Get()
   async findAll(@Query("mainStageId") mainStageId?: string): Promise<DealResponse[]> {
     const deals = await this.dealsService.findAll(mainStageId);
@@ -34,7 +34,7 @@ export class DealsController {
   }
 
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.DEALS_READ])
+  @RequirePermission([PERMISSIONS.DEALS_VIEW])
   @Get(":id")
   async findOne(@Param("id", ParseUUIDPipe) id: string): Promise<DealResponse> {
     const deal = await this.dealsService.findOneOrFail(id);
@@ -76,11 +76,25 @@ export class DealsController {
     return this.toResponse(deal);
   }
 
+  // Gated on DEALS_DELETE, not DEALS_VIEW -- the only consumer is the delete
+  // confirmation dialog, which only ever renders for someone who already
+  // holds delete permission.
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.DEALS_DELETE])
+  @Get(":id/dependents-count")
+  async dependentsCount(@Param("id", ParseUUIDPipe) id: string): Promise<DealDependentsCountResponse> {
+    const count = await this.dealsService.countDependents(id);
+    return { count };
+  }
+
   @UseGuards(PermissionsGuard)
   @RequirePermission([PERMISSIONS.DEALS_DELETE])
   @Delete(":id")
-  async remove(@Param("id", ParseUUIDPipe) id: string): Promise<{ success: true }> {
-    await this.dealsService.remove(id);
+  async remove(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ success: true }> {
+    await this.dealsService.remove(id, user.sub);
     return { success: true };
   }
 
@@ -91,27 +105,37 @@ export class DealsController {
       dealCode: deal.dealCode,
       name: deal.name,
       dealType: deal.dealType,
-      description: deal.description ?? null,
-      companyId: deal.companyId,
+      companyId: deal.companyId ?? null,
       companyName: deal.company?.name,
+      companyCountry: deal.company?.country ?? null,
       primaryContactId: deal.primaryContactId ?? null,
+      primaryContactName: deal.primaryContact?.fullName ?? null,
       contactId: deal.contactId ?? null,
+      contactName: deal.contact?.fullName ?? null,
       sourceId: deal.sourceId ?? null,
-      referredByCompanyId: deal.referredByCompanyId ?? null,
-      referredByEmployeeId: deal.referredByEmployeeId ?? null,
+      sourceName: deal.source?.name ?? null,
       ownerId: deal.ownerId,
       ownerName: deal.owner?.fullName,
+      preSalesPersonId: deal.preSalesPersonId ?? null,
+      preSalesPersonName: deal.preSalesPerson?.fullName ?? null,
+      pmoId: deal.pmoId ?? null,
+      pmoName: deal.pmo?.fullName ?? null,
       mainStageId: deal.mainStageId ?? null,
       mainStageName: deal.mainStage?.name,
       currentStageId: deal.currentStageId,
       currentStageName: deal.currentStage?.name,
       status: deal.status,
-      estimatedValue: deal.estimatedValue ?? null,
-      currency: deal.currency ?? null,
-      expectedCloseDate: deal.expectedCloseDate ?? null,
-      probability: deal.probability ?? null,
-      priority: deal.priority ?? null,
       departmentId: deal.departmentId ?? null,
+      departmentName: deal.department?.name ?? null,
+      dealCountry: deal.dealCountry ?? null,
+      customerPainPoint: deal.customerPainPoint ?? null,
+      product: deal.product ?? null,
+      services: deal.services ?? null,
+      estimatedValue: deal.estimatedValue ?? null,
+      internalCosts: deal.internalCosts ?? null,
+      externalCosts: deal.externalCosts ?? null,
+      expectedCloseDate: deal.expectedCloseDate ?? null,
+      competitors: deal.competitors ?? null,
     };
   }
 }

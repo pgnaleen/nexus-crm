@@ -2,7 +2,15 @@
 
 import { useRef, useState } from "react";
 import { type FunnelLead } from "@/lib/data/funnel";
+import { DealStatus } from "@orelia/common";
 import { ActivityIcon } from "@/components/ui/icons";
+
+const STATUS_BADGE: Record<DealStatus, { label: string; bg: string; color: string }> = {
+  [DealStatus.Open]: { label: "Open", bg: "#e0e7ff", color: "#4338ca" },
+  [DealStatus.Won]: { label: "Won", bg: "#e6f7ee", color: "#1a9c5f" },
+  [DealStatus.Lost]: { label: "Lost", bg: "#fdf0ee", color: "#c0392b" },
+  [DealStatus.OnHold]: { label: "On Hold", bg: "#fef3c7", color: "#b8860b" },
+};
 
 export interface FunnelColumn {
   id: string;
@@ -12,6 +20,10 @@ export interface FunnelColumn {
   // separate page-level "current main stage" prop that wouldn't make sense on
   // the tenant-wide Funnel overview page.
   mainStageId?: string;
+  // Only meaningful for Main Stage columns (the Funnel overview board) --
+  // its sequence in the funnel, used to detect when a drag-and-drop move
+  // skips over one or more stages in between.
+  position?: number;
 }
 
 /* ── Column colours ─────────────────────────────────────────── */
@@ -60,43 +72,74 @@ function DealCard({
   lead,
   accent,
   isDragging,
+  canDrag,
   onDragStart,
   onDragEnd,
   onShowHistory,
+  onViewDeal,
 }: {
   lead: FunnelLead;
   accent: string;
   isDragging: boolean;
+  canDrag: boolean;
   onDragStart: () => void;
   onDragEnd: () => void;
   onShowHistory?: (dealId: string) => void;
+  onViewDeal?: (dealId: string) => void;
 }) {
   return (
     <div
-      className={`funnel-card${isDragging ? " funnel-card-dragging" : ""}`}
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
+      className={`select-none rounded-[10px] border-l-[3px] bg-white px-3 pb-2.5 pt-3 shadow-[0_1px_3px_rgba(16,24,40,0.07)] transition-[box-shadow,opacity,transform] duration-150 hover:shadow-[0_4px_12px_rgba(16,24,40,0.12)] hover:-translate-y-px${
+        canDrag ? " cursor-grab active:cursor-grabbing" : ""
+      }${isDragging ? " opacity-40 scale-[0.97]" : ""}`}
+      draggable={canDrag}
+      onDragStart={canDrag ? onDragStart : undefined}
+      onDragEnd={canDrag ? onDragEnd : undefined}
+      onClick={() => onViewDeal?.(lead.id)}
       style={{ borderLeftColor: accent }}
     >
-      <div className="funnel-card-header">
-        <span className="funnel-card-name">{lead.name}</span>
+      <div className="mb-1 flex items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-[13px] font-semibold leading-[1.3] text-[var(--color-text)]">
+            {lead.name}
+          </span>
+          {lead.code && (
+            <span className="text-[10px] font-medium tabular-nums text-[var(--color-text-muted)]">
+              {lead.code}
+            </span>
+          )}
+        </div>
         <span
-          className="funnel-card-avatar"
+          className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-[9px] font-extrabold tracking-[0.02em] text-white"
           title={lead.assignee}
           style={{ background: accent }}
         >
           {initials(lead.assignee)}
         </span>
       </div>
-      <div className="funnel-card-company">{lead.company}</div>
-      <div className="funnel-card-footer">
-        <span className="funnel-card-value">{fmt(lead.value)}</span>
-        <span className="funnel-card-date">{lead.date}</span>
+      {lead.status && (
+        <div className="mb-1.5">
+          <span
+            className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold"
+            style={{ background: STATUS_BADGE[lead.status].bg, color: STATUS_BADGE[lead.status].color }}
+          >
+            {STATUS_BADGE[lead.status].label}
+          </span>
+        </div>
+      )}
+      <div className="mb-2.5 overflow-hidden truncate text-[11.5px] text-[var(--color-text-muted)]">
+        {lead.company}
+        {lead.country ? `, ${lead.country}` : ""}
+      </div>
+      <div className="flex items-center justify-between">
+        <span className="text-[13px] font-bold tabular-nums text-[var(--color-text)]">
+          {fmt(lead.value)}
+        </span>
+        <span className="text-[10.5px] text-[var(--color-text-muted)]">{lead.date}</span>
         {onShowHistory && (
           <button
             type="button"
-            className="funnel-card-history-btn"
+            className="flex h-[22px] w-[22px] flex-shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#f1f5f9] hover:text-[var(--color-brand)]"
             aria-label="View stage history"
             title="View stage history"
             onClick={(e) => {
@@ -120,12 +163,14 @@ function KanbanColumn({
   leads,
   isOver,
   draggingId,
+  canDrag,
   onDragOver,
   onDragLeave,
   onDrop,
   onDragStart,
   onDragEnd,
   onShowHistory,
+  onViewDeal,
 }: {
   columnName: string;
   accent: string;
@@ -133,29 +178,35 @@ function KanbanColumn({
   leads: FunnelLead[];
   isOver: boolean;
   draggingId: string | null;
+  canDrag: boolean;
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: () => void;
   onDrop: () => void;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
   onShowHistory?: (dealId: string) => void;
+  onViewDeal?: (dealId: string) => void;
 }) {
   const total = leads.reduce((s, l) => s + l.value, 0);
 
   return (
     <div
-      className={`funnel-column${isOver ? " funnel-column-over" : ""}`}
+      className={`flex min-w-[180px] flex-1 flex-col border-r border-[var(--color-border)] last:border-r-0 transition-colors duration-150 ${
+        isOver ? "bg-[rgba(47,111,235,0.03)]" : "bg-white"
+      }`}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={(e) => { e.preventDefault(); onDrop(); }}
     >
       {/* Column header */}
-      <div className="funnel-column-header">
-        <div className="funnel-column-title-row">
-          <span className="funnel-column-dot" style={{ background: accent }} />
-          <span className="funnel-column-title">{columnName}</span>
+      <div className="sticky top-0 z-[1] border-b border-[var(--color-border)] bg-[#f1f5f9] px-[14px] pb-3 pt-[14px]">
+        <div className="flex items-center gap-[7px]">
+          <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ background: accent }} />
+          <span className="flex-1 whitespace-nowrap text-[13px] font-semibold text-[var(--color-text)]">
+            {columnName}
+          </span>
           <span
-            className="funnel-column-count"
+            className="inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold"
             style={{ background: bg, color: accent }}
           >
             {leads.length}
@@ -164,20 +215,32 @@ function KanbanColumn({
       </div>
 
       {/* Cards */}
-      <div className={`funnel-column-body${isOver ? " funnel-column-body-over" : ""}`}>
+      <div
+        className={`flex flex-1 flex-col gap-2 px-2 py-2.5 transition-colors duration-150${
+          isOver ? " bg-[rgba(47,111,235,0.04)]" : ""
+        }`}
+      >
         {leads.map((lead) => (
           <DealCard
             key={lead.id}
             lead={lead}
             accent={accent}
             isDragging={lead.id === draggingId}
+            canDrag={canDrag}
             onDragStart={() => onDragStart(lead.id)}
             onDragEnd={onDragEnd}
             onShowHistory={onShowHistory}
+            onViewDeal={onViewDeal}
           />
         ))}
         {leads.length === 0 && (
-          <div className={`funnel-column-empty${isOver ? " funnel-column-empty-over" : ""}`}>
+          <div
+            className={`flex min-h-16 items-center justify-center rounded-[10px] border-2 border-dashed text-xs transition-colors duration-150 select-none ${
+              isOver
+                ? "border-[var(--color-brand)] bg-[rgba(47,111,235,0.04)] text-[var(--color-brand)]"
+                : "border-[var(--color-border)] text-[var(--color-text-muted)]"
+            }`}
+          >
             Drop here
           </div>
         )}
@@ -193,10 +256,22 @@ interface FunnelBoardProps {
   // persist moves by id, not by the display name shown in the column header.
   onMove: (leadId: string, toStageId: string) => void;
   columns: FunnelColumn[];
+  // Gates drag-and-drop entirely (DEALS_UPDATE) -- defaults to true so every
+  // other caller keeps today's behavior; the Funnel board is the only one
+  // that actually needs to turn it off for a view-only user.
+  canDrag?: boolean;
   onShowHistory?: (dealId: string) => void;
+  onViewDeal?: (dealId: string) => void;
 }
 
-export function FunnelBoard({ leads, onMove, columns, onShowHistory }: FunnelBoardProps) {
+export function FunnelBoard({
+  leads,
+  onMove,
+  columns,
+  canDrag = true,
+  onShowHistory,
+  onViewDeal,
+}: FunnelBoardProps) {
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const dragIdRef = useRef<string | null>(null);
@@ -213,12 +288,13 @@ export function FunnelBoard({ leads, onMove, columns, onShowHistory }: FunnelBoa
   }
 
   function handleDragOver(e: React.DragEvent, stageId: string) {
+    if (!canDrag) return;
     e.preventDefault();
     setDragOverStage(stageId);
   }
 
   function handleDrop(stageId: string) {
-    if (dragIdRef.current) {
+    if (canDrag && dragIdRef.current) {
       onMove(dragIdRef.current, stageId);
     }
     dragIdRef.current = null;
@@ -227,7 +303,7 @@ export function FunnelBoard({ leads, onMove, columns, onShowHistory }: FunnelBoa
   }
 
   return (
-    <div className="funnel-board" style={{ minHeight: "calc(100vh - 260px)" }}>
+    <div className="flex min-h-[calc(100vh-260px)] flex-1 items-stretch rounded-b-[14px] border border-t-0 border-[var(--color-border)] bg-white overflow-auto [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--color-border)]">
       {columns.map((column, index) => {
         const { accent, bg } = colorForIndex(index);
         return (
@@ -239,6 +315,7 @@ export function FunnelBoard({ leads, onMove, columns, onShowHistory }: FunnelBoa
             leads={leads.filter((l) => l.stage === column.id)}
             isOver={dragOverStage === column.id}
             draggingId={draggingId}
+            canDrag={canDrag}
             onDragOver={(e) => handleDragOver(e, column.id)}
             onDragLeave={() => {
               if (dragOverStage === column.id) setDragOverStage(null);
@@ -247,6 +324,7 @@ export function FunnelBoard({ leads, onMove, columns, onShowHistory }: FunnelBoa
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
             onShowHistory={onShowHistory}
+            onViewDeal={onViewDeal}
           />
         );
       })}
