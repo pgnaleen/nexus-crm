@@ -8,6 +8,7 @@ export interface UserSummaryResponse {
   status: UserStatus;
   loggingEmail: string;
   lastLoggingAt: string | null;
+  roleIds?: string[];
 }
 
 /** Full record — served only by GET /users/:id, gated separately from the list. */

@@ -2,10 +2,11 @@ import { SYSTEM_TENANT_SLUG } from "@orelia/common";
 import { getServerSession } from "@/lib/auth/session";
 import { listUsers } from "@/lib/users/server";
 import { listTenants } from "@/lib/tenants/server";
+import { listRoles } from "@/lib/roles/server";
 import { UsersTableWidget } from "@/components/layout/UsersTableWidget";
 
 export default async function UsersPage({ params }: { params: { tenant: string } }) {
-  const [session, users] = await Promise.all([getServerSession(params.tenant), listUsers()]);
+  const [session, users, roles] = await Promise.all([getServerSession(params.tenant), listUsers(), listRoles()]);
   const isPlatformSession = session?.tenant.slug === SYSTEM_TENANT_SLUG;
 
   // Only a System-tenant session can create users for other tenants -- skip
@@ -21,6 +22,7 @@ export default async function UsersPage({ params }: { params: { tenant: string }
     <UsersTableWidget
       key={scopeKey}
       users={users ?? []}
+      roles={roles ?? []}
       permissions={session?.permissions ?? []}
       currentTenantId={session?.tenant.id ?? ""}
       isPlatformSession={isPlatformSession}

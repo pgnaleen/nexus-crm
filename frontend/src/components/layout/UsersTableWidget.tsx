@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { PERMISSIONS, UserStatus } from "@orelia/common";
-import type { ActingTenant, TenantSummaryResponse, UserResponse, UserSummaryResponse } from "@orelia/common";
+import type { ActingTenant, RbacRoleResponse, TenantSummaryResponse, UserResponse, UserSummaryResponse } from "@orelia/common";
 import { deleteUser, disableUser, enableUser } from "@/lib/api/users";
 import { ApiError } from "@/lib/api/client";
 import { BanIcon, CheckCircleIcon, EditIcon, KeyIcon, SearchIcon, TrashIcon } from "@/components/ui/icons";
@@ -15,6 +15,7 @@ import { useConfirm, useAlert } from "@/components/providers/DialogProvider";
 
 interface UsersTableWidgetProps {
   users: UserSummaryResponse[];
+  roles: RbacRoleResponse[];
   permissions: string[];
   currentTenantId: string;
   isPlatformSession: boolean;
@@ -36,8 +37,27 @@ function formatLastLogin(iso: string): string {
   });
 }
 
+function getRoleBadgeStyle(name: string) {
+  const palettes = [
+    { bg: "#eef1fb", color: "#2f6feb", border: "#c3d3f7" }, // Blue
+    { bg: "#fdf0ee", color: "#c0392b", border: "#f5c3bd" }, // Red
+    { bg: "#e6f7ee", color: "#1a9c5f", border: "#b8ebd1" }, // Green
+    { bg: "#fcf0ff", color: "#a855f7", border: "#f1d4ff" }, // Purple
+    { bg: "#fff6eb", color: "#d97706", border: "#ffe0bc" }, // Orange
+    { bg: "#f1f5f9", color: "#475569", border: "#cbd5e1" }, // Slate
+    { bg: "#fff1f2", color: "#e11d48", border: "#ffe4e6" }, // Rose
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % palettes.length;
+  return palettes[index];
+}
+
 export function UsersTableWidget({
   users: initialUsers,
+  roles,
   permissions,
   currentTenantId,
   isPlatformSession,
@@ -183,6 +203,7 @@ export function UsersTableWidget({
               <tr>
                 <th>Username</th>
                 <th>Display Name</th>
+                <th>Roles</th>
                 <th>Status</th>
                 <th>Login Email</th>
                 <th>Last Login</th>
@@ -190,17 +211,50 @@ export function UsersTableWidget({
               </tr>
             </thead>
             <tbody>
-              {filteredUsers.map((user) => (
-                <tr
-                  key={user.id}
-                  className={canView ? "interactive-row" : undefined}
-                  onClick={canView ? () => setViewingUser(user) : undefined}
-                >
-                  <td>{user.username}</td>
-                  <td>{user.displayName}</td>
-                  <td>
-                    <UserStatusBadge status={user.status} />
-                  </td>
+              {filteredUsers.map((user) => {
+                const assignedRoleIds = user.roleIds ?? [];
+                const assignedRoles = roles.filter((r) => assignedRoleIds.includes(r.id));
+                return (
+                  <tr
+                    key={user.id}
+                    className={canView ? "interactive-row" : undefined}
+                    onClick={canView ? () => setViewingUser(user) : undefined}
+                  >
+                    <td>{user.username}</td>
+                    <td>{user.displayName}</td>
+                    <td>
+                      {assignedRoles.length === 0 ? (
+                        <span style={{ color: "var(--color-text-muted)" }}>&mdash;</span>
+                      ) : (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                          {assignedRoles.map((r) => {
+                            const style = getRoleBadgeStyle(r.name);
+                            return (
+                              <span
+                                key={r.id}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  padding: "2px 8px",
+                                  borderRadius: "12px",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 500,
+                                  background: style.bg,
+                                  color: style.color,
+                                  border: `1px solid ${style.border}`,
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {r.name}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <UserStatusBadge status={user.status} />
+                    </td>
                   <td>{user.loggingEmail}</td>
                   <td>{user.lastLoggingAt ? formatLastLogin(user.lastLoggingAt) : <span style={{ color: "var(--color-text-muted)" }}>&mdash;</span>}</td>
                   {showActionsColumn && (
@@ -276,7 +330,7 @@ export function UsersTableWidget({
                     </td>
                   )}
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         )}

@@ -27,7 +27,8 @@ export class UsersController {
   @Get()
   async findAll(): Promise<UserSummaryResponse[]> {
     const users = await this.usersService.findAll();
-    return users.map((user) => this.toSummaryResponse(user));
+    const roleIdsMap = await this.rbacService.getRoleIdsForUsers(users.map(u => u.id));
+    return users.map((user) => this.toSummaryResponse(user, roleIdsMap[user.id] || []));
   }
 
   // Must be declared after the plain "/" GET route above — not strictly
@@ -37,7 +38,9 @@ export class UsersController {
   @RequirePermission([PERMISSIONS.USERS_VIEW, PERMISSIONS.USERS_UPDATE])
   @Get(":id")
   async findOne(@Param("id", ParseUUIDPipe) id: string): Promise<UserResponse> {
-    return this.toResponse(await this.usersService.findOneOrFail(id));
+    const user = await this.usersService.findOneOrFail(id);
+    const roleIds = await this.rbacService.getRoleIdsForUser(id);
+    return this.toResponse(user, roleIds);
   }
 
   @UseGuards(PermissionsGuard)
@@ -48,7 +51,8 @@ export class UsersController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<UserResponse> {
     const created = await this.usersService.create(dto, user.sub);
-    return this.toResponse(created);
+    const roleIds = await this.rbacService.getRoleIdsForUser(created.id);
+    return this.toResponse(created, roleIds);
   }
 
   @UseGuards(PermissionsGuard)
@@ -60,7 +64,8 @@ export class UsersController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<UserResponse> {
     const updated = await this.usersService.update(id, dto, user.sub);
-    return this.toResponse(updated);
+    const roleIds = await this.rbacService.getRoleIdsForUser(updated.id);
+    return this.toResponse(updated, roleIds);
   }
 
   @UseGuards(PermissionsGuard)
@@ -106,7 +111,8 @@ export class UsersController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<UserResponse> {
     const updated = await this.usersService.disable(id, user.sub);
-    return this.toResponse(updated);
+    const roleIds = await this.rbacService.getRoleIdsForUser(updated.id);
+    return this.toResponse(updated, roleIds);
   }
 
   @UseGuards(PermissionsGuard)
@@ -117,7 +123,8 @@ export class UsersController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<UserResponse> {
     const updated = await this.usersService.enable(id, user.sub);
-    return this.toResponse(updated);
+    const roleIds = await this.rbacService.getRoleIdsForUser(updated.id);
+    return this.toResponse(updated, roleIds);
   }
 
   @UseGuards(PermissionsGuard)
@@ -131,7 +138,7 @@ export class UsersController {
     return { success: true };
   }
 
-  private toSummaryResponse(user: User): UserSummaryResponse {
+  private toSummaryResponse(user: User, roleIds: string[]): UserSummaryResponse {
     return {
       id: user.id,
       username: user.username,
@@ -139,12 +146,13 @@ export class UsersController {
       status: user.status,
       loggingEmail: user.loggingEmail,
       lastLoggingAt: user.lastLoggingAt ? user.lastLoggingAt.toISOString() : null,
+      roleIds,
     };
   }
 
-  private toResponse(user: User): UserResponse {
+  private toResponse(user: User, roleIds: string[]): UserResponse {
     return {
-      ...this.toSummaryResponse(user),
+      ...this.toSummaryResponse(user, roleIds),
       tenantId: user.tenantId,
       loggingAttempts: user.loggingAttempts,
       lockedUntil: user.lockedUntil ? user.lockedUntil.toISOString() : null,

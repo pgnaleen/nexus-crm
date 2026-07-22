@@ -173,6 +173,15 @@ export class RbacService {
     return maps.map((map) => map.roleId);
   }
 
+  async getRoleIdsForUsers(userIds: string[]): Promise<Record<string, string[]>> {
+    if (userIds.length === 0) return {};
+    const maps = await this.roleUserMapRepo.find({ where: { userId: In(userIds) } });
+    const result: Record<string, string[]> = {};
+    userIds.forEach(id => result[id] = []);
+    maps.forEach(map => result[map.userId]!.push(map.roleId));
+    return result;
+  }
+
   /**
    * Full replace (not incremental) -- clears every existing role grant for
    * the user then re-assigns the given set, so removing a role from the
