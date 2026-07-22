@@ -53,7 +53,7 @@ const DEFAULT_DEAL_TYPE = DealType.NewBusiness;
 // string, since `.field-textarea` itself stays untouched for every other
 // dialog still using it until their own restyle pass.
 const TEXTAREA_CLASS =
-  "w-full resize-y rounded-lg border border-[var(--color-border)] px-3 py-2.5 font-[inherit] text-sm transition-colors duration-150 focus:outline-none focus:border-[var(--color-crm-primary)] focus:shadow-[0_0_0_3px_rgba(233,28,45,0.15)]";
+  "w-full resize-y rounded-lg border border-[var(--color-border)] bg-white text-[var(--color-text)] px-3 py-2.5 font-[inherit] text-sm transition-colors duration-150 focus:outline-none focus:border-[var(--color-crm-primary)] focus:shadow-[0_0_0_3px_rgba(233,28,45,0.15)]";
 
 interface StagedDocument {
   id: string;

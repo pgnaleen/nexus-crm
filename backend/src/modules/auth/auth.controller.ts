@@ -61,7 +61,14 @@ export class AuthController {
     }
   }
 
-  @UseGuards(JwtAuthGuard)
+  // Public, not JwtAuthGuard-gated: logout must succeed even when the access
+  // token has already expired (the single most common time someone clicks
+  // it) -- it only needs the refresh-token cookie, which AuthService.logout
+  // already handles gracefully if missing/stale. Gating this on a valid
+  // access token meant an expired-but-present one blocked the whole request
+  // with 401 before cookies ever got cleared, leaving a dead session's
+  // cookies stuck in the browser.
+  @Public()
   @Post("logout")
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
