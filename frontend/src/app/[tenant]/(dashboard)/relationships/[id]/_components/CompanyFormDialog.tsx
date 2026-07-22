@@ -230,6 +230,10 @@ export function CompanyFormDialog({
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Tracks which new contact rows (by their stable `key`) have already been
+  // successfully posted -- if row 3 of 5 fails and the user fixes it and
+  // saves again, rows 1-2 must not be re-posted as duplicates.
+  const savedContactKeysRef = useRef<Set<string>>(new Set());
 
   function setField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setValues((current) => ({ ...current, [field]: value }));
@@ -347,7 +351,12 @@ export function CompanyFormDialog({
           hqCityAddress: values.hqCityAddress.trim(),
           branches: toListOrUndefined(values.branches) ?? [],
           parentCompanyId: values.parentCompanyId || null,
-          parentCompanyName: values.parentCompanyId ? undefined : values.parentCompanyName.trim(),
+          // null (not undefined) when a real parentCompanyId is set --
+          // JSON.stringify drops undefined keys entirely, which meant this
+          // never actually cleared server-side after switching from a
+          // free-text parent name to a linked one (the two are meant to be
+          // mutually exclusive, per company.entity.ts's own comment).
+          parentCompanyName: values.parentCompanyId ? null : values.parentCompanyName.trim(),
           credit: values.credit || null,
           territoryOwnerId: values.territoryOwnerId || null,
           territoryNotes: values.territoryNotes.trim(),
@@ -357,6 +366,7 @@ export function CompanyFormDialog({
         // existing contacts already show as their own rows and are edited there.
         for (const contact of contacts) {
           if (!contact.fullName.trim()) continue;
+          if (savedContactKeysRef.current.has(contact.key)) continue;
           await createRelationshipPartyContact(relationshipTypeId, {
             companyId: company?.id,
             fullName: contact.fullName.trim(),
@@ -365,6 +375,7 @@ export function CompanyFormDialog({
             mobileNo: contact.mobileNo.trim() || undefined,
             roleBuying: contact.roleBuying || undefined,
           });
+          savedContactKeysRef.current.add(contact.key);
         }
       }
       onSaved();

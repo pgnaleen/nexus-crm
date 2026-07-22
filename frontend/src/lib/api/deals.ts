@@ -12,7 +12,7 @@ import type {
   UpdateDealNoteRequest,
   UpdateDealRequest,
 } from "@orelia/common";
-import { ApiError, apiFetch } from "./client";
+import { ApiError, apiFetch, redirectToLogin, refreshSession } from "./client";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
@@ -66,11 +66,27 @@ export async function uploadDealDocument(
   formData.append("docType", meta.docType);
   formData.append("title", meta.title);
 
-  const res = await fetch(`${API_BASE_URL}/api/deals/${dealId}/documents`, {
-    method: "POST",
-    credentials: "include",
-    body: formData,
-  });
+  // Raw fetch, not apiFetch -- apiFetch forces a JSON Content-Type header,
+  // which would break this multipart/form-data upload (the browser needs to
+  // set its own boundary-bearing Content-Type from the FormData body).
+  // Still shares apiFetch's 401-refresh-retry path though, so an expired
+  // token mid-dialog doesn't fail the upload outright.
+  const doFetch = () =>
+    fetch(`${API_BASE_URL}/api/deals/${dealId}/documents`, {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+
+  let res = await doFetch();
+
+  if (res.status === 401) {
+    if (await refreshSession()) {
+      res = await doFetch();
+    } else {
+      redirectToLogin();
+    }
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => null);

@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { ScheduleModule } from "@nestjs/schedule";
 import { envValidationSchema } from "./config/env.validation";
 import { CoreModule } from "./core/core.module";
 import { RequestLoggerMiddleware } from "./core/logging/request-logger.middleware";
@@ -7,6 +8,7 @@ import { DatabaseModule } from "./database/database.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { CompaniesModule } from "./modules/companies/companies.module";
 import { ContactsModule } from "./modules/contacts/contacts.module";
+import { DbBackupModule } from "./modules/db-backup/db-backup.module";
 import { DealSourcesModule } from "./modules/deal-sources/deal-sources.module";
 import { MainStagesModule } from "./modules/deal-stages/main-stages.module";
 import { DealsModule } from "./modules/deals/deals.module";
@@ -27,6 +29,7 @@ import { UsersModule } from "./modules/users/users.module";
       isGlobal: true,
       validationSchema: envValidationSchema,
     }),
+    ScheduleModule.forRoot(),
     DatabaseModule,
     CoreModule,
     TenantsModule,
@@ -44,6 +47,7 @@ import { UsersModule } from "./modules/users/users.module";
     IndustriesModule,
     PickersModule,
     UploadsModule,
+    DbBackupModule,
     AuthModule,
   ],
 })

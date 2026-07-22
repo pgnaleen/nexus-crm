@@ -72,6 +72,8 @@ export const PERMISSIONS = {
   SUB_STAGE_CREATE: "sub_stage:create",
   SUB_STAGE_UPDATE: "sub_stage:update",
   SUB_STAGE_DELETE: "sub_stage:delete",
+
+  BACKUP_CREATE: "backup:create",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

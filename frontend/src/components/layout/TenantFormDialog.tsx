@@ -163,6 +163,8 @@ export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onS
           <TextField
             label="Name *"
             name="name"
+            required
+            aria-required="true"
             value={values.name}
             error={errors.name}
             placeholder="e.g. Acme Corp"
@@ -171,6 +173,8 @@ export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onS
           <TextField
             label="Slug *"
             name="slug"
+            required
+            aria-required="true"
             value={values.slug}
             error={errors.slug}
             placeholder="e.g. acme-corp (lowercase & hyphens only)"
@@ -234,6 +238,8 @@ export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onS
           <EmailField
             label="Contact email *"
             name="contactEmail"
+            required
+            aria-required="true"
             value={values.contactEmail}
             error={errors.contactEmail}
             placeholder="e.g. hello@acme.com"
@@ -253,6 +259,8 @@ export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onS
           <PhoneField
             label="Phone *"
             name="phoneNo"
+            required
+            aria-required="true"
             value={values.phoneNo}
             error={errors.phoneNo}
             placeholder="555-1234"

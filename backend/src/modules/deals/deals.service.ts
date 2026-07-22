@@ -131,37 +131,53 @@ export class DealsService {
 
     await this.validateReferences(dto);
 
-    try {
-      const count = await this.dealsRepo.countAllScoped();
-      const dealCode = `DEAL-${String(count + 1).padStart(5, "0")}`;
-      this.logger.debug(`Assigned deal code ${dealCode}`);
+    // dealCode is derived from a plain count with no lock, so two concurrent
+    // creates in the same tenant can race for the same code. The DB has a
+    // unique (tenant_id, deal_code) index to catch that if it happens; on a
+    // collision (Postgres 23505), just recompute the count and retry rather
+    // than letting a duplicate through or failing the request outright.
+    const MAX_DEAL_CODE_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= MAX_DEAL_CODE_ATTEMPTS; attempt++) {
+      try {
+        const count = await this.dealsRepo.countAllScoped();
+        const dealCode = `DEAL-${String(count + 1).padStart(5, "0")}`;
+        this.logger.debug(`Assigned deal code ${dealCode} (attempt ${attempt})`);
 
-      // createScoped() builds a plain new entity with no relations attached
-      // (unlike the loaded-with-relations entities used for mutation
-      // elsewhere in this service), so it isn't exposed to the save() bug
-      // described above.
-      const deal = this.dealsRepo.createScoped({
-        ...dto,
-        dealCode,
-        status: DealStatus.Open,
-        createdBy: userId,
-      });
-      await this.dealsRepo.saveScoped(deal);
-      this.logger.debug(`create succeeded for deal ${deal.id}`);
+        // createScoped() builds a plain new entity with no relations attached
+        // (unlike the loaded-with-relations entities used for mutation
+        // elsewhere in this service), so it isn't exposed to the save() bug
+        // described above.
+        const deal = this.dealsRepo.createScoped({
+          ...dto,
+          dealCode,
+          status: DealStatus.Open,
+          createdBy: userId,
+        });
+        await this.dealsRepo.saveScoped(deal);
+        this.logger.debug(`create succeeded for deal ${deal.id}`);
 
-      await this.auditLogService.record({
-        entityType: AUDIT_ENTITY_TYPE,
-        entityId: deal.id,
-        action: "insert",
-        actorId: userId,
-        changes: { ...dto, dealCode },
-      });
+        await this.auditLogService.record({
+          entityType: AUDIT_ENTITY_TYPE,
+          entityId: deal.id,
+          action: "insert",
+          actorId: userId,
+          changes: { ...dto, dealCode },
+        });
 
-      return this.findOneOrFail(deal.id);
-    } catch (err) {
-      this.logger.error(`create failed: ${(err as Error).message}`, (err as Error).stack);
-      throw err;
+        return await this.findOneOrFail(deal.id);
+      } catch (err) {
+        const isDealCodeConflict = (err as { code?: string; driverError?: { code?: string } }).code === "23505"
+          || (err as { code?: string; driverError?: { code?: string } }).driverError?.code === "23505";
+        if (isDealCodeConflict && attempt < MAX_DEAL_CODE_ATTEMPTS) {
+          this.logger.debug(`Deal code conflict on attempt ${attempt}, retrying`);
+          continue;
+        }
+        this.logger.error(`create failed: ${(err as Error).message}`, (err as Error).stack);
+        throw err;
+      }
     }
+    // Unreachable -- the loop above always either returns or throws.
+    throw new Error("create failed: exhausted deal code retry attempts");
   }
 
   async update(id: string, dto: UpdateDealDto, userId: string): Promise<Deal> {
@@ -272,48 +288,75 @@ export class DealsService {
   }
 
   async moveStage(id: string, dto: MoveDealDto, userId: string): Promise<Deal> {
-    // Bare load for the actual mutation -- same reasoning as update() above.
-    const deal = await this.findOneBareOrFail(id);
-    // Validates toStageId is a real Sub Stage belonging to the current
-    // tenant, not just any UUID that happens to exist in sub_stages.
-    const targetStage = await this.subStagesService.findOneOrFail(dto.toStageId);
+    this.logger.debug(`moveStage called for deal ${id} by ${userId} (toStageId=${dto.toStageId})`);
+    try {
+      // Bare load for the actual mutation -- same reasoning as update() above.
+      const deal = await this.findOneBareOrFail(id);
+      // Validates toStageId is a real Sub Stage belonging to the current
+      // tenant, not just any UUID that happens to exist in sub_stages.
+      const targetStage = await this.subStagesService.findOneOrFail(dto.toStageId);
 
-    const fromStageId = deal.currentStageId;
-    const fromMainStageId = deal.mainStageId;
+      const fromStatus = deal.status;
+      const fromStageId = deal.currentStageId;
+      const fromMainStageId = deal.mainStageId;
 
-    deal.currentStageId = targetStage.id;
-    deal.mainStageId = targetStage.mainStageId;
-    // A deal moved into a Won/Lost sub stage is recorded as such; moved back
-    // out of one (into a stage with neither flag), it reverts to Open rather
-    // than staying stuck.
-    deal.status = targetStage.isWon
-      ? DealStatus.Won
-      : targetStage.isLost
-        ? DealStatus.Lost
-        : DealStatus.Open;
-    deal.updatedBy = userId;
-    await this.dealsRepo.saveScoped(deal);
+      deal.currentStageId = targetStage.id;
+      deal.mainStageId = targetStage.mainStageId;
+      // A deal moved into a Won/Lost sub stage is recorded as such; moved back
+      // out of one (into a stage with neither flag), it reverts to Open rather
+      // than staying stuck.
+      if (targetStage.isWon) {
+        this.logger.debug(`Target stage ${targetStage.id} is a Won stage -- setting status to won`);
+        deal.status = DealStatus.Won;
+      } else if (targetStage.isLost) {
+        this.logger.debug(`Target stage ${targetStage.id} is a Lost stage -- setting status to lost`);
+        deal.status = DealStatus.Lost;
+      } else {
+        this.logger.debug(`Target stage ${targetStage.id} is neither Won nor Lost -- status is open`);
+        deal.status = DealStatus.Open;
+      }
+      deal.updatedBy = userId;
+      await this.dealsRepo.saveScoped(deal);
 
-    await this.stageHistoryService.recordSubStageMove({
-      dealId: deal.id,
-      fromStageId,
-      toStageId: targetStage.id,
-      movedById: userId,
-      note: dto.note,
-    });
-
-    // Only log a Main Stage transition when the move actually crossed into
-    // a different Main Stage -- most moves are within the same funnel stage.
-    if (fromMainStageId !== targetStage.mainStageId) {
-      await this.stageHistoryService.recordMainStageMove({
+      await this.stageHistoryService.recordSubStageMove({
         dealId: deal.id,
-        fromStageId: fromMainStageId,
-        toStageId: targetStage.mainStageId,
+        fromStageId,
+        toStageId: targetStage.id,
         movedById: userId,
         note: dto.note,
       });
-    }
 
-    return this.findOneOrFail(id);
+      // Only log a Main Stage transition when the move actually crossed into
+      // a different Main Stage -- most moves are within the same funnel stage.
+      const crossedMainStage = fromMainStageId !== targetStage.mainStageId;
+      if (crossedMainStage) {
+        this.logger.debug(`Move crossed from Main Stage ${fromMainStageId} to ${targetStage.mainStageId}`);
+        await this.stageHistoryService.recordMainStageMove({
+          dealId: deal.id,
+          fromStageId: fromMainStageId,
+          toStageId: targetStage.mainStageId,
+          movedById: userId,
+          note: dto.note,
+        });
+      } else {
+        this.logger.debug("Move stayed within the same Main Stage, no Main Stage history row needed");
+      }
+
+      if (fromStatus !== deal.status) {
+        await this.auditLogService.record({
+          entityType: AUDIT_ENTITY_TYPE,
+          entityId: id,
+          action: "update",
+          actorId: userId,
+          changes: { status: { old: fromStatus, new: deal.status } },
+        });
+      }
+
+      this.logger.debug(`moveStage succeeded for deal ${id}`);
+      return await this.findOneOrFail(id);
+    } catch (err) {
+      this.logger.error(`moveStage failed for deal ${id}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 }

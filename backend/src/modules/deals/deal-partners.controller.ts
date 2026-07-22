@@ -51,8 +51,9 @@ export class DealPartnersController {
   async remove(
     @Param("dealId", ParseUUIDPipe) dealId: string,
     @Param("partnerId", ParseUUIDPipe) partnerId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<{ success: true }> {
-    await this.dealPartnersService.remove(dealId, partnerId);
+    await this.dealPartnersService.remove(dealId, partnerId, user.sub);
     return { success: true };
   }
 

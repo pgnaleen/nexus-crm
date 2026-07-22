@@ -208,39 +208,79 @@ that level of proof.
 - *(Already resolved, kept for the record)* `deal-contacts.service.ts` cross-tenant contactId
   gap — fixed by the `deal-partners.service.ts` rewrite, verified 2026-07-20.
 
-### 🟡 Medium severity, still open
-- `deals.service.ts` deal-code generation (`DEAL-00001`) has no transaction/lock and no unique DB
-  constraint — concurrent creates in the same tenant can collide.
-- `/uploads` is served fully statically with zero auth/tenant check (`main.ts:20`) — filenames are
-  unguessable UUIDs, but there's no login requirement and no way to revoke a leaked URL.
-- SVG is allowed in the logo upload allow-list and served inline — embedded `<script>` executes on
-  direct navigation (compounds the High XSS item above).
-- `POST /uploads/logo` is gated on `RELATIONSHIP_VIEW` (a *view* permission) for a *mutating*
-  action — a read-only role can write files.
-- `multer@^1.4.5-lts.1` is pinned despite the lockfile's own advisory that 1.x has vulnerabilities
-  patched in 2.x (2.x is already present transitively).
-- `AddDealDialog`'s required-Sub-Stage validation is skipped when the selected Main Stage has zero
-  Sub Stages, even though the backend DTO requires it regardless — hits a generic 400 instead of a
-  clear client message.
-- `CompanyFormDialog` edit-mode posts new contact rows one-by-one with no rollback tracking —
-  a failure partway through duplicates already-created rows on retry.
-- `CompanyFormDialog` can leave a stale `parentCompanyName` in the DB after switching to a
-  parent-by-ID reference (`undefined` is dropped by `JSON.stringify`, so the old column is never
-  cleared server-side).
+### 🟡 Medium severity
+- ✅ **FIXED** — `deals.service.ts` deal-code generation had no transaction/lock and no unique DB
+  constraint. Added migration `1784700000004-AddUniqueDealCodePerTenant` (unique `(tenant_id,
+  deal_code)` index) plus a retry loop in `create()`: on a `23505` conflict, recompute the count
+  and retry (up to 3 attempts) instead of letting a duplicate through. **Verified live**: a raw
+  duplicate insert against the real DB was rejected by the constraint; a real `POST /deals` still
+  creates cleanly with a fresh unique code afterward.
+- **Deferred to the user's own S3 migration** (not fixed here, by their own decision): `/uploads`
+  served with zero auth check, SVG allowed + served inline (XSS), `POST /uploads/logo` gated on a
+  view permission, `multer` version. All four go away or change shape once storage moves off local
+  disk — revisit after that migration, not before.
+- ✅ **FIXED** — `AddDealDialog`'s Sub-Stage requirement had silently drifted: the field itself was
+  removed from the UI in a later refactor (`currentStageId` is now auto-defaulted to
+  `stages[0]?.id`), so the *original* skip-condition no longer exists in that shape — but the
+  underlying gap was still real: when zero stages exist, the default resolves to `""` with no way
+  to fix it, hitting an unexplained backend 400. Added a `runValidation()` check that blocks
+  submission with a clear message ("No stages are available to create a deal in yet...") instead.
+  Frontend typecheck clean; client-side only, not click-tested (no browser automation here).
+- ✅ **FIXED** — `CompanyFormDialog` edit-mode posted new contact rows one-by-one with no tracking
+  of which had already succeeded; a failure partway through duplicated earlier rows on retry.
+  Added a `savedContactKeysRef` (keyed by each row's stable `key`) that skips re-posting any
+  contact already successfully saved in an earlier attempt within the same dialog session.
+  Frontend typecheck clean; client-side only, not click-tested.
+- ✅ **FIXED** — `CompanyFormDialog` left a stale `parentCompanyName` in the DB after switching to
+  a parent-by-ID reference, because `undefined` is dropped by `JSON.stringify` and never reached
+  the server as a clear signal. Now sends `null` (matching every sibling optional field's existing
+  clear-with-null convention) — required widening `UpdateCompanyRequest.parentCompanyName` and
+  `UpdateRelationshipPartyCompanyDto` to accept `null`, not just the frontend call site. **Verified
+  live**: created a real company with a free-text parent name, linked it to a real parent company
+  via the API, confirmed `parentCompanyName` came back `null` in the response and the database.
+  Test data disabled afterward.
 
-### ⚪ Low severity, still open
-- No magic-byte content sniffing anywhere in the upload pipeline (MIME/extension checks are
-  client-supplied only — compounds the High/Medium upload findings above).
-- `uploadDealDocument` uses a raw `fetch` (to avoid `apiFetch`'s forced JSON content-type) and so
-  loses the shared 401-refresh-retry path — an expired token mid-dialog fails the upload outright.
-- `AddDealDialog` sends `probability` as a raw `Number()` with no int/step constraint against the
-  backend's `@IsInt()`.
-- Misc UI nits: `RolePermissionsDialog`'s prefix-stripping assumes one `:` occurrence; several
-  Roles-dialog form controls/inputs have no accessible label; `.permissions-grid`/`.permissions-*`
-  CSS blocks use hardcoded hex instead of the shared CSS variables and have no responsive
-  breakpoint; `AccountMenu`'s Log out item uses an inline red style that both breaks the shared
-  hover rule and over-alarms a reversible action; `RoleFormDialog`'s required marker is cosmetic
-  only (no `aria-required`); a stray em-dash character / a stray BOM in two files.
+### ⚪ Low severity
+- **Deferred to the user's own S3 migration**: no magic-byte content sniffing anywhere in the
+  upload pipeline — same reasoning as the Medium-severity upload items above.
+- ✅ **FIXED** — `uploadDealDocument` used a raw `fetch` with no 401-handling at all, so an expired
+  token mid-dialog failed the upload outright. `refreshSession`/`redirectToLogin` are now exported
+  from `client.ts` and reused here (still a raw `fetch`, not `apiFetch` — multipart bodies need the
+  browser's own boundary-bearing `Content-Type`, which `apiFetch`'s forced JSON header would
+  break) — same 401 → refresh → retry-or-redirect shape as every other call in the app. **Verified
+  live**: a real document upload against the real backend still succeeds end-to-end (`201`,
+  correct response shape) after the change.
+- **Stale, already resolved by a later refactor — no action needed**: `AddDealDialog`'s
+  `probability` field finding (the field no longer exists anywhere in the current form) and
+  `RolePermissionsDialog`'s prefix-stripping finding (already rewritten to use
+  `.slice(prefix.length + 1)`, not the `.replace()` pattern the finding described — already
+  correct regardless of repeated substrings).
+- ✅ **FIXED** — the search input in `RolePermissionsDialog` had no accessible label (the Level/Risk
+  filter selects already did, from an earlier pass) — added `aria-label="Search permissions"`.
+- ✅ **FIXED** — `.permissions-grid`/`.permissions-*` used hardcoded `#f8fafc` in four neutral
+  surface-color rules instead of the shared `var(--color-bg)` already used throughout the rest of
+  `globals.css` (the semantic risk/status-tag colors elsewhere in the same block were left as
+  intentional hardcoded hex — matching the same deliberate multi-color badge convention used for
+  Won/Lost elsewhere in this app, not an inconsistency). Added a `@media (max-width: 700px)`
+  breakpoint collapsing the grid to one column.
+- ✅ **FIXED** — `AccountMenu`'s Log out item forced a solid red fill with `!important`, completely
+  overriding the shared `.account-menu-item:hover` rule and giving a fully reversible action the
+  same visual alarm as a genuine delete. Replaced with a plain red text tint — the shared hover
+  background now applies normally, same as every other menu item.
+- ✅ **FIXED** — `RoleFormDialog`'s and `TenantFormDialog`'s required-field markers (`"Name *"` etc.)
+  were cosmetic text only, no `required`/`aria-required` on the actual input. Added both to Role's
+  Name field and Tenant's Name/Slug/Contact email/Phone fields.
+- **Skipped, not a real issue**: the stray em-dash character in `RoleDetailsDialog.tsx` — it lives
+  inside a JS string/template literal (a dialog title and a fallback display value), not a raw JSX
+  text node, so the `&mdash;` HTML entity the original finding suggested would **not** decode there
+  at all — it would show the literal text "&mdash;" instead of an em-dash. Swapping it would have
+  been a real regression, not a fix. Left as a plain `—` character, which renders correctly.
+- ✅ **FIXED** — `globals.css` had a genuine stray UTF-8 BOM at byte 0 (confirmed via hex dump).
+  Stripped.
+
+All frontend typechecks clean (zero new errors vs. the tracked baseline) across every file touched
+in this round. CSS/behavior changes not click-tested — same browser-automation limitation as the
+rest of this session.
 
 ---
 
@@ -249,21 +289,31 @@ that level of proof.
 ### Deep debug logging retrofit
 Reference implementation (entry log, branch-level debug lines, result-count log, full
 try/catch+rethrow) is done for: Pickers, Auth (`verify-password`), Relationship Types, Main
-Stages/Sub Stages, `deals.service.ts::create/update`, `deal-notes.*`.
-**Still missing:** Departments, Deal Sources, Teams, Relationship Parties, RBAC, Users, Tenants,
-the rest of Auth, `deals.service.ts::remove/moveStage`, `deal-documents.service.ts`,
-`deal-partners.service.ts`, `deal-stage-history.service.ts`.
+Stages/Sub Stages, `deals.service.ts` (all methods, including `remove`/`moveStage` which were
+found to have zero and partial logging respectively), `deal-notes.*`, `deal-documents.service.ts`,
+`deal-partners.service.ts`, `deal-stage-history.service.ts` — **all of Deals is now fully done.**
+**Departments, Deal Sources done** (2026-07-22) — both controller and service layers instrumented
+for each.
+**Still missing:** Teams, Relationship Parties, RBAC, Users, Tenants, the rest of Auth.
 
 ### `AuditLogService` rollout
-Done for: Relationship Types (`create`/`update`/`remove`), `deals.service.ts`
-(`create`/`update`), `deal-notes.*` (`create`/`update`).
-**Still missing:** `deal-documents.service.ts`/`deal-partners.service.ts` (uploads, deletes,
-partner add/remove aren't in the `audit_logs` trail at all), plus the same longer list above
-(Departments, Deal Sources, Teams, Relationship Parties, RBAC, Users, Tenants).
+Done for: Relationship Types (`create`/`update`/`remove`), all of `deals.service.ts`, `deal-notes.*`,
+`deal-documents.service.ts` (insert/delete, entity type `deal_document`), `deal-partners.service.ts`
+(insert/delete, entity type `deal_partner`, also fixed a real gap where `DELETE
+/deals/:dealId/partners/:partnerId` never even received the caller's user id), Departments
+(insert/update/delete, entity type `department`). Deliberately **not** added to
+`deal-stage-history.service.ts` — its own history rows already are the audit trail for stage
+moves; a second entry would be circular.
+**Still missing:** Teams, Relationship Parties, RBAC, Users, Tenants.
+**Verified live** (2026-07-22): exercised move/upload-document/add-partner and Departments/Deal
+Sources create/rename/delete through the real API, confirmed every new debug-log line in `docker
+logs` and every new `audit_logs` row in the database at each step.
 
 ### API Endpoint Registry (`api-endpoint-registry.md`)
-No sections yet for: Departments, Deal Sources, Teams, Relationship Parties, RBAC, Users,
-Tenants, the rest of Auth.
+Deal Documents/Partners/Stage History now have full per-endpoint tables (they only had prose
+summaries before); `/deals/:id/move`'s Debug Logging column corrected from ⬜ to ✅; Departments
+and Deal Sources now each have a full section.
+**Still missing:** Teams, Relationship Parties, RBAC, Users, Tenants, the rest of Auth.
 
 ### Enforce `createdBy`/`updatedBy` NOT NULL at the DB level (stretch, explicitly do last)
 Only after confirming every service path always sets them (audit via the rollout above) — change

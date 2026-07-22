@@ -101,7 +101,7 @@ export class UpdateRelationshipPartyCompanyDto implements UpdateCompanyRequest {
 
   @IsOptional()
   @IsString()
-  parentCompanyName?: string;
+  parentCompanyName?: string | null;
 
   @IsOptional()
   @IsEnum(CreditStatus)

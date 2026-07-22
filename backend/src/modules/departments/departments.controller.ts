@@ -1,5 +1,5 @@
 import { DepartmentResponse, PERMISSIONS } from "@orelia/common";
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Logger, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
@@ -11,6 +11,8 @@ import { DepartmentsService } from "./departments.service";
 
 @Controller("departments")
 export class DepartmentsController {
+  private readonly logger = new Logger(DepartmentsController.name);
+
   constructor(private readonly departmentsService: DepartmentsService) {}
 
   @UseGuards(PermissionsGuard)
@@ -22,8 +24,15 @@ export class DepartmentsController {
   ])
   @Get()
   async findAll(): Promise<DepartmentResponse[]> {
-    const departments = await this.departmentsService.findAll();
-    return departments.map((department) => this.toResponse(department));
+    this.logger.debug("GET /departments called");
+    try {
+      const departments = await this.departmentsService.findAll();
+      this.logger.debug(`GET /departments returning ${departments.length} row(s)`);
+      return departments.map((department) => this.toResponse(department));
+    } catch (err) {
+      this.logger.error(`GET /departments failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   // The dropdown/filter listing (formerly GET /departments/picker) now lives
@@ -36,8 +45,15 @@ export class DepartmentsController {
     @Body() dto: CreateDepartmentDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<DepartmentResponse> {
-    const department = await this.departmentsService.create(dto, user.sub);
-    return this.toResponse(department);
+    this.logger.debug(`POST /departments called by ${user.sub} (name="${dto.name}")`);
+    try {
+      const department = await this.departmentsService.create(dto, user.sub);
+      this.logger.debug(`POST /departments succeeded for department ${department.id}`);
+      return this.toResponse(department);
+    } catch (err) {
+      this.logger.error(`POST /departments failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
@@ -48,8 +64,15 @@ export class DepartmentsController {
     @Body() dto: UpdateDepartmentDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<DepartmentResponse> {
-    const department = await this.departmentsService.update(id, dto, user.sub);
-    return this.toResponse(department);
+    this.logger.debug(`PATCH /departments/${id} called by ${user.sub}`);
+    try {
+      const department = await this.departmentsService.update(id, dto, user.sub);
+      this.logger.debug(`PATCH /departments/${id} succeeded`);
+      return this.toResponse(department);
+    } catch (err) {
+      this.logger.error(`PATCH /departments/${id} failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
@@ -59,8 +82,15 @@ export class DepartmentsController {
     @Param("id", ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<{ success: true }> {
-    await this.departmentsService.remove(id, user.sub);
-    return { success: true };
+    this.logger.debug(`DELETE /departments/${id} called by ${user.sub}`);
+    try {
+      await this.departmentsService.remove(id, user.sub);
+      this.logger.debug(`DELETE /departments/${id} succeeded`);
+      return { success: true };
+    } catch (err) {
+      this.logger.error(`DELETE /departments/${id} failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   private toResponse(department: Department): DepartmentResponse {

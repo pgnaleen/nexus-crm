@@ -46,7 +46,7 @@ export interface UpdateCompanyRequest {
   hqCityAddress?: string;
   branches?: string[];
   parentCompanyId?: string | null;
-  parentCompanyName?: string;
+  parentCompanyName?: string | null;
   credit?: CreditStatus | null;
   territoryOwnerId?: string | null;
   territoryNotes?: string;

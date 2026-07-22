@@ -102,23 +102,41 @@ gating* isn't re-documented here (unchanged), just the fields/behavior that chan
 | 1 | POST | `/deals` | RBAC | `DEALS_CREATE` | Create a deal — the full Add Deal dialog payload (customer, stage, owner, and every field below). | body: `CreateDealRequest` — name, dealType, companyId/contactId (exactly one required), primaryContactId?, sourceId?, ownerId, preSalesPersonId?, pmoId?, mainStageId?, currentStageId, departmentId?, dealCountry?, customerPainPoint?, product?, services?, estimatedValue?, internalCosts?, externalCosts?, expectedCloseDate?, competitors?: `{name, details}[]` | `DealResponse` (adds `preSalesPersonName`/`pmoName`/`sourceName`/`departmentName`/`primaryContactName`/`contactName` resolved display names alongside the existing `ownerName`/`companyName` pattern) | `deals.controller.ts::create` → `deals.service.ts::create` | `AddDealDialog.tsx` (`handleSubmit`, `mode="create"`) via `lib/api/deals.ts::createDeal` | ✅ | **Schema rework 2026-07-21**: removed `description`/`referredByCompanyId`/`referredByEmployeeId`/`probability`/`priority`/`currency` (confirmed zero references anywhere in `frontend/src` and zero seed data before removal); added the 9 fields above. `estimatedValue` doubles as the Costing tab's "Project Value without Tax" — Total Cost/Profit/Markup/Margin are deliberately never stored, only ever derived client-side from `estimatedValue`/`internalCosts`/`externalCosts`. `competitors` is a single `jsonb` column, not a table (per the frontend's own existing design comment — free-text blurbs, no need to query individually). |
 | 2 | GET | `/deals/:id` | RBAC | `DEALS_VIEW` | Fetch one deal's full detail — every field above plus every resolved display name. | none | `DealResponse` | `deals.controller.ts::findOne` → `deals.service.ts::findOneOrFail` (relations-loaded variant) | `ViewDealDialog.tsx` via `lib/api/deals.ts::getDeal` | ✅ | Added 2026-07-21 alongside View Deal — `listDeals()` existed but no single-deal fetch did. `sourceName`/`departmentName`/`primaryContactName`/`contactName` added to `DealResponse` the same day (a real display gap found while building View Deal — those four were only ever returned as raw ids before). |
 | 3 | PATCH | `/deals/:id` | RBAC | `DEALS_UPDATE` | Update any of the fields above on an existing deal — **except** `companyId`/`contactId`/`currentStageId`/`mainStageId` (Customer is locked after creation; Stage stays a drag-and-drop-only action so it never skips `DealStageHistory`). | body: `UpdateDealRequest` (all optional) | `DealResponse` | `deals.controller.ts::update` → `deals.service.ts::update` | `AddDealDialog.tsx` (`mode="edit"`, opened via View Deal's **Edit** button) via `lib/api/deals.ts::updateDeal` | ✅ | Records a field-level `{old, new}` diff to `audit_logs` (`entityType: "deal"`). **Critical bug found + fixed 2026-07-21**: see `CLAUDE.md`'s "TypeORM Gotcha" section — this endpoint (and `move`, below) were loading the Deal *with* relations for the mutation itself, which silently nulled every relation-backed FK column on every update. Fixed by splitting into a bare load for mutation (`findOneBareOrFail`) and a relations-loaded re-fetch only for the response. Edit mode's Documents/Partners tabs apply immediately via their own endpoints (rows 6-9 below), not batched into this PATCH. |
-| 4 | POST | `/deals/:id/move` | RBAC | `DEALS_UPDATE` | Move a deal to a different Sub Stage (and Main Stage, if it crosses one), recording stage history. | body: `{toStageId, note?}` | `DealResponse` | `deals.controller.ts::move` → `deals.service.ts::moveStage` | `FunnelBoard.tsx` drag-and-drop | ⬜ | Hit the same relation-nulling bug as `update` above, same fix applied. |
+| 4 | POST | `/deals/:id/move` | RBAC | `DEALS_UPDATE` | Move a deal to a different Sub Stage (and Main Stage, if it crosses one), recording stage history. Also sets `deal.status` from the target Sub Stage's `isWon`/`isLost` flags. | body: `{toStageId, note?}` | `DealResponse` | `deals.controller.ts::move` → `deals.service.ts::moveStage` | `FunnelBoard.tsx` drag-and-drop | ✅ | Hit the same relation-nulling bug as `update` above, same fix applied. **2026-07-22**: added entry/branch/result debug logging (was completely unlogged) and an `audit_logs` update entry, but only when the move actually changes `status` (a same-stage-family move that doesn't cross a Won/Lost boundary correctly logs nothing, verified live). |
 | 5 | GET | `/deals/:id/dependents-count` | RBAC | `DEALS_DELETE` | Returns how many Documents+Notes+Partners a delete would cascade to, for the confirmation warning. | none | `DealDependentsCountResponse` — `{count: number}` | `deals.controller.ts::dependentsCount` → `deals.service.ts::countDependents` | `ViewDealDialog.tsx`'s Delete button, right before opening `useCascadeDeleteConfirm()` | ✅ | Added 2026-07-22. Deliberately **not** a `dependentCount` field on the bulk `DealResponse` (unlike `RelationshipTypeResponse`/`MainStageResponse`) — `DealResponse` is fetched for the whole Funnel board on every page load, and this number is only relevant at the one moment someone opens the delete confirmation. |
 | 6 | DELETE | `/deals/:id` | RBAC | `DEALS_DELETE` | Delete a deal **and cascade** — soft-deletes its Documents and Notes (each gets its own `deletedBy`), hard-deletes its Partner links (that table was never soft-deletable — matches its own existing remove path). Stage history is deliberately left untouched, a permanent record, not deal content. | none | `{success: true}` | `deals.controller.ts::remove` → `deals.service.ts::remove` | `ViewDealDialog.tsx`'s Delete button, via `useCascadeDeleteConfirm()` (password + warning naming the dependents count) then `lib/api/deals.ts::deleteDeal` | ✅ | Added 2026-07-22, same cascade-transaction shape as `relationship-types.service.ts`/`main-stages.service.ts`. Records an `audit_logs` `delete` entry. Verified via the real API with all three dependent kinds present. |
 
 ## Deal Documents (`deal-documents.controller.ts`, route `deals/:dealId/documents`) — Edit Deal additions
 
-Pre-existing `GET`/`POST`/`DELETE` endpoints, unchanged — just newly consumed by Edit Deal's
-Documents tab (uploads/deletes apply immediately, not batched, since the deal already exists):
-`uploadDealDocument`/`deleteDealDocument` (`lib/api/deals.ts`) called directly from
-`AddDealDialog.tsx`'s `mode="edit"` document rows.
+Endpoint shapes unchanged — just newly consumed by Edit Deal's Documents tab (uploads/deletes
+apply immediately, not batched, since the deal already exists): `uploadDealDocument`/
+`deleteDealDocument` (`lib/api/deals.ts`) called directly from `AddDealDialog.tsx`'s `mode="edit"`
+document rows.
+
+| # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | GET | `/deals/:dealId/documents` | RBAC | `DEALS_VIEW` | List every document on a deal, newest first. | none | `DealDocumentResponse[]` | `findAll` → `deal-documents.service.ts::findAll` | `ViewDealDialog.tsx`, `AddDealDialog.tsx` (`mode="edit"`) | ✅ | **2026-07-22**: added entry/result debug logging and an `audit_logs` entity type (`deal_document`) — this endpoint family had zero logging or audit trail before. |
+| 2 | POST | `/deals/:dealId/documents` | RBAC | `DEALS_UPDATE` | Upload a document, stored on local disk (`multer`), metadata row created. | multipart: `file`, `docType`, `title` | `DealDocumentResponse` | `create` → `deal-documents.service.ts::create` | `AddDealDialog.tsx` (both modes) | ✅ | Records an `audit_logs` insert (`entityType: "deal_document"`). Verified live via a real multipart upload. |
+| 3 | DELETE | `/deals/:dealId/documents/:documentId` | RBAC | `DEALS_UPDATE` | Soft-delete a document. | none | `{success: true}` | `remove` → `deal-documents.service.ts::remove` | `AddDealDialog.tsx` (`mode="edit"`) | ✅ | Records an `audit_logs` delete entry. |
 
 ## Deal Partners (`deal-partners.controller.ts`, route `deals/:dealId/partners`) — Edit Deal additions
 
-Pre-existing `POST .../companies`/`POST .../contacts`/`DELETE :partnerId` endpoints, unchanged —
-same "applies immediately" treatment as Documents above, via `addDealPartnerCompany`/
-`addDealPartnerContact`/`removeDealPartner` (`lib/api/deals.ts`) called directly from
-`AddDealDialog.tsx`'s `mode="edit"` partner rows.
+Endpoint shapes unchanged — same "applies immediately" treatment as Documents above, via
+`addDealPartnerCompany`/`addDealPartnerContact`/`removeDealPartner` (`lib/api/deals.ts`) called
+directly from `AddDealDialog.tsx`'s `mode="edit"` partner rows.
+
+| # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | GET | `/deals/:dealId/partners` | RBAC | `DEALS_VIEW` | List every company/contact partner on a deal. | none | `DealPartnerResponse[]` | `findAll` → `deal-partners.service.ts::findAll` | `ViewDealDialog.tsx`, `AddDealDialog.tsx` (`mode="edit"`) | ✅ | **2026-07-22**: added entry/branch/result debug logging and an `audit_logs` entity type (`deal_partner`) — zero logging or audit trail before. |
+| 2 | POST | `/deals/:dealId/partners/companies` | RBAC | `DEALS_UPDATE` | Link a company as a deal partner (tenant-scoped lookup, rejects a duplicate link). | body: `{companyId}` | `DealPartnerResponse` | `addCompany` → `deal-partners.service.ts::addCompany` | `AddDealDialog.tsx` (both modes) | ✅ | Records an `audit_logs` insert. Verified live. |
+| 3 | POST | `/deals/:dealId/partners/contacts` | RBAC | `DEALS_UPDATE` | Link a contact as a deal partner. | body: `{contactId}` | `DealPartnerResponse` | `addContact` → `deal-partners.service.ts::addContact` | `AddDealDialog.tsx` (both modes) | ✅ | Records an `audit_logs` insert. |
+| 4 | DELETE | `/deals/:dealId/partners/:partnerId` | RBAC | `DEALS_UPDATE` | Unlink a partner. | none | `{success: true}` | `remove` → `deal-partners.service.ts::remove` | `AddDealDialog.tsx` (`mode="edit"`) | ✅ | **2026-07-22**: controller wasn't even passing the caller's user id through before — added `@CurrentUser()` to the route so `deletedBy`/`actorId` are real instead of always absent. Records an `audit_logs` delete entry. |
+
+## Deal Stage History (`deal-stage-history.controller.ts`, route `deals/:dealId/stage-history`)
+
+| # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | GET | `/deals/:dealId/stage-history` | RBAC | `DEALS_VIEW` | List every Sub Stage + Main Stage move recorded for a deal. | none | `DealStageHistoryResponse[]` | `findAll` → `deal-stage-history.service.ts::listForDeal` | `DealStageHistoryDialog.tsx`, `DealStageHistoryRoadmap.tsx` | ✅ | **2026-07-22**: added entry/result debug logging. Deliberately **no** `audit_logs` entry for this service's own writes (`recordSubStageMove`/`recordMainStageMove`) — the history rows themselves already are the permanent audit trail for stage moves; a second `audit_logs` row recording "a history row was written" would be circular. |
 
 ## Deal Notes (`backend/src/modules/deals/deal-notes.controller.ts`, route `deals/:dealId/notes`)
 
@@ -134,7 +152,30 @@ own), plus a new author-ownership check `deal_documents` doesn't need.
 
 ---
 
-*(Next sections will be added as each part of the system is reviewed — Departments, Deal Sources,
-Teams, Relationship Parties, RBAC, Users, Tenants, the rest of Auth, and the remaining
-Deals/Documents/Partners/Stage-History endpoints, in whatever order the user chooses to go through
+## Departments (`backend/src/modules/departments/departments.controller.ts`)
+
+`findAll` is gated on the union of all four Department permissions (any Department-admin visitor
+can list them); the dropdown/filter listing used elsewhere in the app lives in
+`PickersController` (`GET /pickers/departments`), not here.
+
+| # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | GET | `/departments` | RBAC | `DEPARTMENT_VIEW`/`_CREATE`/`_UPDATE`/`_DELETE` (any) | List every department. | none | `DepartmentResponse[]` | `findAll` → `departments.service.ts::findAll` | `DepartmentsWidget.tsx` | ✅ | **2026-07-22**: added debug logging at both controller and service layers — had none before. |
+| 2 | POST | `/departments` | RBAC | `DEPARTMENT_CREATE` | Create a department. | body: `{name}` | `DepartmentResponse` | `create` → `departments.service.ts::create` | `DepartmentsWidget.tsx` (Add) | ✅ | Now records an `audit_logs` insert (`entityType: "department"`) — had no audit trail at all before. |
+| 3 | PATCH | `/departments/:id` | RBAC | `DEPARTMENT_UPDATE` | Update a department's name/active state. | body: `{name?, isActive?}` | `DepartmentResponse` | `update` → `departments.service.ts::update` | `DepartmentsWidget.tsx` (Edit) | ✅ | Records an `audit_logs` update diff (field-level `{old, new}`). |
+| 4 | DELETE | `/departments/:id` | RBAC | `DEPARTMENT_DELETE` | Soft-delete a department. | none | `{success: true}` | `remove` → `departments.service.ts::remove` | `DepartmentsWidget.tsx` (Delete) | ✅ | Records an `audit_logs` delete entry. Verified live: created, renamed, deleted a real department via the API, confirmed all three `audit_logs` rows and the full debug-log trail at both layers. |
+
+## Deal Sources (`backend/src/modules/deal-sources/deal-sources.controller.ts`)
+
+Identical shape to Departments above — same permission-union `findAll`, same CRUD pattern.
+
+| # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | GET | `/deal-sources` | RBAC | `DEAL_SOURCE_VIEW`/`_CREATE`/`_UPDATE`/`_DELETE` (any) | List every deal source. | none | `DealSourceResponse[]` | `findAll` → `deal-sources.service.ts::findAll` | `DealSourcesWidget.tsx` | ✅ | **2026-07-22**: added debug logging at both layers — had none before. |
+| 2 | POST | `/deal-sources` | RBAC | `DEAL_SOURCE_CREATE` | Create a deal source. | body: `{name, category?}` | `DealSourceResponse` | `create` → `deal-sources.service.ts::create` | `DealSourcesWidget.tsx` (Add) | ✅ | Now records an `audit_logs` insert (`entityType: "deal_source"`). |
+| 3 | PATCH | `/deal-sources/:id` | RBAC | `DEAL_SOURCE_UPDATE` | Update a deal source's name/category/active state. | body: `{name?, category?, isActive?}` | `DealSourceResponse` | `update` → `deal-sources.service.ts::update` | `DealSourcesWidget.tsx` (Edit) | ✅ | Records an `audit_logs` update diff. |
+| 4 | DELETE | `/deal-sources/:id` | RBAC | `DEAL_SOURCE_DELETE` | Soft-delete a deal source. | none | `{success: true}` | `remove` → `deal-sources.service.ts::remove` | `DealSourcesWidget.tsx` (Delete) | ✅ | Records an `audit_logs` delete entry. Verified live via the real API — full debug-log trail at both layers, all three audit rows confirmed. |
+
+*(Next sections will be added as each part of the system is reviewed — Teams, Relationship
+Parties, RBAC, Users, Tenants, the rest of Auth — in whatever order the user chooses to go through
 them.)*

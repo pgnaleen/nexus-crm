@@ -1,4 +1,4 @@
-﻿/* Tailwind v4 + FlyonUI. Preflight (Tailwind's base-element reset) is
+/* Tailwind v4 + FlyonUI. Preflight (Tailwind's base-element reset) is
    deliberately NOT imported here -- it would immediately restyle every
    existing hand-written-CSS screen's default element styles (margins,
    font-weights, button/input resets) before any of them have been migrated.
@@ -2354,7 +2354,7 @@ body {
   align-items: center;
   margin: 16px 0;
   gap: 16px;
-  background: #f8fafc;
+  background: var(--color-bg);
   padding: 12px;
   border-radius: 8px;
   border: 1px solid var(--color-border);
@@ -2436,6 +2436,12 @@ body {
   margin-bottom: 24px;
 }
 
+@media (max-width: 700px) {
+  .permissions-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .permissions-group {
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -2448,7 +2454,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #f8fafc;
+  background: var(--color-bg);
   padding: 10px 14px;
   border-bottom: 1px solid var(--color-border);
 }
@@ -2487,7 +2493,7 @@ body {
 }
 
 .permissions-checkbox-row:hover {
-  background: #f8fafc;
+  background: var(--color-bg);
 }
 
 .permissions-platform-tag {
@@ -2537,22 +2543,19 @@ body {
   padding: 40px;
   color: var(--color-text-muted);
   font-size: 14px;
-  background: #f8fafc;
+  background: var(--color-bg);
   border-radius: 8px;
   border: 1px dashed var(--color-border);
 }
 
+/* Logout is a reversible, everyday action -- a solid red fill (this used to
+   force one with !important, overriding the shared hover rule entirely)
+   gives it the same visual alarm as genuinely destructive actions
+   elsewhere. A red text tint is enough to mark it as distinct while still
+   behaving like a normal menu item otherwise. */
 .account-menu-item-logout {
-  background-color: var(--color-danger) !important;
-  color: #ffffff !important;
+  color: var(--color-danger);
   font-weight: 500;
-  transition: background-color 0.15s ease, opacity 0.15s ease;
-}
-
-.account-menu-item-logout:hover {
-  background-color: #dc2626 !important;
-  color: #ffffff !important;
-  opacity: 0.9;
 }
 
 /* ── Interactive Table Rows ─────────────────────────────────── */

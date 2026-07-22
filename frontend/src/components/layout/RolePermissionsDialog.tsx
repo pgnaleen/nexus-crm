@@ -49,6 +49,7 @@ const RESOURCE_DISPLAY_NAME: Record<string, string> = {
   main_stage: "Main Stages",
   department: "Departments",
   sub_stage: "Sub Stages",
+  backup: "DB Backups",
 };
 
 // Action suffix -> display label. The underlying permission key stays "_update" (renaming ~40
@@ -185,9 +186,10 @@ export function RolePermissionsDialog({ role, resources, onClose, onSaved }: Rol
         <div className="permissions-controls">
           <div className="permissions-search">
             <SearchIcon size={16} />
-            <input 
-              type="text" 
-              placeholder="Search permissions..." 
+            <input
+              type="text"
+              placeholder="Search permissions..."
+              aria-label="Search permissions"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />

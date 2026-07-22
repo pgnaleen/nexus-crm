@@ -76,6 +76,8 @@ export function RoleFormDialog({ mode, role, onClose, onSaved }: RoleFormDialogP
         <TextField
           label="Name *"
           name="name"
+          required
+          aria-required="true"
           value={values.name}
           error={errors.name}
           onChange={(e) => setField("name", e.target.value)}

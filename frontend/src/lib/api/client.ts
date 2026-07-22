@@ -14,7 +14,7 @@ export class ApiError extends Error {
 // caller shares this, not just whichever one happened to notice, so an
 // idle tab with a dead session gets kicked to login on its very next
 // request instead of sitting silently broken until a manual page refresh.
-function redirectToLogin(): void {
+export function redirectToLogin(): void {
   if (typeof window === "undefined") return;
   const tenantSlug = window.location.pathname.split("/")[1] ?? "";
   const loginPath = `/${tenantSlug}`;
@@ -27,7 +27,7 @@ function redirectToLogin(): void {
 // fail and needlessly log the user out.
 let refreshPromise: Promise<boolean> | null = null;
 
-function refreshSession(): Promise<boolean> {
+export function refreshSession(): Promise<boolean> {
   if (!refreshPromise) {
     refreshPromise = fetch(`${API_BASE_URL}/api/auth/refresh`, {
       method: "POST",

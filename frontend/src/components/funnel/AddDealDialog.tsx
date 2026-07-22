@@ -324,11 +324,19 @@ export function AddDealDialog({
     // nothing to validate here in edit mode -- it's always already set.
     if (!isEdit && !otherParty) nextErrors.otherParty = "Select the other party for this deal";
     if (!values.salesPersonId) nextErrors.salesPersonId = "Sales Person is required";
+    // currentStageId has no visible field -- it's silently defaulted to
+    // stages[0]?.id (see DetailsFormState above) -- but the backend still
+    // requires a real Sub Stage on create. When there are none configured
+    // yet, that default resolves to "" and would otherwise hit a generic,
+    // unexplained backend 400 with no way for the user to fix it here.
+    if (!isEdit && !values.currentStageId) {
+      nextErrors.currentStageId = "No stages are available to create a deal in yet — add a Sub Stage first";
+    }
 
     setErrors(nextErrors);
 
     // Jump to whichever tab actually holds the first invalid field.
-    if (nextErrors.name || nextErrors.otherParty) {
+    if (nextErrors.name || nextErrors.otherParty || nextErrors.currentStageId) {
       setActiveTab("dealInfo");
     } else if (nextErrors.salesPersonId) {
       setActiveTab("team");
@@ -667,6 +675,12 @@ export function AddDealDialog({
               placeholder="e.g. TechNova Inc. — Platform Rollout"
               onChange={(e) => setField("name", e.target.value)}
             />
+
+            {errors.currentStageId && (
+              <p className="mb-[18px] mt-[-8px] text-[12.5px] text-[var(--color-danger)]">
+                {errors.currentStageId}
+              </p>
+            )}
 
             <div className="mb-[18px]">
               <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
