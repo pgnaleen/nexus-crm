@@ -162,78 +162,74 @@ Since dependencies live only inside Docker's named volumes (not on your host fil
 docker compose exec backend pnpm --filter @orelia/common build
 ```
 
-## Deployment (AWS EC2)
+## Deployment (production — sales.orelit.com)
 
-### Important caveat first
+### The live setup, as it actually exists
 
-`docker-compose.yml` + `Dockerfile.dev` as they exist today are a **development** setup: they bind-mount the entire repo into the containers and run `nest start --watch` / `next dev` (unoptimized, hot-reload, verbose). They will technically run on an EC2 box, but you'd be shipping source code and dev servers to production with default secrets (`JWT_ACCESS_SECRET=change-me-access-secret`, DB password `orelia`). Fine for a quick demo behind a security group only you can reach; **not** fine for anything real. The steps below cover both.
+- **EC2** (Ubuntu) at `sales.orelit.com`, with **nginx** (native, terminating TLS) reverse-proxying `/` → `localhost:3000` (frontend) and `/api/` → `localhost:3001` (backend).
+- **Database: AWS RDS Postgres** (`DB_HOST` points at the RDS endpoint; `DB_SSL=true` in the server's `.env`).
+- The stack runs from **`~/nexus-crm/docker-compose.prod.yml`** — a **server-local file, not tracked in this repo**. It builds from `Dockerfile.dev` but the frontend runs a real `next build && next start`, with `NEXT_PUBLIC_API_URL: https://sales.orelit.com` and `API_INTERNAL_URL: http://backend:3001` set in the compose file itself.
+- Secrets live in **`~/nexus-crm/.env` on the server** (plain file, gitignored, hand-maintained). Any credential shared with an external system (e.g. the RDS password) must be changed **on both sides in the same action**, then verified with a real login — see the postmortems in `_bmad-output/planning-artifacts/plan-production-deployment.md`.
 
-### Recommended production topology
+### Branch model
 
-- **1 EC2 instance** (Ubuntu 22.04 LTS, `t3.medium` or larger — Node + Postgres + Next.js build all want headroom) running Docker.
-- **Reverse proxy** (Nginx or Caddy) in front of `frontend`/`backend`, terminating TLS. Only **80/443** (and 22 for SSH, restricted to your IP) open in the security group — **3000/3001/5432 should never be exposed to the internet directly**.
-- **Postgres**: a container with an EBS-backed volume is fine to start; move to **RDS** once this is real (automated backups, patching, no single point of failure on the same instance as the app).
+| Branch | Role |
+|---|---|
+| `dev-g` | Daily development. Pushing here **never** deploys anything. |
+| `main`  | Production. The server only ever pulls `main`. Merging into it is the deliberate "this batch is client-ready" decision. |
 
-### Step-by-step
+### Releasing a new version (on your machine)
 
-1. **Launch the instance** — Ubuntu 22.04, attach/size the root EBS volume with the Postgres data volume in mind.
-2. **Install Docker:**
-   ```bash
-   curl -fsSL https://get.docker.com | sudo sh
-   sudo usermod -aG docker $USER   # log out/in after this
-   ```
-3. **Clone the repo and set a production `.env`:**
-   ```bash
-   git clone https://github.com/pgnaleen/nexus-crm.git
-   cd nexus-crm
-   git checkout dev-g   # or your release branch
-   cp .env.example .env
-   ```
-   Then edit `.env` — **do not deploy with the example values**:
-   - `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` — generate real ones: `openssl rand -hex 32`
-   - `DB_PASSWORD` — a real password, not `orelia`
-   - `CORS_ORIGIN` — your actual domain, e.g. `https://crm.yourcompany.com`
-   - `NEXT_PUBLIC_API_URL` — the public URL the browser will call, e.g. `https://crm.yourcompany.com/api`
-   - `NODE_ENV=production`
-4. **Build for production, not dev mode.** `Dockerfile.dev` skips `pnpm build` entirely (it just runs the dev server against your mounted source). For production you want a multi-stage build that runs `pnpm build` and ships only the compiled output — no bind-mounted source, no `--watch`. Minimal example (`backend/Dockerfile`):
-   ```dockerfile
-   FROM node:20-bookworm-slim AS build
-   RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
-   WORKDIR /app
-   COPY . .
-   RUN pnpm install --frozen-lockfile \
-       && pnpm --filter @orelia/common build \
-       && pnpm --filter @orelia/backend build
+```bash
+git checkout main
+git merge --ff-only dev-g     # promote the current dev state
+git push origin main
+git checkout dev-g            # go back to daily work
+```
 
-   FROM node:20-bookworm-slim
-   RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
-   WORKDIR /app
-   COPY --from=build /app .
-   ENV NODE_ENV=production
-   CMD ["node", "backend/dist/main"]
-   ```
-   `frontend/Dockerfile` follows the same shape, ending in `CMD ["pnpm", "--filter", "@orelia/frontend", "start"]` after `next build`. Wire these into a `docker-compose.prod.yml` (same `postgres`/`backend`/`frontend` services as today, minus the `setup` container, `Dockerfile.dev` reference, and source bind-mounts — build args/image tags instead). Treat this as a starting template, not drop-in production config — review it before relying on it.
-5. **Bring the stack up, then run migrations and seed once:**
-   ```bash
-   docker compose -f docker-compose.prod.yml up -d --build
-   docker compose -f docker-compose.prod.yml exec backend pnpm --filter @orelia/backend migration:run
-   docker compose -f docker-compose.prod.yml exec backend pnpm --filter @orelia/backend seed   # first deploy only
-   ```
-6. **Put a reverse proxy + TLS in front.** Point your domain's A record at the instance's Elastic IP, then either:
-   - **Caddy** (simplest — auto-provisions Let's Encrypt certs): a `Caddyfile` reverse-proxying `crm.yourcompany.com` → `localhost:3000` (and `/api/*` → `localhost:3001`) is normally 3–4 lines.
-   - **Nginx + certbot**: standard `server { }` block proxying the same two upstreams, then `certbot --nginx`.
-7. **Redeploying after changes:** `git pull`, then `docker compose -f docker-compose.prod.yml up -d --build`. A CI/CD pipeline (GitHub Actions building images and deploying over SSH, or pushing to ECR) is a natural next step once this is running for real — not required to get started.
+If `--ff-only` refuses, `main` has something `dev-g` doesn't — investigate before forcing anything.
 
-### Security checklist before going live
+### Deploying (on the server)
 
-- [ ] Real `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` (not the `.env.example` defaults)
-- [ ] Real DB password
-- [ ] `CORS_ORIGIN` set to your actual domain only
-- [ ] TLS in front (never serve login/cookies over plain HTTP)
-- [ ] Security group closes 3000/3001/5432 to the internet — only 80/443 (+22 to your IP) open
-- [ ] `NODE_ENV=production`
-- [ ] Postgres backups — either RDS, or a cron'd `pg_dump` off-instance if staying on a container
-- [ ] Elastic IP (or Route 53 + ALB) so the instance's address doesn't change under you
+One command — `deploy.sh` (tracked in this repo) is the entire runbook:
+
+```bash
+ssh ubuntu@<server>
+cd ~/nexus-crm
+./deploy.sh          # deploys main
+```
+
+What it does, in order — and it **fails loudly** if any step breaks:
+1. `git pull` of `main` (or `./deploy.sh <branch>` to override — avoid).
+2. Tags the deploy (`deploy-YYYY-MM-DD-HHMM`) so rollback is unambiguous.
+3. `docker compose -f docker-compose.prod.yml up -d --build` — always the prod compose file.
+4. Runs database migrations, then the **idempotent** seed (registers any newly-added RBAC permission keys; never resets existing users or passwords).
+5. Waits for the frontend's in-container `next build` to finish (takes a few minutes), then smoke-tests the site **and** a fake API login — `401` proves the whole nginx → backend → RDS → auth chain; anything else fails the deploy.
+
+Expect a brief interruption during the rebuild — deploy in the agreed low-traffic window.
+
+### Rolling back
+
+```bash
+cd ~/nexus-crm
+git tag --list 'deploy-*' | tail -5      # find the last-good tag
+git checkout <previous-deploy-tag>
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+(If a bad migration changed data, restore the RDS snapshot/backup taken before the deploy — code rollback alone doesn't undo schema/data changes.)
+
+### ⚠️ The one command that must never run on the server
+
+```bash
+docker compose up -d --build        # ← NO. This is the DEV compose file.
+```
+
+Running the default `docker-compose.yml` on the server silently deploys the **development** config: `next dev`, and `NEXT_PUBLIC_API_URL=http://localhost:3001` baked into the browser bundle — every visitor's browser then calls its own machine and login dies with "Failed to fetch". This exact incident happened on 2026-07-23. Both compose files share a project name, so `docker compose -f docker-compose.prod.yml ps` will happily show the wrongly-created containers as if everything were fine. **Always deploy through `./deploy.sh`.**
+
+### Hardening roadmap
+
+Environment separation (staging), CI/CD, real production Dockerfiles, a dedicated smoke-tested backup/restore drill, and secrets management are planned and prioritized in `_bmad-output/planning-artifacts/plan-production-deployment.md` — including postmortems of the incidents that motivated each phase.
 
 ## Troubleshooting
 
