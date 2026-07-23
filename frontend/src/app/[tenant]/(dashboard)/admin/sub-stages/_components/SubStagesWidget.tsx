@@ -49,7 +49,6 @@ export function SubStagesWidget({
   const confirm = useConfirm();
   const { showError } = useAlert();
 
-  const canView   = permissions.includes(PERMISSIONS.SUB_STAGE_VIEW);
   const canCreate = permissions.includes(PERMISSIONS.SUB_STAGE_CREATE);
   const canUpdate = permissions.includes(PERMISSIONS.SUB_STAGE_UPDATE);
   const canDelete = permissions.includes(PERMISSIONS.SUB_STAGE_DELETE);
@@ -193,18 +192,7 @@ export function SubStagesWidget({
               {filteredSubStages.map((subStage) => (
                 <tr
                   key={subStage.id}
-                  className={
-                    canUpdate || canView
-                      ? "cursor-pointer transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f1f5f9]"
-                      : "transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f7f8fc]"
-                  }
-                  onClick={
-                    canUpdate
-                      ? () => setDialogState({ mode: "edit", subStage })
-                      : canView
-                        ? () => setDialogState({ mode: "view", subStage })
-                        : undefined
-                  }
+                  className="transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f7f8fc]"
                 >
                   <td className="border-b border-[var(--color-border)] p-3 font-medium text-crm-text">
                     {subStage.name}

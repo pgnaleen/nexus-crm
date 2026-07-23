@@ -50,7 +50,6 @@ export function MainStagesWidget({
   const confirmCascadeDelete = useCascadeDeleteConfirm();
   const { showError } = useAlert();
 
-  const canView   = permissions.includes(PERMISSIONS.MAIN_STAGE_VIEW);
   const canCreate = permissions.includes(PERMISSIONS.MAIN_STAGE_CREATE);
   const canUpdate = permissions.includes(PERMISSIONS.MAIN_STAGE_UPDATE);
   const canDelete = permissions.includes(PERMISSIONS.MAIN_STAGE_DELETE);
@@ -195,18 +194,7 @@ export function MainStagesWidget({
               {filteredStages.map((stage) => (
                 <tr
                   key={stage.id}
-                  className={
-                    canUpdate || canView
-                      ? "cursor-pointer transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f1f5f9]"
-                      : "transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f7f8fc]"
-                  }
-                  onClick={
-                    canUpdate
-                      ? () => setDialogState({ mode: "edit", mainStage: stage })
-                      : canView
-                        ? () => setDialogState({ mode: "view", mainStage: stage })
-                        : undefined
-                  }
+                  className="transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f7f8fc]"
                 >
                   <td className="border-b border-[var(--color-border)] p-3 text-[var(--color-text-muted)]">
                     {stage.position}
