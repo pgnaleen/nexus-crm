@@ -1,26 +1,39 @@
 "use client";
 
 import { useState } from "react";
+import { PERMISSIONS } from "@orelia/common";
+import type { EmployeeListItemResponse } from "@orelia/common";
 import { SearchIcon } from "@/components/ui/icons";
+import { t } from "@/lib/i18n";
 
-export function EmployeesWidget() {
+interface EmployeesWidgetProps {
+  employees: EmployeeListItemResponse[];
+  permissions: string[];
+}
+
+const STATUS_COLORS: Record<string, { background: string; color: string }> = {
+  active: { background: "#e6f7ee", color: "#1a9c5f" },
+  on_leave: { background: "#fff4e5", color: "#b26a00" },
+  terminated: { background: "#fdecec", color: "#c0392b" },
+  resigned: { background: "#f3f4f6", color: "#6b7280" },
+};
+
+export function EmployeesWidget({ employees, permissions }: EmployeesWidgetProps) {
   const [search, setSearch] = useState("");
+
+  const canView = permissions.includes(PERMISSIONS.EMPLOYEES_VIEW);
+
+  const filteredEmployees = employees.filter(
+    (employee) => !search || employee.fullName.toLowerCase().includes(search.toLowerCase()),
+  );
 
   return (
     <div className="flex flex-col">
       <div className="mb-6 flex items-center justify-between">
         <div className="flex flex-col">
-          <h1 className="m-0 mb-0.5 text-[26px] font-bold text-crm-text">Employees</h1>
-          <p className="m-0 text-[13.5px] text-[var(--color-text-muted)]">
-            Manage your organization's internal team members and their details
-          </p>
+          <h1 className="m-0 mb-0.5 text-[26px] font-bold text-crm-text">{t("employees.title")}</h1>
+          <p className="m-0 text-[13.5px] text-[var(--color-text-muted)]">{t("employees.subtitle")}</p>
         </div>
-        <button
-          type="button"
-          className="cursor-pointer rounded-lg border-none bg-crm-primary px-5 py-2.5 text-[13.5px] font-semibold text-white transition-opacity duration-150 hover:opacity-90"
-        >
-          Add Employee
-        </button>
       </div>
 
       <div className="mb-6 flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[#f8fafc] px-4 py-3">
@@ -31,7 +44,7 @@ export function EmployeesWidget() {
             </span>
             <input
               type="text"
-              placeholder="Search employees by name or email..."
+              placeholder={t("employees.searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-lg border border-[var(--color-border)] bg-white py-2 pl-8 pr-3 font-[inherit] text-[13px] transition-colors duration-150 focus:border-crm-primary focus:outline-none"
@@ -41,30 +54,78 @@ export function EmployeesWidget() {
       </div>
 
       <div className="content-card">
-        <div className="empty-state">
-          <div className="empty-state-icon">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
+        {!canView ? (
+          <div className="empty-state">
+            <p className="empty-state-title">{t("employees.emptyState.title")}</p>
+            <p className="empty-state-message">{t("employees.emptyState.noneExist")}</p>
           </div>
-          <p className="empty-state-title">No employees found</p>
-          <p className="empty-state-message">
-            There are no employees to display right now.
-          </p>
-        </div>
+        ) : filteredEmployees.length === 0 ? (
+          <div className="empty-state">
+            <p className="empty-state-title">{t("employees.emptyState.title")}</p>
+            <p className="empty-state-message">
+              {employees.length === 0
+                ? t("employees.emptyState.noneExist")
+                : t("employees.emptyState.noMatch")}
+            </p>
+          </div>
+        ) : (
+          <table className="w-full border-collapse text-[13px]">
+            <thead>
+              <tr>
+                <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  {t("employees.table.name")}
+                </th>
+                <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  {t("employees.table.title")}
+                </th>
+                <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  {t("employees.table.department")}
+                </th>
+                <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  {t("employees.table.status")}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredEmployees.map((employee) => {
+                const statusColors = employee.employmentStatus
+                  ? STATUS_COLORS[employee.employmentStatus]
+                  : undefined;
+                return (
+                  <tr
+                    key={employee.id}
+                    className="transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f7f8fc]"
+                  >
+                    <td className="border-b border-[var(--color-border)] p-3 font-medium text-crm-text">
+                      {employee.fullName}
+                    </td>
+                    <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
+                      {employee.title ?? t("employees.notSet")}
+                    </td>
+                    <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
+                      {employee.departmentName ?? t("employees.notSet")}
+                    </td>
+                    <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
+                      {employee.employmentStatus ? (
+                        <span
+                          className="inline-block rounded-full px-2.5 py-[3px] text-[11.5px] font-semibold"
+                          style={{
+                            background: statusColors?.background,
+                            color: statusColors?.color,
+                          }}
+                        >
+                          {t(`employees.status.${employee.employmentStatus}`)}
+                        </span>
+                      ) : (
+                        t("employees.notSet")
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

@@ -6,6 +6,29 @@
       "save": "Save"
     }
   },
+  "employees": {
+    "title": "Employees",
+    "subtitle": "Manage your organization's internal team members and their details",
+    "searchPlaceholder": "Search employees by name...",
+    "table": {
+      "name": "Name",
+      "title": "Title",
+      "department": "Department",
+      "status": "Status"
+    },
+    "status": {
+      "active": "Active",
+      "on_leave": "On Leave",
+      "terminated": "Terminated",
+      "resigned": "Resigned"
+    },
+    "emptyState": {
+      "title": "No employees found",
+      "noneExist": "No employees exist yet.",
+      "noMatch": "No employees match your search."
+    },
+    "notSet": "Not set"
+  },
   "departments": {
     "title": "Department Management",
     "subtitle": "Configure organizational departments",

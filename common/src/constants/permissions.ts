@@ -74,6 +74,11 @@ export const PERMISSIONS = {
   SUB_STAGE_DELETE: "sub_stage:delete",
 
   BACKUP_CREATE: "backup:create",
+
+  // Only VIEW exists so far -- CREATE/UPDATE/DELETE are added alongside their
+  // own stories (Employee Management epic, Story 1.1 is directory view only)
+  // rather than pre-seeded ahead of any endpoint that would enforce them.
+  EMPLOYEES_VIEW: "employees:view",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
