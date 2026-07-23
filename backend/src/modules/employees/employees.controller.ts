@@ -63,6 +63,31 @@ export class EmployeesController {
     }
   }
 
+  // Story 1.11 -- the caller's OWN employee record for the My Profile page.
+  // No PermissionsGuard/RequirePermission: any authenticated user may see
+  // what HR has on file for THEM (global JwtAuthGuard still applies), same
+  // posture as POST /users/me/change-password. Confidential fields are
+  // always nulled here -- "it's my own data" does not bypass
+  // EMPLOYEES_VIEW_SENSITIVE (AC). Returns null when the caller's account
+  // isn't linked to any employee record. Declared before the ":id" routes.
+  @Get("me")
+  async findMyEmployeeRecord(@CurrentUser() user: AuthenticatedUser): Promise<EmployeeDetailResponse | null> {
+    this.logger.debug(`GET /employees/me called by ${user.sub}`);
+    try {
+      const bare = await this.employeesService.findByUserId(user.sub);
+      if (!bare) {
+        this.logger.debug(`GET /employees/me: no employee linked to user ${user.sub}`);
+        return null;
+      }
+      const employee = await this.employeesService.findOneOrFail(bare.id);
+      this.logger.debug(`GET /employees/me succeeded (employee ${employee.id})`);
+      return this.toDetailResponse(employee, false);
+    } catch (err) {
+      this.logger.error(`GET /employees/me failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
   // Story 1.7 -- Organization Chart data: every non-exited employee with
   // the reporting edge (reportingManagerId). Declared BEFORE @Get(":id") --
   // otherwise "org-chart" would be captured as :id and rejected by

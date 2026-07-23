@@ -215,6 +215,12 @@
       }
     }
   },
+  "profile": {
+    "employeeRecord": {
+      "title": "My Employee Record",
+      "hint": "What HR has on file for you — read-only. Contact HR to correct anything here."
+    }
+  },
   "users": {
     "form": {
       "linkedEmployee": {
