@@ -2,6 +2,7 @@ import { ConflictException, Injectable, Logger, NotFoundException } from "@nestj
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
+import { TenantContextService } from "../../core/tenant";
 import { CompaniesRepository } from "../companies/companies.repository";
 import { ContactsRepository } from "../contacts/contacts.repository";
 import { DealPartnersMap } from "./entities/deal-partners-map.entity";
@@ -19,6 +20,7 @@ export class DealPartnersService {
     private readonly companiesRepo: CompaniesRepository,
     private readonly contactsRepo: ContactsRepository,
     private readonly auditLogService: AuditLogService,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
   async findAll(dealId: string): Promise<DealPartnersMap[]> {
@@ -27,6 +29,28 @@ export class DealPartnersService {
     const maps = await this.repo.find({ where: { dealId }, relations: ["company", "contact"] });
     this.logger.debug(`findAll returning ${maps.length} partner(s) for deal ${dealId}`);
     return maps;
+  }
+
+  // Id-only, every link in the tenant -- powers the Funnel board's Partner
+  // filter. DealPartnersMap has no tenant_id column of its own (it's a bare
+  // join table), so tenant scoping happens via an inner join to deal, same
+  // as the cascade-delete lookup in deals.service.ts.
+  async findAllLinksForTenant(): Promise<DealPartnersMap[]> {
+    this.logger.debug("findAllLinksForTenant called");
+    try {
+      const tenantId = this.tenantContext.getTenantId();
+      const links = await this.repo
+        .createQueryBuilder("map")
+        .innerJoin("map.deal", "deal")
+        .where("deal.tenant_id = :tenantId", { tenantId })
+        .andWhere("deal.deleted_at IS NULL")
+        .getMany();
+      this.logger.debug(`findAllLinksForTenant returning ${links.length} link(s)`);
+      return links;
+    } catch (err) {
+      this.logger.error(`findAllLinksForTenant failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   async addCompany(dealId: string, companyId: string, userId: string): Promise<DealPartnersMap> {

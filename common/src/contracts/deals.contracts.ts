@@ -89,6 +89,17 @@ export interface DealPartnerResponse {
   subtitle?: string | null;
 }
 
+// Bulk, id-only view of every deal-partner link across the tenant -- powers
+// the Funnel board's Partner filter (client-side, alongside the already
+// per-deal companyId/contactId used for the Customer filter) without
+// embedding full partner objects into the DealResponse list payload, which
+// is fetched on every Funnel page load.
+export interface DealPartnerLinkResponse {
+  dealId: string;
+  companyId: string | null;
+  contactId: string | null;
+}
+
 export interface DealStageHistoryResponse {
   id: string;
   kind: "main_stage" | "sub_stage";

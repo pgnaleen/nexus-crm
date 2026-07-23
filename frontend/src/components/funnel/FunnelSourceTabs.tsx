@@ -6,6 +6,7 @@ import { PERMISSIONS } from "@orelia/common";
 import type {
   CompanyPickerResponse,
   ContactPickerResponse,
+  DealPartnerLinkResponse,
   DealResponse,
   DealSourceResponse,
   DepartmentPickerResponse,
@@ -22,8 +23,9 @@ import { moveDeal } from "@/lib/api/deals";
 import { ApiError } from "@/lib/api/client";
 import { useToast } from "@/components/providers/ToastProvider";
 import { useAlert, useConfirm } from "@/components/providers/DialogProvider";
-import { SearchIcon } from "@/components/ui/icons";
+import { BuildingIcon, SearchIcon, UserIcon } from "@/components/ui/icons";
 import { CustomSelect } from "@/components/ui/CustomSelect";
+import { SearchSelect, type SearchSelectOption } from "@/components/ui/SearchSelect";
 
 /* ── Per-source accent colours ─────────────────────────────────
    Deal Sources are tenant-defined (created/renamed freely from Admin),
@@ -44,6 +46,15 @@ const SOURCE_PALETTE: { accent: string; bg: string }[] = [
 
 // How long a stage move stays undoable before it's persisted to the backend.
 const UNDO_GRACE_PERIOD_MS = 30000;
+
+// Same "kind:id" value scheme AddDealDialog's Customer/Partner fields use
+// (SearchSelect/MultiSelect only carry a single string value).
+function parsePartyValue(value: string): { kind: "company" | "contact"; id: string } | null {
+  const [kind, id] = value.split(":");
+  if (kind !== "company" && kind !== "contact") return null;
+  if (!id) return null;
+  return { kind, id };
+}
 
 type StageField = "mainStageName" | "currentStageName";
 type StageIdField = "mainStageId" | "currentStageId";
@@ -106,6 +117,11 @@ interface FunnelSourceTabsProps {
   industries: IndustryResponse[];
   customerParties: RelationshipRolePickerResponse;
   partnerParties: RelationshipRolePickerResponse;
+  // Bulk, id-only deal-partner links for every deal in the tenant, used only
+  // to drive the Partner filter below -- companyId/contactId already live
+  // directly on DealResponse for the Customer filter, but partners are a
+  // separate many-to-many not embedded in the bulk deal list.
+  partnerLinks: DealPartnerLinkResponse[];
   initialDeals?: DealResponse[];
   title?: string;
   subtitle?: string;
@@ -134,6 +150,7 @@ export function FunnelSourceTabs({
   industries,
   customerParties,
   partnerParties,
+  partnerLinks,
   initialDeals = [],
   title = "Funnel",
   subtitle = "Track deals by acquisition source",
@@ -159,6 +176,10 @@ export function FunnelSourceTabs({
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("");
   const [country, setCountry] = useState("");
+  // "kind:id" (see parsePartyValue), "" means no filter -- same value scheme
+  // as AddDealDialog's Customer/Partner fields.
+  const [customerFilter, setCustomerFilter] = useState("");
+  const [partnerFilter, setPartnerFilter] = useState("");
   const [isAddDealOpen, setAddDealOpen] = useState(false);
   const [historyDealId, setHistoryDealId] = useState<string | null>(null);
   const [viewDealId, setViewDealId] = useState<string | null>(null);
@@ -182,7 +203,8 @@ export function FunnelSourceTabs({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const hasFilters = search !== "" || department !== "" || country !== "";
+  const hasFilters =
+    search !== "" || department !== "" || country !== "" || customerFilter !== "" || partnerFilter !== "";
 
   const columnNameById = new Map(columns.map((c) => [c.id, c.name]));
   // Only populated for the Funnel overview board (columns = Main Stages,
@@ -218,10 +240,57 @@ export function FunnelSourceTabs({
     ...countries.map((c) => ({ value: c, label: c })),
   ];
 
+  // Customer/Partner filter option lists -- companies and directly-tagged
+  // contacts only, same as AddDealDialog's Customer/Partner fields (the
+  // pickers behind customerParties/partnerParties no longer inherit a
+  // company's tag onto its own untagged contacts, see contacts.service.ts).
+  const companyNameById = new Map(companies.map((c) => [c.id, c.name]));
+  function toPartyOptions(parties: RelationshipRolePickerResponse): SearchSelectOption[] {
+    return [
+      ...parties.companies.map((c) => ({
+        value: `company:${c.id}`,
+        label: c.name,
+        sublabel: "Company",
+        icon: <BuildingIcon size={14} />,
+      })),
+      ...parties.contacts.map((c) => ({
+        value: `contact:${c.id}`,
+        label: c.fullName,
+        sublabel: c.companyId ? companyNameById.get(c.companyId) ?? "Person" : "Person (no company)",
+        icon: <UserIcon size={14} />,
+      })),
+    ];
+  }
+  const customerOptions = toPartyOptions(customerParties);
+  const partnerOptions = toPartyOptions(partnerParties);
+
+  // dealId -> set of "kind:id" partner values, for the Partner filter --
+  // partners are a separate many-to-many not embedded in DealResponse.
+  const partnerValuesByDeal = new Map<string, Set<string>>();
+  for (const link of partnerLinks) {
+    const value = link.companyId ? `company:${link.companyId}` : link.contactId ? `contact:${link.contactId}` : null;
+    if (!value) continue;
+    const existing = partnerValuesByDeal.get(link.dealId);
+    if (existing) {
+      existing.add(value);
+    } else {
+      partnerValuesByDeal.set(link.dealId, new Set([value]));
+    }
+  }
+
+  const customerFilterParty = customerFilter ? parsePartyValue(customerFilter) : null;
+
   const activeDeals = deals
     .filter((d) => activeId === "all" || d.sourceId === activeId)
     .filter((d) => !department || d.departmentId === department)
-    .filter((d) => !country || d.companyCountry === country);
+    .filter((d) => !country || d.companyCountry === country)
+    .filter((d) => {
+      if (!customerFilterParty) return true;
+      return customerFilterParty.kind === "company"
+        ? d.companyId === customerFilterParty.id
+        : d.contactId === customerFilterParty.id;
+    })
+    .filter((d) => !partnerFilter || (partnerValuesByDeal.get(d.id)?.has(partnerFilter) ?? false));
   const activeLeads = activeDeals.map((deal) => dealToFunnelLead(deal, stageIdField));
   const activeCfg = getTabColor(activeId);
 
@@ -397,6 +466,26 @@ export function FunnelSourceTabs({
               onChange={setCountry}
               options={countryOptions}
             />
+
+            <div className="w-[190px]">
+              <SearchSelect
+                value={customerFilter}
+                onChange={setCustomerFilter}
+                options={customerOptions}
+                placeholder="All Customers"
+                searchPlaceholder="Search customers..."
+              />
+            </div>
+
+            <div className="w-[190px]">
+              <SearchSelect
+                value={partnerFilter}
+                onChange={setPartnerFilter}
+                options={partnerOptions}
+                placeholder="All Partners"
+                searchPlaceholder="Search partners..."
+              />
+            </div>
           </div>
         </div>
 
@@ -409,6 +498,8 @@ export function FunnelSourceTabs({
                 setSearch("");
                 setDepartment("");
                 setCountry("");
+                setCustomerFilter("");
+                setPartnerFilter("");
               }}
             >
               Clear filters

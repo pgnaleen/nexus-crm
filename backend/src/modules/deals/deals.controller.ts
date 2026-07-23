@@ -1,4 +1,4 @@
-import { DealDependentsCountResponse, DealResponse, PERMISSIONS } from "@orelia/common";
+import { DealDependentsCountResponse, DealPartnerLinkResponse, DealResponse, PERMISSIONS } from "@orelia/common";
 import {
   Body,
   Controller,
@@ -15,6 +15,7 @@ import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
+import { DealPartnersService } from "./deal-partners.service";
 import { CreateDealDto } from "./dto/create-deal.dto";
 import { MoveDealDto } from "./dto/move-deal.dto";
 import { UpdateDealDto } from "./dto/update-deal.dto";
@@ -23,7 +24,10 @@ import { DealsService } from "./deals.service";
 
 @Controller("deals")
 export class DealsController {
-  constructor(private readonly dealsService: DealsService) {}
+  constructor(
+    private readonly dealsService: DealsService,
+    private readonly dealPartnersService: DealPartnersService,
+  ) {}
 
   @UseGuards(PermissionsGuard)
   @RequirePermission([PERMISSIONS.DEALS_VIEW])
@@ -31,6 +35,22 @@ export class DealsController {
   async findAll(@Query("mainStageId") mainStageId?: string): Promise<DealResponse[]> {
     const deals = await this.dealsService.findAll(mainStageId);
     return deals.map((deal) => this.toResponse(deal));
+  }
+
+  // Declared before the ":id" route below so "partner-links" isn't swallowed
+  // as a route param. Bulk id-only lookup for the Funnel board's Partner
+  // filter -- see DealPartnerLinkResponse for why this isn't just embedded
+  // in the list response above.
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.DEALS_VIEW])
+  @Get("partner-links")
+  async findPartnerLinks(): Promise<DealPartnerLinkResponse[]> {
+    const links = await this.dealPartnersService.findAllLinksForTenant();
+    return links.map((link) => ({
+      dealId: link.dealId,
+      companyId: link.companyId ?? null,
+      contactId: link.contactId ?? null,
+    }));
   }
 
   @UseGuards(PermissionsGuard)

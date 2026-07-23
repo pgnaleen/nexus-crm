@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { FunnelSourceTabs } from "@/components/funnel/FunnelSourceTabs";
 import { getServerSession } from "@/lib/auth/session";
 import { listDealSources } from "@/lib/deal-sources/server";
-import { listDeals } from "@/lib/deals/server";
+import { listDeals, listDealPartnerLinks } from "@/lib/deals/server";
 import { listMainStages } from "@/lib/main-stages/server";
 import {
   listCompaniesPicker,
@@ -37,6 +37,7 @@ export default async function MainStageDealsPage({
     industries,
     customerParties,
     partnerParties,
+    partnerLinks,
   ] = await Promise.all([
     getServerSession(params.tenant),
     listDealSources(),
@@ -52,6 +53,7 @@ export default async function MainStageDealsPage({
     listIndustries(),
     listDealCustomerParties(),
     listDealPartnerParties(),
+    listDealPartnerLinks(),
   ]);
 
   const mainStage = (mainStages ?? []).find((stage) => stage.id === params.id);
@@ -80,6 +82,7 @@ export default async function MainStageDealsPage({
       industries={industries ?? []}
       customerParties={customerParties ?? { configured: false, companies: [], contacts: [] }}
       partnerParties={partnerParties ?? { configured: false, companies: [], contacts: [] }}
+      partnerLinks={partnerLinks ?? []}
       initialDeals={deals ?? []}
       title={mainStage.name}
       subtitle={

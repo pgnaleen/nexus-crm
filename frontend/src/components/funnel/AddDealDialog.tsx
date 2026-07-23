@@ -841,7 +841,7 @@ export function AddDealDialog({
 
         {/* ── Deal Information ──────────────────────────── */}
         {activeTab === "dealInfo" && (
-          <div className="min-h-[420px]">
+          <div className="h-[620px] overflow-y-auto pr-1">
             <TextField
               label="Deal Name *"
               name="name"
@@ -975,7 +975,7 @@ export function AddDealDialog({
 
         {/* ── Tender ────────────────────────────────────── */}
         {activeTab === "tender" && (
-          <div className="min-h-[420px]">
+          <div className="h-[620px] overflow-y-auto pr-1">
             <TextField
               label="Tender Reference Number *"
               name="tenderReference"
@@ -1055,7 +1055,7 @@ export function AddDealDialog({
 
         {/* ── Delivery ──────────────────────────────────── */}
         {activeTab === "delivery" && (
-          <div className="min-h-[420px]">
+          <div className="h-[620px] overflow-y-auto pr-1">
             <div className="mb-[18px]">
               <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
                 Partners (Companies or Contacts)
@@ -1137,7 +1137,7 @@ export function AddDealDialog({
 
         {/* ── Costing ───────────────────────────────────── */}
         {activeTab === "costing" && (
-          <div className="min-h-[420px]">
+          <div className="h-[620px] overflow-y-auto pr-1">
             <TextField
               label="Project Value without Tax (LKR)"
               name="projectValue"
@@ -1223,7 +1223,7 @@ export function AddDealDialog({
             just a list of free-text blurbs with no need to query/filter on
             individually. */}
         {activeTab === "competition" && (
-          <div className="min-h-[420px]">
+          <div className="h-[620px] overflow-y-auto pr-1">
             <div className="mb-4 flex justify-end">
               <Button type="button" variant="secondary" onClick={addCompetitor}>
                 + Add Competitor
@@ -1285,7 +1285,7 @@ export function AddDealDialog({
 
         {/* ── Team ──────────────────────────────────────── */}
         {activeTab === "team" && (
-          <div className="min-h-[420px]">
+          <div className="h-[620px] overflow-y-auto pr-1">
             <div className="mb-[18px]">
               <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
                 Sales Person *
@@ -1330,7 +1330,7 @@ export function AddDealDialog({
 
         {/* ── Documents ─────────────────────────────────── */}
         {activeTab === "documents" && (
-          <div className="min-h-[420px]">
+          <div className="h-[620px] overflow-y-auto pr-1">
             <div
               className={`flex cursor-pointer flex-col items-center gap-2 rounded-[10px] border-[1.5px] border-dashed px-4 py-[30px] text-center text-[13.5px] font-medium text-[var(--color-text)] transition-colors duration-150 hover:border-[var(--color-brand)] hover:bg-[#eef4ff] ${
                 isDropActive ? "border-[var(--color-brand)] bg-[#eef4ff]" : "border-[var(--color-border)] bg-[#f8fafc]"
@@ -1435,7 +1435,7 @@ export function AddDealDialog({
             keeps working once this is reused for editing notes on an
             existing deal, where other users' names would actually appear. */}
         {activeTab === "notes" && (
-          <div className="min-h-[420px]">
+          <div className="h-[620px] overflow-y-auto pr-1">
             {notes.length === 0 ? (
               <p className="text-[var(--color-text-muted)]">No notes yet. Add one below.</p>
             ) : (
