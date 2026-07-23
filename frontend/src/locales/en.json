@@ -54,6 +54,9 @@
       "navLabel": "Organization Chart",
       "editButton": "Edit Chart",
       "saveButton": "Save",
+      "autoArrangeButton": "Auto-arrange",
+      "collapseAriaLabel": "Collapse {name}'s branch",
+      "expandAriaLabel": "Expand {name}'s branch",
       "unplacedTitle": "Unplaced",
       "unplacedHint": "Employees not yet placed in the reporting structure. Placement is done from the chart's edit mode.",
       "unplacedDragHint": "Drag an employee onto the canvas, then draw a line from their manager down to them.",
@@ -279,6 +282,7 @@
       "saveNotesButton": "Save Notes",
       "historyLabel": "History",
       "historyCreatedEntry": "Created",
+      "historyCreatedByEntry": "Created by {actor}",
       "status": {
         "placed": "Placed"
       },

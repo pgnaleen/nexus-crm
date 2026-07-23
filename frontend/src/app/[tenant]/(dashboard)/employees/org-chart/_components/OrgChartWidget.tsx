@@ -58,6 +58,11 @@ const NO_DEPARTMENT_COLOR = "#64748b";
 type EmployeeNodeData = {
   employee: OrgChartEmployeeResponse;
   color: string;
+  // Story 1.9 -- branch collapse. Present only on cards with direct
+  // reports; toggling hides/shows the whole subtree beneath this card.
+  reportCount?: number;
+  isCollapsed?: boolean;
+  onToggleCollapse?: (employeeId: string) => void;
   [key: string]: unknown;
 };
 
@@ -85,14 +90,34 @@ function CompanyNode({ data }: NodeProps<Node<CompanyNodeData>>) {
 }
 
 function EmployeeNode({ data }: NodeProps<Node<EmployeeNodeData>>) {
-  const { employee, color } = data;
+  const { employee, color, reportCount, isCollapsed, onToggleCollapse } = data;
   return (
     <div
-      className="flex w-[230px] items-center gap-2.5 rounded-xl border border-[var(--color-border)] bg-white px-3 py-2.5 shadow-sm"
+      className="relative flex w-[230px] items-center gap-2.5 rounded-xl border border-[var(--color-border)] bg-white px-3 py-2.5 shadow-sm"
       style={{ borderLeft: `4px solid ${color}` }}
     >
       <Handle type="target" position={Position.Top} style={{ background: color }} />
       <Handle type="source" position={Position.Bottom} style={{ background: color }} />
+      {/* Story 1.9 -- collapse/expand control, only on cards with reports.
+          Collapsed state shows the hidden-report count as the indicator. */}
+      {typeof reportCount === "number" && reportCount > 0 && onToggleCollapse && (
+        <button
+          type="button"
+          className="absolute -bottom-2.5 left-1/2 z-10 flex h-5 min-w-5 -translate-x-1/2 items-center justify-center rounded-full border border-[var(--color-border)] bg-white px-1 text-[10px] font-bold shadow-sm transition-colors hover:bg-[#f1f5f9]"
+          style={{ color }}
+          aria-label={
+            isCollapsed
+              ? t("employees.orgChart.expandAriaLabel", { name: employee.fullName })
+              : t("employees.orgChart.collapseAriaLabel", { name: employee.fullName })
+          }
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleCollapse(employee.id);
+          }}
+        >
+          {isCollapsed ? `+${reportCount}` : "−"}
+        </button>
+      )}
       {employee.profilePhotoUrl ? (
         <img
           src={resolveUploadUrl(employee.profilePhotoUrl)}
@@ -137,11 +162,15 @@ function DepartmentAnchorNode({ data }: NodeProps<Node<DepartmentNodeData>>) {
 
 const NODE_TYPES = { company: CompanyNode, employee: EmployeeNode, departmentAnchor: DepartmentAnchorNode };
 
+// Story 1.9 -- Auto-arrange reuses this too. Department anchors are
+// deliberately NOT laid out (dagre would pile the disconnected nodes into a
+// corner); they keep whatever position they were dropped at.
 function layoutNodes(nodes: Node[], edges: Edge[]): Node[] {
   const graph = new dagre.graphlib.Graph();
   graph.setDefaultEdgeLabel(() => ({}));
   graph.setGraph({ rankdir: "TB", nodesep: 40, ranksep: 70 });
   for (const node of nodes) {
+    if (node.type === "departmentAnchor") continue;
     graph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
   }
   for (const edge of edges) {
@@ -149,6 +178,7 @@ function layoutNodes(nodes: Node[], edges: Edge[]): Node[] {
   }
   dagre.layout(graph);
   return nodes.map((node) => {
+    if (node.type === "departmentAnchor") return node;
     const position = graph.node(node.id);
     return {
       ...node,
@@ -251,6 +281,47 @@ function OrgChartInner({ companyName, employees: initialEmployees, departments, 
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
 
+  // Story 1.9 -- collapsed managers: their whole subtree is hidden (nodes
+  // AND edges), and their card shows the hidden-report count.
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+
+  const childrenOf = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const edge of edges) {
+      if (edge.source === COMPANY_NODE_ID) continue;
+      const list = map.get(edge.source) ?? [];
+      list.push(edge.target);
+      map.set(edge.source, list);
+    }
+    return map;
+  }, [edges]);
+
+  const hiddenIds = useMemo(() => {
+    const hidden = new Set<string>();
+    for (const collapsedId of collapsedIds) {
+      const queue = [...(childrenOf.get(collapsedId) ?? [])];
+      while (queue.length > 0) {
+        const id = queue.pop()!;
+        if (hidden.has(id)) continue;
+        hidden.add(id);
+        queue.push(...(childrenOf.get(id) ?? []));
+      }
+    }
+    return hidden;
+  }, [collapsedIds, childrenOf]);
+
+  const toggleCollapse = useCallback((employeeId: string) => {
+    setCollapsedIds((current) => {
+      const next = new Set(current);
+      if (next.has(employeeId)) {
+        next.delete(employeeId);
+      } else {
+        next.add(employeeId);
+      }
+      return next;
+    });
+  }, []);
+
   // Employees currently represented by a canvas node.
   const onCanvasIds = useMemo(() => new Set(nodes.filter((node) => node.type === "employee").map((n) => n.id)), [nodes]);
   const unplaced = employees.filter((employee) => !onCanvasIds.has(employee.id));
@@ -259,6 +330,13 @@ function OrgChartInner({ companyName, employees: initialEmployees, departments, 
     const rebuilt = buildFromBaseline(data);
     setNodes(rebuilt.nodes);
     setEdges(rebuilt.edges);
+    setCollapsedIds(new Set());
+  }
+
+  // Story 1.9 -- Auto-arrange (edit mode): snap back to the automatic
+  // top-down dagre layout. A layout reset only, never a save.
+  function handleAutoArrange() {
+    setNodes((current) => layoutNodes(current, edges));
   }
 
   // ── Edit-mode interactions ────────────────────────────────────────────
@@ -461,6 +539,9 @@ function OrgChartInner({ companyName, employees: initialEmployees, departments, 
           )}
           {isEditMode && (
             <>
+              <Button type="button" variant="secondary" onClick={handleAutoArrange} disabled={isSaving}>
+                {t("employees.orgChart.autoArrangeButton")}
+              </Button>
               <Button type="button" variant="secondary" onClick={handleCancel} disabled={isSaving}>
                 {t("common.actions.cancel")}
               </Button>
@@ -483,10 +564,26 @@ function OrgChartInner({ companyName, employees: initialEmployees, departments, 
           onDragOver={onDragOver}
         >
           <ReactFlow
-            nodes={nodes.map((node) =>
-              node.type === "company" ? node : { ...node, draggable: isEditMode },
-            )}
-            edges={edges}
+            nodes={nodes.map((node) => {
+              if (node.type === "company") return node;
+              if (node.type !== "employee") return { ...node, draggable: isEditMode };
+              const reportCount = childrenOf.get(node.id)?.length ?? 0;
+              return {
+                ...node,
+                draggable: isEditMode,
+                hidden: hiddenIds.has(node.id),
+                data: {
+                  ...node.data,
+                  reportCount,
+                  isCollapsed: collapsedIds.has(node.id),
+                  onToggleCollapse: toggleCollapse,
+                },
+              };
+            })}
+            edges={edges.map((edge) => ({
+              ...edge,
+              hidden: hiddenIds.has(edge.target) || hiddenIds.has(edge.source),
+            }))}
             nodeTypes={NODE_TYPES}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
