@@ -6,6 +6,7 @@ import type { DepartmentPickerResponse, EmployeeListItemResponse } from "@orelia
 import { Button } from "@/components/ui/Button";
 import { SearchIcon } from "@/components/ui/icons";
 import { t } from "@/lib/i18n";
+import { EmployeeDetailDialog } from "./EmployeeDetailDialog";
 import { EmployeeFormDialog } from "./EmployeeFormDialog";
 
 interface EmployeesWidgetProps {
@@ -25,6 +26,7 @@ export function EmployeesWidget({ employees: initialEmployees, permissions, depa
   const [employees, setEmployees] = useState(initialEmployees);
   const [search, setSearch] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [viewingEmployeeId, setViewingEmployeeId] = useState<string | null>(null);
 
   const canView = permissions.includes(PERMISSIONS.EMPLOYEES_VIEW);
   const canCreate = permissions.includes(PERMISSIONS.EMPLOYEES_CREATE);
@@ -110,7 +112,8 @@ export function EmployeesWidget({ employees: initialEmployees, permissions, depa
                 return (
                   <tr
                     key={employee.id}
-                    className="transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f7f8fc]"
+                    className="cursor-pointer transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f1f5f9]"
+                    onClick={() => setViewingEmployeeId(employee.id)}
                   >
                     <td className="border-b border-[var(--color-border)] p-3 font-medium text-crm-text">
                       {employee.fullName}
@@ -150,6 +153,14 @@ export function EmployeesWidget({ employees: initialEmployees, permissions, depa
           canViewSensitive={canViewSensitive}
           onClose={() => setIsAddOpen(false)}
           onSaved={handleSaved}
+        />
+      )}
+
+      {viewingEmployeeId && (
+        <EmployeeDetailDialog
+          employeeId={viewingEmployeeId}
+          canViewSensitive={canViewSensitive}
+          onClose={() => setViewingEmployeeId(null)}
         />
       )}
     </div>

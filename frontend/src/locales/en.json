@@ -38,6 +38,7 @@
     "addButton": "Add Employee",
     "dialog": {
       "addTitle": "Add Employee",
+      "viewTitle": "Employee Details",
       "saveButton": "Create Employee",
       "tabs": {
         "personal": "Personal",
@@ -77,7 +78,9 @@
       "contact": {
         "email": "Email",
         "mobileNo": "Mobile number",
-        "officeNo": "Office number"
+        "officeNo": "Office number",
+        "linkedAccount": "Linked login account",
+        "notLinked": "Not linked to any login account"
       },
       "confidential": {
         "notice": "Only visible to users with sensitive-data access.",
@@ -106,7 +109,8 @@
       "errors": {
         "photoUploadFailed": "Failed to upload photo",
         "cvUploadFailed": "Failed to upload CV",
-        "saveFailed": "Failed to create employee"
+        "saveFailed": "Failed to create employee",
+        "loadFailed": "Failed to load employee details"
       }
     }
   },

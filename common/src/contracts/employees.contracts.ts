@@ -49,3 +49,43 @@ export interface CreateEmployeeRequest {
   nicPassportNumber?: string;
   baseSalary?: number;
 }
+
+// Story 1.3 (View Employee Details) -- full read-only record, same tab
+// grouping as CreateEmployeeRequest (Personal/Employment/Contact/
+// Confidential) plus which login account this employee is linked to
+// (read-only here -- the link itself is only ever created/changed from User
+// Management, Story 1.6). nicPassportNumber/baseSalary are nulled server-side
+// for any caller without EMPLOYEES_VIEW_SENSITIVE, regardless of whether the
+// employee actually has values set -- same posture as the create endpoint.
+export interface EmployeeDetailResponse {
+  id: string;
+  // Personal
+  fullName: string;
+  dateOfBirth: string | null;
+  gender: Gender | null;
+  nationality: string | null;
+  bio: string | null;
+  profilePhotoUrl: string | null;
+  // Employment
+  employeeCode: string | null;
+  title: EmployeeTitle | null;
+  currentDesignation: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  employmentType: EmploymentType | null;
+  employmentStatus: EmploymentStatus | null;
+  dateOfJoined: string | null;
+  primaryLocation: string | null;
+  baseCountry: string | null;
+  clearanceLevel: ClearanceLevel | null;
+  cvUrl: string | null;
+  // Contact
+  employeeEmail: string | null;
+  mobileNo: string | null;
+  officeNo: string | null;
+  // Linked login account -- read-only, set via User Management (Story 1.6)
+  linkedUser: { id: string; username: string; displayName: string } | null;
+  // Confidential -- null unless the caller holds EMPLOYEES_VIEW_SENSITIVE
+  nicPassportNumber: string | null;
+  baseSalary: number | null;
+}
