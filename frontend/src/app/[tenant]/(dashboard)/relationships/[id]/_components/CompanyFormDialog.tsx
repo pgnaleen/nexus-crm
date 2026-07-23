@@ -712,8 +712,8 @@ export function CompanyFormDialog({
         {activeTab === "contacts" && (
           <div>
             {mode === "edit" && (
-              <div style={{ marginBottom: "20px" }}>
-                <p style={{ fontWeight: 600, marginBottom: "8px" }}>Existing contacts</p>
+              <div className="mb-5">
+                <p className="mb-2 text-[13.5px] font-semibold text-crm-text">Existing contacts</p>
                 {isLoadingExistingContacts ? (
                   <Spinner size={20} />
                 ) : existingContacts.length === 0 ? (
@@ -723,30 +723,18 @@ export function CompanyFormDialog({
                     {existingContacts.map((existing) => (
                       <div key={existing.id} className="deal-contact-row">
                         <div className="deal-contact-fields">
-                          <div className="field-row">
-                            <div className="field">
-                              <label>Full name</label>
-                              <p>{existing.fullName}</p>
-                            </div>
-                            <div className="field">
-                              <label>Title</label>
-                              <p>{existing.title || "—"}</p>
-                            </div>
+                          <div className="grid grid-cols-2 gap-3.5">
+                            <TextField label="Full name" value={existing.fullName} disabled />
+                            <TextField label="Title" value={existing.title || "—"} disabled />
                           </div>
-                          <div className="field-row">
-                            <div className="field">
-                              <label>Email</label>
-                              <p>{existing.email || "—"}</p>
-                            </div>
-                            <div className="field">
-                              <label>Mobile number</label>
-                              <p>{existing.mobileNo || "—"}</p>
-                            </div>
+                          <div className="grid grid-cols-2 gap-3.5">
+                            <TextField label="Email" value={existing.email || "—"} disabled />
+                            <TextField label="Mobile number" value={existing.mobileNo || "—"} disabled />
                           </div>
                         </div>
                       </div>
                     ))}
-                    <p style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>
+                    <p className="text-xs text-[var(--color-text-muted)]">
                       Editing or removing an existing contact isn't available here yet — add a
                       replacement below if their details changed.
                     </p>
