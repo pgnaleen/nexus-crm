@@ -145,6 +145,12 @@ export class Deal extends AuditedTenantEntity {
   @Column({ type: "jsonb", nullable: true })
   competitors?: CompetitorEntry[];
 
-  // tenderDetailsId deferred until deal_tender_details exists (Tender
-  // management) — same dependency pattern as Teams_Employee_Map.
+  // Tender tab in the Add/Edit Deal dialog only shows when this is true.
+  // The richer tender-specific fields (reference number, issuing body,
+  // submission deadline, etc.) will live on their own DealTenderDetails
+  // record once the field list for that tab is finalized — this flag is
+  // deliberately standalone rather than derived from that relation existing,
+  // since nothing writes to deal_tender_details yet.
+  @Column({ default: false })
+  isTender!: boolean;
 }

@@ -30,6 +30,7 @@ export interface CreateDealRequest {
   externalCosts?: number;
   expectedCloseDate?: string;
   competitors?: CompetitorEntryRequest[];
+  isTender?: boolean;
 }
 
 export type UpdateDealRequest = Partial<Omit<CreateDealRequest, "companyId">>;

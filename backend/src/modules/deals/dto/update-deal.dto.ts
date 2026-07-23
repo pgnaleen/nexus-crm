@@ -2,6 +2,7 @@ import { DealType, UpdateDealRequest } from "@orelia/common";
 import { Type } from "class-transformer";
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsNumber,
@@ -106,4 +107,8 @@ export class UpdateDealDto implements UpdateDealRequest {
   @ValidateNested({ each: true })
   @Type(() => CompetitorEntryDto)
   competitors?: CompetitorEntryDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  isTender?: boolean;
 }

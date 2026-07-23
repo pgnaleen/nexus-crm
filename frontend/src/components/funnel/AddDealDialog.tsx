@@ -86,6 +86,7 @@ interface NoteEntry {
 
 interface DetailsFormState {
   name: string;
+  isTender: boolean;
   sourceId: string;
   primaryContactId: string;
   // Silently defaulted (stages[0]), same treatment as dealType below -- the
@@ -133,7 +134,7 @@ function parsePartyValue(value: string): OtherParty | null {
   return { kind, id };
 }
 
-type TabId = "dealInfo" | "delivery" | "costing" | "documents" | "notes" | "competition" | "team";
+type TabId = "dealInfo" | "tender" | "delivery" | "costing" | "documents" | "notes" | "competition" | "team";
 
 // Nested "create a new company/person" flow, reusing the exact same dialogs
 // the Relationships section uses -- a new party still has to be tagged with
@@ -229,6 +230,7 @@ export function AddDealDialog({
   const [contacts, setContacts] = useState(initialContacts);
   const [values, setValues] = useState<DetailsFormState>(() => ({
     name: deal?.name ?? "",
+    isTender: deal?.isTender ?? false,
     sourceId:
       deal?.sourceId ?? (dealSources.some((s) => s.id === defaultDealSourceId) ? (defaultDealSourceId ?? "") : ""),
     primaryContactId: deal?.primaryContactId ?? "",
@@ -292,6 +294,15 @@ export function AddDealDialog({
       cancelled = true;
     };
   }, [isEdit, deal]);
+
+  // Unchecking "This is a Tender deal" drops the Tender tab from tabDefs --
+  // if it was the active tab, fall back to Deal Information rather than
+  // leaving the dialog stuck on a tab with no button left to reach it.
+  useEffect(() => {
+    if (!values.isTender && activeTab === "tender") {
+      setActiveTab("dealInfo");
+    }
+  }, [values.isTender, activeTab]);
 
   function setField<K extends keyof DetailsFormState>(field: K, value: DetailsFormState[K]) {
     setValues((current) => ({ ...current, [field]: value }));
@@ -480,6 +491,7 @@ export function AddDealDialog({
       try {
         const updated = await updateDeal(deal.id, {
           name: values.name.trim(),
+          isTender: values.isTender,
           // Customer itself is locked, but which contact-at-that-company is
           // primary is still a legitimate, editable field.
           primaryContactId: otherParty?.kind === "company" ? values.primaryContactId || undefined : undefined,
@@ -536,6 +548,7 @@ export function AddDealDialog({
     try {
       createdDeal = await createDeal({
         name: values.name.trim(),
+        isTender: values.isTender,
         dealType: DEFAULT_DEAL_TYPE,
         companyId,
         contactId,
@@ -647,6 +660,9 @@ export function AddDealDialog({
   const documentCount = isEdit ? existingDocuments.length : documents.length;
   const tabDefs: [TabId, string][] = [
     ["dealInfo", "Deal Information"],
+    // Only shown once "This is a Tender deal" is checked on the Deal
+    // Information tab.
+    ...(values.isTender ? ([["tender", "Tender"]] as [TabId, string][]) : []),
     ["delivery", "Delivery"],
     ["costing", "Costing"],
     ["documents", `Documents${documentCount > 0 ? ` (${documentCount})` : ""}`],
@@ -691,6 +707,15 @@ export function AddDealDialog({
               placeholder="e.g. TechNova Inc. — Platform Rollout"
               onChange={(e) => setField("name", e.target.value)}
             />
+
+            <label className="mb-[18px] flex cursor-pointer items-center gap-2.5 text-[13.5px] text-crm-text">
+              <input
+                type="checkbox"
+                checked={values.isTender}
+                onChange={(e) => setField("isTender", e.target.checked)}
+              />
+              <span>This is a Tender deal</span>
+            </label>
 
             {errors.currentStageId && (
               <p className="mb-[18px] mt-[-8px] text-[12.5px] text-[var(--color-danger)]">
@@ -798,6 +823,15 @@ export function AddDealDialog({
                 searchPlaceholder="Search by name..."
               />
             </div>
+          </div>
+        )}
+
+        {/* ── Tender ────────────────────────────────────── */}
+        {activeTab === "tender" && (
+          <div className="min-h-[420px]">
+            <p className="text-[13.5px] text-[var(--color-text-muted)]">
+              Tender details form — fields coming soon.
+            </p>
           </div>
         )}
 

@@ -136,6 +136,7 @@ export class DealsController {
       externalCosts: deal.externalCosts ?? null,
       expectedCloseDate: deal.expectedCloseDate ?? null,
       competitors: deal.competitors ?? null,
+      isTender: deal.isTender,
     };
   }
 }
