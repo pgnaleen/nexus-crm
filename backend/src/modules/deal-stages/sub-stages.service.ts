@@ -30,10 +30,25 @@ export class SubStagesService {
     return subStage;
   }
 
+  // Scoped to the same Main Stage, not globally -- sortOrder only has to be
+  // unambiguous among the sub-stages of one funnel column, per how
+  // SubStagesWidget/FunnelBoard render and sort them.
+  private async assertSortOrderAvailable(
+    mainStageId: string,
+    sortOrder: number,
+    excludeId?: string,
+  ): Promise<void> {
+    const existing = await this.subStagesRepo.findOneScoped({ where: { mainStageId, sortOrder } });
+    if (existing && existing.id !== excludeId) {
+      throw new ConflictException(`Sort order ${sortOrder} is already used by "${existing.name}" under this main stage`);
+    }
+  }
+
   async create(dto: CreateSubStageDto, userId: string): Promise<SubStage> {
     // Ensures mainStageId genuinely belongs to the current tenant, not just
     // any UUID that happens to exist in main_stages across all tenants.
     await this.mainStagesService.findOneOrFail(dto.mainStageId);
+    await this.assertSortOrderAvailable(dto.mainStageId, dto.sortOrder);
     const subStage = this.subStagesRepo.createScoped({ ...dto, createdBy: userId });
     return this.subStagesRepo.saveScoped(subStage);
   }
@@ -42,6 +57,13 @@ export class SubStagesService {
     const subStage = await this.findOneOrFail(id);
     if (dto.mainStageId) {
       await this.mainStagesService.findOneOrFail(dto.mainStageId);
+    }
+    if (dto.sortOrder !== undefined || dto.mainStageId !== undefined) {
+      await this.assertSortOrderAvailable(
+        dto.mainStageId ?? subStage.mainStageId,
+        dto.sortOrder ?? subStage.sortOrder,
+        id,
+      );
     }
     Object.assign(subStage, dto, { updatedBy: userId });
     await this.subStagesRepo.saveScoped(subStage);

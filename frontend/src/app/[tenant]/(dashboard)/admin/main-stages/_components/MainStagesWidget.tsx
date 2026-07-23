@@ -256,6 +256,7 @@ export function MainStagesWidget({
         <MainStageFormDialog
           mode={dialogState.mode}
           mainStage={dialogState.mode === "edit" ? dialogState.mainStage : undefined}
+          mainStages={stages}
           onClose={() => setDialogState(null)}
           onSaved={handleSaved}
         />

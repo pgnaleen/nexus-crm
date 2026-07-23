@@ -32,6 +32,9 @@ interface SubStageFormDialogProps {
   mode: "create" | "edit" | "view";
   subStage?: DealStageResponse;
   mainStages: MainStageResponse[];
+  // Every other Sub Stage, used to reject a sort order already taken by a
+  // sibling under the same Main Stage (excluding this one in edit mode).
+  subStages: DealStageResponse[];
   onClose: () => void;
   onSaved: (subStage: DealStageResponse) => void;
 }
@@ -40,6 +43,7 @@ export function SubStageFormDialog({
   mode,
   subStage,
   mainStages,
+  subStages,
   onClose,
   onSaved,
 }: SubStageFormDialogProps) {
@@ -62,6 +66,22 @@ export function SubStageFormDialog({
     const nameError = validate(values.name, [required(), minLength(1)]);
     if (nameError) nextErrors.name = nameError;
     if (!values.mainStageId) nextErrors.mainStageId = "Select a main stage";
+
+    const sortParsed = parseInt(values.sortOrder, 10);
+    if (isNaN(sortParsed)) {
+      nextErrors.sortOrder = "Must be a valid number";
+    } else if (sortParsed < 0) {
+      nextErrors.sortOrder = "Sort order can't be negative";
+    } else {
+      const conflict = subStages.find(
+        (row) =>
+          row.id !== subStage?.id && row.mainStageId === values.mainStageId && row.sortOrder === sortParsed,
+      );
+      if (conflict) {
+        nextErrors.sortOrder = `Sort order ${sortParsed} is already used by "${conflict.name}" under this main stage`;
+      }
+    }
+
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   }
@@ -141,7 +161,9 @@ export function SubStageFormDialog({
           label="Sort order"
           name="sortOrder"
           type="number"
+          min="0"
           value={values.sortOrder}
+          error={errors.sortOrder}
           disabled={isViewOnly}
           onChange={(e) => setField("sortOrder", e.target.value)}
         />

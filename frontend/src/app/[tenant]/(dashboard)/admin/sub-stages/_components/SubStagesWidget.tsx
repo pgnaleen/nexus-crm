@@ -267,6 +267,7 @@ export function SubStagesWidget({
           mode={dialogState.mode}
           subStage={dialogState.mode === "edit" ? dialogState.subStage : undefined}
           mainStages={mainStages}
+          subStages={subStages}
           onClose={() => setDialogState(null)}
           onSaved={handleSaved}
         />
