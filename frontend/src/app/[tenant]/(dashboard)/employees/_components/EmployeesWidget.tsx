@@ -2,13 +2,16 @@
 
 import { useState } from "react";
 import { PERMISSIONS } from "@orelia/common";
-import type { EmployeeListItemResponse } from "@orelia/common";
+import type { DepartmentPickerResponse, EmployeeListItemResponse } from "@orelia/common";
+import { Button } from "@/components/ui/Button";
 import { SearchIcon } from "@/components/ui/icons";
 import { t } from "@/lib/i18n";
+import { EmployeeFormDialog } from "./EmployeeFormDialog";
 
 interface EmployeesWidgetProps {
   employees: EmployeeListItemResponse[];
   permissions: string[];
+  departments: DepartmentPickerResponse[];
 }
 
 const STATUS_COLORS: Record<string, { background: string; color: string }> = {
@@ -18,14 +21,22 @@ const STATUS_COLORS: Record<string, { background: string; color: string }> = {
   resigned: { background: "#f3f4f6", color: "#6b7280" },
 };
 
-export function EmployeesWidget({ employees, permissions }: EmployeesWidgetProps) {
+export function EmployeesWidget({ employees: initialEmployees, permissions, departments }: EmployeesWidgetProps) {
+  const [employees, setEmployees] = useState(initialEmployees);
   const [search, setSearch] = useState("");
+  const [isAddOpen, setIsAddOpen] = useState(false);
 
   const canView = permissions.includes(PERMISSIONS.EMPLOYEES_VIEW);
+  const canCreate = permissions.includes(PERMISSIONS.EMPLOYEES_CREATE);
+  const canViewSensitive = permissions.includes(PERMISSIONS.EMPLOYEES_VIEW_SENSITIVE);
 
   const filteredEmployees = employees.filter(
     (employee) => !search || employee.fullName.toLowerCase().includes(search.toLowerCase()),
   );
+
+  function handleSaved(employee: EmployeeListItemResponse) {
+    setEmployees((current) => [...current, employee].sort((a, b) => a.fullName.localeCompare(b.fullName)));
+  }
 
   return (
     <div className="flex flex-col">
@@ -34,6 +45,11 @@ export function EmployeesWidget({ employees, permissions }: EmployeesWidgetProps
           <h1 className="m-0 mb-0.5 text-[26px] font-bold text-crm-text">{t("employees.title")}</h1>
           <p className="m-0 text-[13.5px] text-[var(--color-text-muted)]">{t("employees.subtitle")}</p>
         </div>
+        {canCreate && (
+          <Button type="button" onClick={() => setIsAddOpen(true)}>
+            {t("employees.addButton")}
+          </Button>
+        )}
       </div>
 
       <div className="mb-6 flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[#f8fafc] px-4 py-3">
@@ -100,7 +116,7 @@ export function EmployeesWidget({ employees, permissions }: EmployeesWidgetProps
                       {employee.fullName}
                     </td>
                     <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
-                      {employee.title ?? t("employees.notSet")}
+                      {employee.title ? t(`employees.titles.${employee.title}`) : t("employees.notSet")}
                     </td>
                     <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
                       {employee.departmentName ?? t("employees.notSet")}
@@ -127,6 +143,15 @@ export function EmployeesWidget({ employees, permissions }: EmployeesWidgetProps
           </table>
         )}
       </div>
+
+      {isAddOpen && (
+        <EmployeeFormDialog
+          departments={departments}
+          canViewSensitive={canViewSensitive}
+          onClose={() => setIsAddOpen(false)}
+          onSaved={handleSaved}
+        />
+      )}
     </div>
   );
 }

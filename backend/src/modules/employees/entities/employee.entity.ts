@@ -1,4 +1,4 @@
-import { ClearanceLevel, EmploymentStatus, EmploymentType, Gender } from "@orelia/common";
+import { ClearanceLevel, EmployeeTitle, EmploymentStatus, EmploymentType, Gender } from "@orelia/common";
 import { Column, Entity, JoinColumn, ManyToOne } from "typeorm";
 import { AuditedTenantEntity } from "../../../core/tenant";
 import { Department } from "../../departments/entities/department.entity";
@@ -9,8 +9,10 @@ export class Employee extends AuditedTenantEntity {
   @Column({ nullable: true })
   employeeCode?: string;
 
-  @Column({ nullable: true })
-  title?: string;
+  // Salutation (Mr/Mrs/Ms/Miss/Dr) -- job title lives on currentDesignation,
+  // not here.
+  @Column({ type: "enum", enum: EmployeeTitle, nullable: true })
+  title?: EmployeeTitle;
 
   @Column()
   fullName!: string;

@@ -1,10 +1,10 @@
-import { ClearanceLevel, EmploymentStatus, EmploymentType, Gender } from "../enums";
+import { ClearanceLevel, EmployeeTitle, EmploymentStatus, EmploymentType, Gender } from "../enums";
 
 export interface IEmployee {
   id: string;
   tenantId: string;
   employeeCode?: string | null;
-  title?: string | null;
+  title?: EmployeeTitle | null;
   fullName: string;
   dateOfBirth?: string | null;
   gender?: Gender | null;

@@ -50,8 +50,12 @@ export class PickersController {
     private readonly industriesService: IndustriesService,
   ) {}
 
+  // Also consumed by the Add Employee form's department dropdown (Story 1.2)
+  // -- an EMPLOYEES_CREATE holder with no Deals access would otherwise 403
+  // here, same class of gap already fixed for companies/contacts/employees
+  // above. Add EMPLOYEES_UPDATE too once Update Employee (Story 1.4) exists.
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.DEALS_VIEW])
+  @RequirePermission([PERMISSIONS.DEALS_VIEW, PERMISSIONS.EMPLOYEES_CREATE])
   @Get("departments")
   async findDepartments(): Promise<DepartmentPickerResponse[]> {
     this.logger.debug("GET /pickers/departments called");

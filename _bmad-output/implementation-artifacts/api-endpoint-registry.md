@@ -41,7 +41,7 @@ including which ones had a real pre-existing permission bug fixed during the mov
 
 | # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | GET | `/pickers/departments` | System-Internal (Picker) | `DEALS_VIEW` | Lightweight active-department list for a dropdown/filter (e.g. Add Deal dialog, Funnel department filter) — **not** the admin section's own department list. | none | `DepartmentPickerResponse[]` → `{id, name}[]` | `pickers.controller.ts::findDepartments` → `departments.service.ts::findPicker` | `lib/pickers/server.ts::listDepartmentsPicker` — Funnel page, Deal detail page | ✅ | Moved from `GET /departments/picker`. Gating unchanged. |
+| 1 | GET | `/pickers/departments` | System-Internal (Picker) | `DEALS_VIEW` **or** `EMPLOYEES_CREATE` | Lightweight active-department list for a dropdown/filter (e.g. Add Deal dialog, Funnel department filter, Add Employee dialog's Employment tab). | none | `DepartmentPickerResponse[]` → `{id, name}[]` | `pickers.controller.ts::findDepartments` → `departments.service.ts::findPicker` | `lib/pickers/server.ts::listDepartmentsPicker` — Funnel page, Deal detail page, Add Employee dialog | ✅ | Moved from `GET /departments/picker`. **Bug fixed 2026-07-23**: was gated on `DEALS_VIEW` only — an `EMPLOYEES_CREATE` holder with no Deals access got an empty department dropdown in Add Employee. Add `EMPLOYEES_UPDATE` too once Update Employee (Story 1.4) exists. |
 | 2 | GET | `/pickers/companies` | System-Internal (Picker) | `DEALS_VIEW` **or** any of `RELATIONSHIP_VIEW/CREATE/UPDATE/DELETE` | Searchable company list for a dropdown/search-select (Add Deal dialog's company field, Relationship party "Add Company" form). | query: `search?` (name filter), `excludeId?` (omit one company) | `CompanyPickerResponse[]` → `{id, name, country\|null}[]` | `pickers.controller.ts::findCompanies` → `companies.service.ts::findPicker` | `lib/pickers/server.ts` + `lib/api/pickers.ts::listCompaniesPicker` — Funnel, Deal detail, AddDealDialog, Relationships page | ✅ | Moved from `GET /companies/picker`. **Bug fixed**: was gated on `RELATIONSHIP_*` only — a Deals-only user got an empty dropdown. Now includes `DEALS_VIEW`. |
 | 3 | GET | `/pickers/company-countries` | System-Internal (Picker) | `DEALS_VIEW` | Distinct list of country values already used by existing companies, for a country filter. | none | `string[]` | `pickers.controller.ts::findCompanyCountries` → `companies.service.ts::findCountries` | `lib/pickers/server.ts::listCompanyCountries` — Funnel page, Deal detail page | ✅ | Moved from `GET /companies/countries`. Gating unchanged. |
 | 4 | GET | `/pickers/contacts` | System-Internal (Picker) | `DEALS_VIEW` | Contact list for a dropdown (Add Deal dialog's contact field), optionally scoped to one company. | query: `companyId?` | `ContactPickerResponse[]` → `{id, fullName, companyId\|null}[]` | `pickers.controller.ts::findContacts` → `contacts.service.ts::findPicker` | `lib/pickers/server.ts` + `lib/api/pickers.ts::listContactsPicker` — Funnel, Deal detail, AddDealDialog | ✅ | Moved from `GET /contacts/picker`. **Bug fixed**: was gated on `CONTACTS_VIEW` — the resource's own admin permission, a direct rule violation, since it's only ever called by Deals-side users. Now `DEALS_VIEW`. |
@@ -176,17 +176,31 @@ can list them); the dropdown/filter listing used elsewhere in the app lives in
 
 ## Employees (`backend/src/modules/employees/employees.controller.ts`)
 
-Employee Management epic, Story 1.1 (Employee Directory view) — only endpoint so far. Response is
-`EmployeeListItemResponse`, a deliberately narrow directory-listing shape (id, fullName, title,
-departmentId/departmentName, employmentStatus) — excludes every Confidential field the `Employee`
-entity/`IEmployee` type carries (NIC/passport, base salary, etc.); those stay gated behind a
-separate permission once that story (1.2+, Confidential tab) is built. The dropdown/picker listing
-used elsewhere in the app (Deal owner field, Relationship party referral field) lives in
+Employee Management epic. Response is `EmployeeListItemResponse`, a deliberately narrow
+directory-listing shape (id, fullName, title, departmentId/departmentName, employmentStatus) —
+excludes every Confidential field the `Employee` entity/`IEmployee` type carries (NIC/passport,
+base salary, etc.), same shape used for both the list and the create response. The dropdown/picker
+listing used elsewhere in the app (Deal owner field, Relationship party referral field) lives in
 `PickersController` (`GET /pickers/employees`), not here — see the Pickers module section above.
 
 | # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | GET | `/employees` | RBAC | `EMPLOYEES_VIEW` | List every employee in the tenant (directory view). | none | `EmployeeListItemResponse[]` | `findAll` → `employees.service.ts::findAll` | `EmployeesWidget.tsx` | ✅ | **New 2026-07-23**, built with debug logging from day one. `EMPLOYEES_VIEW` is the only Employees permission that exists so far — `_CREATE`/`_UPDATE`/`_DELETE` are added alongside their own stories rather than pre-seeded ahead of any endpoint enforcing them (avoiding the dead-permission pattern found earlier in `COMPANIES_*`/`CONTACTS_*`). Sidebar's "Human Resources" group is now gated on this permission — previously visible to every user regardless of permission. |
+| 1 | GET | `/employees` | RBAC | `EMPLOYEES_VIEW` | List every employee in the tenant (directory view). | none | `EmployeeListItemResponse[]` | `findAll` → `employees.service.ts::findAll` | `EmployeesWidget.tsx` | ✅ | **2026-07-23**, built with debug logging from day one. Sidebar's "Human Resources" group is now gated on this permission — previously visible to every user regardless of permission. |
+| 2 | POST | `/employees` | RBAC | `EMPLOYEES_CREATE` | Create a new employee (Story 1.2) — Personal, Employment, Contact tabs always; Confidential tab (NIC/passport, base salary) only if the caller also holds `EMPLOYEES_VIEW_SENSITIVE`. | body: `CreateEmployeeRequest` — fullName (required) + ~20 optional fields across the four tabs | `EmployeeListItemResponse` | `create` → `employees.service.ts::create` | `EmployeeFormDialog.tsx` (via `EmployeesWidget.tsx`'s "Add Employee") | ✅ | **New 2026-07-23**. `EMPLOYEES_VIEW_SENSITIVE` replaces the `EMPLOYEES_MANAGE_SENSITIVE` name used in the original `epics-hr.md` story text — renamed to satisfy this project's "no `_MANAGE` key" rule. The controller independently strips `nicPassportNumber`/`baseSalary` for any caller lacking that permission, regardless of request body content — never trusts the frontend's tab-hiding alone. `reportingManagerId` is deliberately never accepted here; every new employee starts unplaced, set exclusively via the future Organization Chart (Story 1.8). Records an `audit_logs` insert (`entityType: "employee"`). **Shape change 2026-07-23**: `title` is now `EmployeeTitle` (`mr`/`mrs`/`ms`/`miss`/`dr`), not free text — it's a salutation, distinct from `currentDesignation` (the actual job title/designation field). Migration `1784700000005-AlterEmployeesTitleToEnum.ts` converts the column and nulls out any pre-existing value that doesn't match one of the five enum values. |
+
+## Uploads (`backend/src/modules/uploads/uploads.controller.ts`)
+
+Each route is a narrow, single-purpose file upload returning `{url}` (a backend-relative path,
+resolved client-side via `resolveUploadUrl()`) — no DB record, the caller stores the URL string on
+whatever entity field needs it (e.g. `Company.logo`, `Employee.profilePhotoUrl`/`s3Key`). Only the
+two Story 1.2 routes are documented here — `POST /uploads/logo` predates this registry's coverage
+and isn't retrofitted as a side effect of unrelated work, per this project's own incremental-rollout
+precedent.
+
+| # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | POST | `/uploads/employee-photo` | RBAC | `EMPLOYEES_CREATE` | Upload an employee's profile photo (Personal tab). | multipart: `file` (PNG/JPEG/WebP, ≤5MB) | `UploadResponse` → `{url}` | `uploadEmployeePhoto` (no service layer — file-system + multer only, same pattern as the pre-existing logo upload) | `EmployeeFormDialog.tsx` | ⚠️ | **New 2026-07-23**. No debug logging (matches the pre-existing `uploadLogo` precedent this route was copied from — neither has a service layer to log from). Gated on `EMPLOYEES_CREATE` only; broaden to include `EMPLOYEES_UPDATE` once Update Employee (Story 1.4) exists. SVG deliberately excluded from the allow-list (unlike logo's), since SVG-upload XSS is already a tracked, unresolved finding for the logo route (`deferred-work.md`) — not repeated here. |
+| 2 | POST | `/uploads/employee-cv` | RBAC | `EMPLOYEES_CREATE` | Upload an employee's CV (Employment tab). | multipart: `file` (PDF/DOC/DOCX, ≤20MB) | `UploadResponse` → `{url}` | `uploadEmployeeCv` | `EmployeeFormDialog.tsx` | ⚠️ | **New 2026-07-23**. Same notes as #1. |
 
 ## Deal Sources (`backend/src/modules/deal-sources/deal-sources.controller.ts`)
 
