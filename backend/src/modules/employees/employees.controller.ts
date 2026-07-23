@@ -1,5 +1,5 @@
-import { EmployeeListItemResponse, PERMISSIONS } from "@orelia/common";
-import { Body, Controller, Get, Logger, Post, UseGuards } from "@nestjs/common";
+import { EmployeeDetailResponse, EmployeeListItemResponse, PERMISSIONS } from "@orelia/common";
+import { Body, Controller, Get, Logger, Param, ParseUUIDPipe, Post, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
@@ -45,8 +45,7 @@ export class EmployeesController {
       // Never trust the frontend alone to hide the Confidential tab -- a
       // caller without EMPLOYEES_VIEW_SENSITIVE has these fields silently
       // stripped here regardless of what the request body contains.
-      const permissions = await this.rbacService.getPermissionsForUser(user.sub);
-      const hasSensitiveAccess = permissions.includes(PERMISSIONS.EMPLOYEES_VIEW_SENSITIVE);
+      const hasSensitiveAccess = await this.hasSensitiveAccess(user.sub);
       if (!hasSensitiveAccess) {
         this.logger.debug("POST /employees: caller lacks EMPLOYEES_VIEW_SENSITIVE, stripping confidential fields");
         dto.nicPassportNumber = undefined;
@@ -62,6 +61,35 @@ export class EmployeesController {
     }
   }
 
+  // Story 1.3 -- full read-only record. nicPassportNumber/baseSalary are
+  // nulled here for a caller without EMPLOYEES_VIEW_SENSITIVE regardless of
+  // what's actually stored, same posture as the create endpoint's stripping.
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.EMPLOYEES_VIEW])
+  @Get(":id")
+  async findOne(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<EmployeeDetailResponse> {
+    this.logger.debug(`GET /employees/${id} called by ${user.sub}`);
+    try {
+      const [employee, hasSensitiveAccess] = await Promise.all([
+        this.employeesService.findOneOrFail(id),
+        this.hasSensitiveAccess(user.sub),
+      ]);
+      this.logger.debug(`GET /employees/${id} succeeded (sensitiveAccess=${hasSensitiveAccess})`);
+      return this.toDetailResponse(employee, hasSensitiveAccess);
+    } catch (err) {
+      this.logger.error(`GET /employees/${id} failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  private async hasSensitiveAccess(userId: string): Promise<boolean> {
+    const permissions = await this.rbacService.getPermissionsForUser(userId);
+    return permissions.includes(PERMISSIONS.EMPLOYEES_VIEW_SENSITIVE);
+  }
+
   private toListItemResponse(employee: Employee): EmployeeListItemResponse {
     return {
       id: employee.id,
@@ -70,6 +98,38 @@ export class EmployeesController {
       departmentId: employee.departmentId ?? null,
       departmentName: employee.department?.name ?? null,
       employmentStatus: employee.employmentStatus ?? null,
+    };
+  }
+
+  private toDetailResponse(employee: Employee, hasSensitiveAccess: boolean): EmployeeDetailResponse {
+    return {
+      id: employee.id,
+      fullName: employee.fullName,
+      dateOfBirth: employee.dateOfBirth ?? null,
+      gender: employee.gender ?? null,
+      nationality: employee.nationality ?? null,
+      bio: employee.bio ?? null,
+      profilePhotoUrl: employee.profilePhotoUrl ?? null,
+      employeeCode: employee.employeeCode ?? null,
+      title: employee.title ?? null,
+      currentDesignation: employee.currentDesignation ?? null,
+      departmentId: employee.departmentId ?? null,
+      departmentName: employee.department?.name ?? null,
+      employmentType: employee.employmentType ?? null,
+      employmentStatus: employee.employmentStatus ?? null,
+      dateOfJoined: employee.dateOfJoined ?? null,
+      primaryLocation: employee.primaryLocation ?? null,
+      baseCountry: employee.baseCountry ?? null,
+      clearanceLevel: employee.clearanceLevel ?? null,
+      cvUrl: employee.s3Key ?? null,
+      employeeEmail: employee.employeeEmail ?? null,
+      mobileNo: employee.mobileNo ?? null,
+      officeNo: employee.officeNo ?? null,
+      linkedUser: employee.user
+        ? { id: employee.user.id, username: employee.user.username, displayName: employee.user.displayName }
+        : null,
+      nicPassportNumber: hasSensitiveAccess ? (employee.nicPassportNumber ?? null) : null,
+      baseSalary: hasSensitiveAccess ? (employee.baseSalary ?? null) : null,
     };
   }
 }
