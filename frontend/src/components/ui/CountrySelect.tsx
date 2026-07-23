@@ -1,18 +1,24 @@
 "use client";
 
+import * as Flags from "country-flag-icons/react/3x2";
 import { COUNTRIES } from "@/lib/countries";
 import { SearchSelect, type SearchSelectOption } from "./SearchSelect";
 
-const COUNTRY_OPTIONS: SearchSelectOption[] = COUNTRIES.map((country) => ({
-  value: country.name,
-  label: country.name,
-  sublabel: country.code,
-  icon: (
-    <span aria-hidden="true" className="text-base leading-none">
-      {country.flag}
-    </span>
-  ),
-}));
+// SVG flags (country-flag-icons), not emoji flags: Windows ships no country
+// flag emojis at all (Segoe UI Emoji excludes them), so Chrome/Edge on
+// Windows render emoji flags as bare letter pairs like "LK". SVGs are
+// identical on every OS/browser.
+const COUNTRY_OPTIONS: SearchSelectOption[] = COUNTRIES.map((country) => {
+  const Flag = Flags[country.code as keyof typeof Flags];
+  return {
+    value: country.name,
+    label: country.name,
+    sublabel: country.code,
+    icon: Flag ? (
+      <Flag aria-hidden="true" className="w-5 shrink-0 rounded-[2px]" />
+    ) : undefined,
+  };
+});
 
 interface CountrySelectProps {
   label?: string;
