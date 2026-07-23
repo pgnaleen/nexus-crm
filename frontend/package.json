@@ -19,6 +19,7 @@
     "@xyflow/react": "^12.8.6",
     "countries-list": "^3.4.1",
     "country-flag-icons": "^1.5.21",
+    "html-to-image": "^1.11.13",
     "next": "^14.2.18",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

@@ -20,6 +20,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import dagre from "@dagrejs/dagre";
+import { toPng } from "html-to-image";
 import { getOrgChart, updateOrgChartStructure } from "@/lib/api/employees";
 import { resolveUploadUrl } from "@/lib/api/uploads";
 import { ApiError } from "@/lib/api/client";
@@ -211,6 +212,7 @@ function OrgChartInner({ companyName, employees: initialEmployees, departments, 
   const [employees, setEmployees] = useState(initialEmployees);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const colorForEmployee = useMemo(() => {
     const departmentIds = Array.from(
@@ -337,6 +339,39 @@ function OrgChartInner({ companyName, employees: initialEmployees, departments, 
   // top-down dagre layout. A layout reset only, never a save.
   function handleAutoArrange() {
     setNodes((current) => layoutNodes(current, edges));
+  }
+
+  // Story 1.10 -- export exactly what's currently on screen (zoom/pan/
+  // collapse state included -- hidden nodes simply aren't rendered) as a
+  // PNG. Captures the canvas wrapper at its rendered size; React Flow's
+  // controls/attribution are filtered out of the image.
+  async function handleExport() {
+    const element = wrapperRef.current;
+    if (!element) return;
+    setIsExporting(true);
+    try {
+      const dataUrl = await toPng(element, {
+        cacheBust: true,
+        backgroundColor: "#ffffff",
+        filter: (domNode) => {
+          const classList = (domNode as HTMLElement).classList;
+          if (!classList) return true;
+          return (
+            !classList.contains("react-flow__controls") &&
+            !classList.contains("react-flow__attribution") &&
+            !classList.contains("react-flow__panel")
+          );
+        },
+      });
+      const link = document.createElement("a");
+      link.download = `organization-chart-${new Date().toISOString().slice(0, 10)}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch {
+      showError(t("employees.orgChart.errors.exportFailed"));
+    } finally {
+      setIsExporting(false);
+    }
   }
 
   // ── Edit-mode interactions ────────────────────────────────────────────
@@ -532,6 +567,9 @@ function OrgChartInner({ companyName, employees: initialEmployees, departments, 
           </p>
         </div>
         <div className="flex gap-2.5">
+          <Button type="button" variant="secondary" onClick={handleExport} isLoading={isExporting}>
+            {t("employees.orgChart.exportButton")}
+          </Button>
           {canUpdate && !isEditMode && (
             <Button type="button" onClick={() => setIsEditMode(true)}>
               {t("employees.orgChart.editButton")}

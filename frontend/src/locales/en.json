@@ -55,6 +55,7 @@
       "editButton": "Edit Chart",
       "saveButton": "Save",
       "autoArrangeButton": "Auto-arrange",
+      "exportButton": "Export as PNG",
       "collapseAriaLabel": "Collapse {name}'s branch",
       "expandAriaLabel": "Expand {name}'s branch",
       "unplacedTitle": "Unplaced",
@@ -70,7 +71,8 @@
         "confirmLabel": "Save changes"
       },
       "errors": {
-        "saveFailed": "Failed to save the organization chart"
+        "saveFailed": "Failed to save the organization chart",
+        "exportFailed": "Failed to export the chart as an image"
       },
       "noAccess": "You don't have permission to view the organization chart."
     },
