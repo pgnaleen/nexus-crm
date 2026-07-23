@@ -1,5 +1,5 @@
 import { CreateDealStageRequest } from "@orelia/common";
-import { IsBoolean, IsInt, IsOptional, IsString, IsUUID, MaxLength, MinLength } from "class-validator";
+import { IsBoolean, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength } from "class-validator";
 
 export class CreateSubStageDto implements CreateDealStageRequest {
   @IsString()
@@ -8,6 +8,7 @@ export class CreateSubStageDto implements CreateDealStageRequest {
   name!: string;
 
   @IsInt()
+  @Min(0)
   sortOrder!: number;
 
   @IsOptional()

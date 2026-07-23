@@ -68,8 +68,7 @@ export interface IDeal {
   externalCosts?: number | null;
   expectedCloseDate?: string | null;
   competitors?: ICompetitorEntry[] | null;
-  // tenderDetailsId deferred until deal_tender_details exists (Tender management,
-  // last table on the backlog) — same dependency pattern as Teams_Employee_Map.
+  isTender: boolean;
 }
 
 export interface ISubStageHistory {
@@ -114,7 +113,6 @@ export interface IDealTenderDetails {
   dealId: string;
   tenderReference: string;
   issuingBody: string;
-  submissionDeadline?: string | null;
   bidBondRequired: boolean;
   bidBondAmount?: number | null;
   emdAmount?: number | null;

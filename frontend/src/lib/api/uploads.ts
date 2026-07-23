@@ -13,10 +13,22 @@ export function resolveUploadUrl(path: string): string {
 // Content-Type: application/json, which would break the multipart boundary
 // the browser needs to set itself for a FormData body.
 export async function uploadLogo(file: File): Promise<UploadResponse> {
+  return uploadFile(file, "logo", "Failed to upload logo");
+}
+
+export async function uploadEmployeePhoto(file: File): Promise<UploadResponse> {
+  return uploadFile(file, "employee-photo", "Failed to upload photo");
+}
+
+export async function uploadEmployeeCv(file: File): Promise<UploadResponse> {
+  return uploadFile(file, "employee-cv", "Failed to upload CV");
+}
+
+async function uploadFile(file: File, route: string, errorMessage: string): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch(`${API_BASE_URL}/api/uploads/logo`, {
+  const res = await fetch(`${API_BASE_URL}/api/uploads/${route}`, {
     method: "POST",
     credentials: "include",
     body: formData,
@@ -24,7 +36,7 @@ export async function uploadLogo(file: File): Promise<UploadResponse> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    throw new ApiError(body?.message ?? "Failed to upload logo", res.status);
+    throw new ApiError(body?.message ?? errorMessage, res.status);
   }
 
   return res.json() as Promise<UploadResponse>;

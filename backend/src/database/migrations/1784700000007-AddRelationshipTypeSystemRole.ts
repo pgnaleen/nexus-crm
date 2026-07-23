@@ -5,8 +5,8 @@ import { MigrationInterface, QueryRunner } from "typeorm";
 // this flag (by id, never by name) to filter to only tagged companies/contacts.
 // The partial index's "deleted_at IS NULL" clause is required: without it, a
 // soft-deleted flagged row would permanently occupy that (tenant, role) slot.
-export class AddRelationshipTypeSystemRole1784700000005 implements MigrationInterface {
-  name = "AddRelationshipTypeSystemRole1784700000005";
+export class AddRelationshipTypeSystemRole1784700000007 implements MigrationInterface {
+  name = "AddRelationshipTypeSystemRole1784700000007";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`

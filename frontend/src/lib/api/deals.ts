@@ -8,9 +8,11 @@ import type {
   DealPartnerResponse,
   DealResponse,
   DealStageHistoryResponse,
+  DealTenderDetailsResponse,
   MoveDealStageRequest,
   UpdateDealNoteRequest,
   UpdateDealRequest,
+  UpsertDealTenderDetailsRequest,
 } from "@orelia/common";
 import { ApiError, apiFetch, redirectToLogin, refreshSession } from "./client";
 
@@ -137,6 +139,20 @@ export function updateDealNote(
 ): Promise<DealNoteResponse> {
   return apiFetch<DealNoteResponse>(`/deals/${dealId}/notes/${noteId}`, {
     method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getDealTenderDetails(dealId: string): Promise<DealTenderDetailsResponse | null> {
+  return apiFetch<DealTenderDetailsResponse | null>(`/deals/${dealId}/tender-details`);
+}
+
+export function upsertDealTenderDetails(
+  dealId: string,
+  payload: UpsertDealTenderDetailsRequest,
+): Promise<DealTenderDetailsResponse> {
+  return apiFetch<DealTenderDetailsResponse>(`/deals/${dealId}/tender-details`, {
+    method: "PUT",
     body: JSON.stringify(payload),
   });
 }

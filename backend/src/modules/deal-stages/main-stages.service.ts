@@ -43,13 +43,28 @@ export class MainStagesService {
     return this.subStagesRepo.countActiveForMainStage(id);
   }
 
+  // A duplicate position isn't corrupt data (nothing else keys off it being
+  // unique), but it makes "lower numbers appear first" ambiguous between the
+  // two stages that share it -- reject it outright rather than let the order
+  // become a coin flip.
+  private async assertPositionAvailable(position: number, excludeId?: string): Promise<void> {
+    const existing = await this.mainStagesRepo.findOneScoped({ where: { position } });
+    if (existing && existing.id !== excludeId) {
+      throw new ConflictException(`Position ${position} is already used by "${existing.name}"`);
+    }
+  }
+
   async create(dto: CreateMainStageDto, userId: string): Promise<MainStage> {
+    await this.assertPositionAvailable(dto.position);
     const stage = this.mainStagesRepo.createScoped({ ...dto, createdBy: userId });
     return this.mainStagesRepo.saveScoped(stage);
   }
 
   async update(id: string, dto: UpdateMainStageDto, userId: string): Promise<MainStage> {
     const stage = await this.findOneOrFail(id);
+    if (dto.position !== undefined) {
+      await this.assertPositionAvailable(dto.position, id);
+    }
     Object.assign(stage, dto, { updatedBy: userId });
     await this.mainStagesRepo.saveScoped(stage);
     // Re-fetch rather than return the in-memory object -- Object.assign copies

@@ -18,20 +18,30 @@ export interface S3ObjectSummary {
 // is unset, isEnabled() is false and callers skip the backup instead of crashing.
 @Injectable()
 export class S3Service {
-  private readonly client: S3Client;
+  // Lazily created: the S3Client constructor itself throws "Region is missing"
+  // when AWS_REGION is unset, which would crash app startup on any machine
+  // without backup config (e.g. local dev on .env.example defaults). Only
+  // built on first real use, which callers already gate behind isEnabled().
+  private client?: S3Client;
   private readonly bucket?: string;
 
   constructor(private readonly config: ConfigService) {
     this.bucket = this.config.get<string>("S3_BACKUPS_BUCKET");
-    this.client = new S3Client({ region: this.config.get<string>("AWS_REGION") });
   }
 
   isEnabled(): boolean {
-    return !!this.bucket;
+    return !!this.bucket && !!this.config.get<string>("AWS_REGION");
+  }
+
+  private getClient(): S3Client {
+    if (!this.client) {
+      this.client = new S3Client({ region: this.config.get<string>("AWS_REGION") });
+    }
+    return this.client;
   }
 
   async putObject(key: string, buffer: Buffer, contentType?: string): Promise<void> {
-    await this.client.send(
+    await this.getClient().send(
       new PutObjectCommand({
         Bucket: this.bucket,
         Key: key,
@@ -43,14 +53,14 @@ export class S3Service {
   }
 
   async deleteObject(key: string): Promise<void> {
-    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+    await this.getClient().send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 
   async listObjects(prefix: string): Promise<S3ObjectSummary[]> {
     const out: S3ObjectSummary[] = [];
     let token: string | undefined;
     do {
-      const page = await this.client.send(
+      const page = await this.getClient().send(
         new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix, ContinuationToken: token }),
       );
       for (const obj of page.Contents ?? []) {

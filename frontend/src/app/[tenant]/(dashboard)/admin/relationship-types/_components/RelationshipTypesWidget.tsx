@@ -57,7 +57,6 @@ export function RelationshipTypesWidget({
   const confirmCascadeDelete = useCascadeDeleteConfirm();
   const { showError } = useAlert();
 
-  const canView   = permissions.includes(PERMISSIONS.RELATIONSHIP_TYPE_VIEW);
   const canCreate = permissions.includes(PERMISSIONS.RELATIONSHIP_TYPE_CREATE);
   const canUpdate = permissions.includes(PERMISSIONS.RELATIONSHIP_TYPE_UPDATE);
   const canDelete = permissions.includes(PERMISSIONS.RELATIONSHIP_TYPE_DELETE);
@@ -203,18 +202,7 @@ export function RelationshipTypesWidget({
               {filteredTypes.map((type) => (
                 <tr
                   key={type.id}
-                  className={
-                    canUpdate || canView
-                      ? "cursor-pointer transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f1f5f9]"
-                      : "transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f7f8fc]"
-                  }
-                  onClick={
-                    canUpdate
-                      ? () => setDialogState({ mode: "edit", relationshipType: type })
-                      : canView
-                        ? () => setDialogState({ mode: "view", relationshipType: type })
-                        : undefined
-                  }
+                  className="transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f7f8fc]"
                 >
                   <td className="border-b border-[var(--color-border)] p-3 font-medium text-crm-text">
                     {type.name}

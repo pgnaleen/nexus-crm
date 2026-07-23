@@ -1,5 +1,5 @@
 import { CreateMainStageRequest } from "@orelia/common";
-import { IsInt, IsString, MaxLength, MinLength } from "class-validator";
+import { IsInt, IsString, MaxLength, Min, MinLength } from "class-validator";
 
 export class CreateMainStageDto implements CreateMainStageRequest {
   @IsString()
@@ -8,5 +8,6 @@ export class CreateMainStageDto implements CreateMainStageRequest {
   name!: string;
 
   @IsInt()
+  @Min(0)
   position!: number;
 }

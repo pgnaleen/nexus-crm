@@ -1,5 +1,5 @@
-import { DealType, DocumentType } from "../enums";
-import { IDeal } from "../types";
+import { DealType, DocumentType, EvaluationType, SubmissionMode } from "../enums";
+import { IDeal, IDealTenderDetails } from "../types";
 
 export interface CompetitorEntryRequest {
   name: string;
@@ -30,6 +30,7 @@ export interface CreateDealRequest {
   externalCosts?: number;
   expectedCloseDate?: string;
   competitors?: CompetitorEntryRequest[];
+  isTender?: boolean;
 }
 
 export type UpdateDealRequest = Partial<Omit<CreateDealRequest, "companyId">>;
@@ -116,3 +117,17 @@ export interface DealNoteResponse {
   createdAt: string;
   updatedAt: string;
 }
+
+// One row per deal -- upsert (create-if-missing, else update), not
+// separate create/update endpoints, matching the 1:1 relationship.
+export interface UpsertDealTenderDetailsRequest {
+  tenderReference: string;
+  issuingBody: string;
+  bidBondRequired?: boolean;
+  bidBondAmount?: number;
+  emdAmount?: number;
+  submissionMode?: SubmissionMode;
+  evaluationType?: EvaluationType;
+}
+
+export type DealTenderDetailsResponse = IDealTenderDetails;

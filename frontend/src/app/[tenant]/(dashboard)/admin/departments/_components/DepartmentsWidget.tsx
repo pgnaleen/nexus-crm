@@ -50,7 +50,6 @@ export function DepartmentsWidget({
   const confirm = useConfirm();
   const { showError } = useAlert();
 
-  const canView   = permissions.includes(PERMISSIONS.DEPARTMENT_VIEW);
   const canCreate = permissions.includes(PERMISSIONS.DEPARTMENT_CREATE);
   const canUpdate = permissions.includes(PERMISSIONS.DEPARTMENT_UPDATE);
   const canDelete = permissions.includes(PERMISSIONS.DEPARTMENT_DELETE);
@@ -171,18 +170,7 @@ export function DepartmentsWidget({
               {filteredDepartments.map((department) => (
                 <tr
                   key={department.id}
-                  className={
-                    canUpdate || canView
-                      ? "cursor-pointer transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f1f5f9]"
-                      : "transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f7f8fc]"
-                  }
-                  onClick={
-                    canUpdate
-                      ? () => setDialogState({ mode: "edit", department })
-                      : canView
-                        ? () => setDialogState({ mode: "view", department })
-                        : undefined
-                  }
+                  className="transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f7f8fc]"
                 >
                   <td className="border-b border-[var(--color-border)] p-3 font-medium text-crm-text">
                     {department.name}

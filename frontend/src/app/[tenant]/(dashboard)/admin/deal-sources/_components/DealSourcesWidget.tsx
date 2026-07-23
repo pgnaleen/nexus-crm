@@ -49,7 +49,6 @@ export function DealSourcesWidget({
   const confirm = useConfirm();
   const { showError } = useAlert();
 
-  const canView   = permissions.includes(PERMISSIONS.DEAL_SOURCE_VIEW);
   const canCreate = permissions.includes(PERMISSIONS.DEAL_SOURCE_CREATE);
   const canUpdate = permissions.includes(PERMISSIONS.DEAL_SOURCE_UPDATE);
   const canDelete = permissions.includes(PERMISSIONS.DEAL_SOURCE_DELETE);
@@ -193,18 +192,7 @@ export function DealSourcesWidget({
               {filteredSources.map((source) => (
                 <tr
                   key={source.id}
-                  className={
-                    canUpdate || canView
-                      ? "cursor-pointer transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f1f5f9]"
-                      : "transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f7f8fc]"
-                  }
-                  onClick={
-                    canUpdate
-                      ? () => setDialogState({ mode: "edit", dealSource: source })
-                      : canView
-                        ? () => setDialogState({ mode: "view", dealSource: source })
-                        : undefined
-                  }
+                  className="transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f7f8fc]"
                 >
                   <td className="border-b border-[var(--color-border)] p-3 font-medium text-crm-text">
                     {source.name}

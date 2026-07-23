@@ -1,5 +1,5 @@
 import { UpdateDealStageRequest } from "@orelia/common";
-import { IsBoolean, IsInt, IsOptional, IsString, IsUUID, MaxLength, MinLength } from "class-validator";
+import { IsBoolean, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength } from "class-validator";
 
 export class UpdateSubStageDto implements UpdateDealStageRequest {
   @IsOptional()
@@ -10,6 +10,7 @@ export class UpdateSubStageDto implements UpdateDealStageRequest {
 
   @IsOptional()
   @IsInt()
+  @Min(0)
   sortOrder?: number;
 
   @IsOptional()

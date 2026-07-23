@@ -24,6 +24,9 @@ function toFormState(stage?: MainStageResponse): FormState {
 interface MainStageFormDialogProps {
   mode: "create" | "edit" | "view";
   mainStage?: MainStageResponse;
+  // Every other Main Stage, used to reject a position that's already taken
+  // (excluding this stage itself in edit mode).
+  mainStages: MainStageResponse[];
   onClose: () => void;
   onSaved: (stage: MainStageResponse) => void;
 }
@@ -31,6 +34,7 @@ interface MainStageFormDialogProps {
 export function MainStageFormDialog({
   mode,
   mainStage,
+  mainStages,
   onClose,
   onSaved,
 }: MainStageFormDialogProps) {
@@ -53,6 +57,13 @@ export function MainStageFormDialog({
     const posParsed = parseInt(values.position, 10);
     if (isNaN(posParsed)) {
       nextErrors.position = "Must be a valid number";
+    } else if (posParsed < 0) {
+      nextErrors.position = "Position can't be negative";
+    } else {
+      const conflict = mainStages.find((stage) => stage.id !== mainStage?.id && stage.position === posParsed);
+      if (conflict) {
+        nextErrors.position = `Position ${posParsed} is already used by "${conflict.name}"`;
+      }
     }
 
     setErrors(nextErrors);
@@ -108,6 +119,7 @@ export function MainStageFormDialog({
           label="Position"
           name="position"
           type="number"
+          min="0"
           value={values.position}
           error={errors.position}
           disabled={isViewOnly}
