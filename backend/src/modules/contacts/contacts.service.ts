@@ -8,12 +8,14 @@ export class ContactsService {
 
   constructor(private readonly contactsRepo: ContactsRepository) {}
 
-  // Used by the Deal Customer/Partner pickers. Matches contacts EITHER
-  // directly tagged with their own map row OR owned by a company that has a
-  // map row for this type -- company-owned contacts deliberately don't get
-  // their own map row (the 2026-07-22 double-counting fix), so without this
-  // OR they'd vanish from the filtered list entirely instead of correctly
-  // inheriting their parent company's tag.
+  // Used by the Deal Customer/Partner pickers. Matches ONLY contacts directly
+  // tagged with their own map row for this type -- deliberately does NOT
+  // inherit the tag from a company-owned contact's parent company (2026-07-23:
+  // reverted the earlier inherit-from-company behavior per product decision --
+  // when a company is tagged, only the company itself shows in this picker;
+  // its contacts stay selectable via the separate "Primary Contact" field
+  // once that company is picked, so nothing is lost, but a company-owned
+  // contact no longer also appears as its own duplicate-looking entry here).
   async findPickerForRelationshipType(relationshipTypeId: string): Promise<Contact[]> {
     this.logger.debug(`findPickerForRelationshipType called (relationshipTypeId=${relationshipTypeId})`);
     try {
@@ -23,10 +25,6 @@ export class ContactsService {
           `contact.id IN (
              SELECT contact_id FROM relationship_company_contact_map
              WHERE relationship_type_id = :relationshipTypeId AND contact_id IS NOT NULL AND deleted_at IS NULL
-           )
-           OR contact.company_id IN (
-             SELECT company_id FROM relationship_company_contact_map
-             WHERE relationship_type_id = :relationshipTypeId AND company_id IS NOT NULL AND deleted_at IS NULL
            )`,
           { relationshipTypeId },
         )

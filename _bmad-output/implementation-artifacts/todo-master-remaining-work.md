@@ -501,6 +501,84 @@ priority). Not designed beyond the shape above.
 
 ---
 
+## G. Production RDS migration + Auth cross-tab session sync — 2026-07-23
+
+Two unrelated threads of work done back-to-back this session: moving the deploy server off its
+shared container Postgres onto a dedicated RDS instance, and implementing the two fixes from
+`plan-auth-cross-tab-session-sync.md`. Both surfaced real, previously-undocumented gaps.
+
+### G1. ✅ FIXED — Backend couldn't connect to RDS at all — two separate root causes found in sequence
+**Where:** `docker-compose.yml` (on the deploy server, EC2 `18.142.49.168`), `backend/src/database/data-source.ts`, `backend/src/database/database.module.ts`, `backend/src/config/env.validation.ts`.
+
+**Root cause 1 — port conflict, not a credentials bug.** After updating the server's `.env` to
+point at the new RDS endpoint, `docker compose up` for `backend` also tried to start nexus-crm's
+own local `postgres` service (a `depends_on`), which failed to bind host port 5432 — already held
+by `goldbond-postgres`, an unrelated project's container sharing the same EC2 box (this is the
+exact same shared-Postgres risk already flagged in `plan-production-deployment.md`'s Phase 3).
+**Fixed on the server** (not yet committed — see G3 below): removed the `postgres:` service block
+and backend's `depends_on: postgres` entry from `docker-compose.yml`, since RDS is now the real
+database and the local container was never needed once RDS is live.
+
+**Root cause 2 — RDS requires SSL, TypeORM wasn't configured for it.** Once the port conflict was
+cleared, `migration:run` failed with `no pg_hba.conf entry for host ... no encryption` — RDS
+rejects unencrypted connections by default; `psql` had silently auto-negotiated SSL (libpq's
+default `sslmode=prefer`) during earlier manual connectivity checks, masking this until the real
+TypeORM connection (Node's `pg` driver, which does not auto-negotiate SSL) was attempted.
+**Fixed:** added `DB_SSL` (Joi-validated, default `false` so the local docker-compose Postgres
+container is unaffected) to `env.validation.ts`, wired into both connection paths —
+`database.module.ts`'s live `TypeOrmModule.forRootAsync` and `data-source.ts`'s migration-CLI
+config — as `ssl: { rejectUnauthorized: false } | false`. `rejectUnauthorized: false` skips CA
+chain validation rather than pinning the AWS RDS CA bundle — a pragmatic tradeoff, not the most
+rigorous option; revisit once this is running for real. Committed `a854eed`.
+
+**Verified live:** `docker compose config` confirmed the resolved backend env pointed at the real
+RDS endpoint; `migration:run` executed every migration cleanly against RDS, ending on
+`AddRefreshTokenGraceWindow1784700000008`; `seed` ran; tables + rows confirmed visible via DBeaver
+(SSH-tunneled through the same EC2 instance). **Not yet confirmed:** an actual login through the
+real app UI against the now-populated RDS database — DBeaver showing data proves the DB is
+correct, not that the full auth round-trip works end-to-end.
+
+### G2. 🟡 Real secrets were exposed in this chat session — needs rotation
+**Where:** RDS `DB_PASSWORD`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` (server `.env`).
+**What:** `docker compose config` was run to debug the connection above and printed all three in
+plaintext into the chat transcript while troubleshooting. Flagged live at the time; not yet acted
+on as of this writing.
+**To do:** rotate all three — change the RDS user's password (RDS console or `ALTER USER`),
+generate fresh JWT secrets (`openssl rand -hex 32`, matching the README's own setup instructions),
+update the server's `.env`, `docker compose up -d --force-recreate backend`. Low urgency but not
+zero — don't let it linger indefinitely.
+
+### G3. 🟡 `docker-compose.yml`'s local-`postgres`-removal fix exists only on the deploy server, uncommitted
+**Where:** `docker-compose.yml`.
+**What:** G1's fix (deleting the `postgres:` service + backend's `depends_on: postgres`) was made
+directly via `nano` over SSH on the live server — it was never committed to the repo. The
+git-tracked `docker-compose.yml` still defines the local `postgres` service today. Anyone who
+re-clones or redeploys fresh (a new server, a teammate) will hit the exact same port-conflict bug
+G1 already diagnosed and fixed once.
+**To do:** get the server's current `docker-compose.yml`, commit the same fix properly into the
+repo, so the deploy server and git stop disagreeing about the compose config.
+
+### G4. Auth cross-tab session sync (`plan-auth-cross-tab-session-sync.md`) — both fixes implemented, neither live-verified
+**Where:** `backend/src/modules/auth/auth.service.ts`, `backend/src/modules/users/entities/refresh-token.entity.ts` (Fix A, commit `a70af45`); `frontend/src/lib/auth/tab-sync.ts`,
+`frontend/src/components/providers/TabSyncListener.tsx`, `frontend/src/lib/api/auth.ts` (Fix B,
+commit `11b148b`).
+**What:** Fix A (10s grace-window reuse for a just-rotated refresh token, fixing the two-tabs/
+proactive-vs-reactive refresh race) and Fix B (`BroadcastChannel`-based cross-tab reload on
+login/logout, fixing the silent-identity-switch bug) are both built and typecheck-clean. Neither
+has been run against a real, live two-tabs-open scenario — this session's environment had no
+running server until the RDS work above stood one up.
+**To do — the plan doc's own Section 6 verification steps, now actually possible against the live
+RDS-backed server:**
+1. Fix A: reproduce the actual race (two near-simultaneous `POST /auth/refresh` calls presenting
+   the same token — e.g. two browser tabs open, or curl twice back-to-back), confirm both get the
+   identical new pair instead of one hard-401ing; confirm reuse *past* the 10s window still 401s;
+   confirm a normal single-caller refresh is unaffected.
+2. Fix B: two real tabs open and logged in, log in as a different user in one, confirm the other
+   silently reloads and reflects the new session; log out in one, confirm the other reloads to
+   login.
+
+---
+
 ## Recommendation — what to actually finish today
 
 "Production ready, no bugs, today" and "fix everything in this document today" are different
