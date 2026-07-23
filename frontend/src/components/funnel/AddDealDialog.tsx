@@ -36,10 +36,11 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import { CustomSelect } from "@/components/ui/CustomSelect";
+import { CountrySelect } from "@/components/ui/CountrySelect";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 import { SearchSelect, type SearchSelectOption } from "@/components/ui/SearchSelect";
 import { BuildingIcon, EditIcon, FileIcon, TrashIcon, UploadCloudIcon, UserIcon } from "@/components/ui/icons";
-import { required, validate } from "@/lib/validation";
+import { minDate, required, validate } from "@/lib/validation";
 import { CompanyFormDialog } from "@/app/[tenant]/(dashboard)/relationships/[id]/_components/CompanyFormDialog";
 import { ContactFormDialog } from "@/app/[tenant]/(dashboard)/relationships/[id]/_components/ContactFormDialog";
 
@@ -315,6 +316,11 @@ export function AddDealDialog({
     }
   }
 
+  // "YYYY-MM-DD" in the user's local timezone, matching the format
+  // <input type="date"> reads/writes -- used both as the native min= floor
+  // and in the past-date validation below.
+  const todayISO = new Date().toLocaleDateString("en-CA");
+
   function runValidation(): boolean {
     const nextErrors: Partial<Record<keyof DetailsFormState | "otherParty", string>> = {};
 
@@ -332,11 +338,21 @@ export function AddDealDialog({
     if (!isEdit && !values.currentStageId) {
       nextErrors.currentStageId = "No stages are available to create a deal in yet — add a Sub Stage first";
     }
+    // Skip the past-date check when editing a deal whose deadline was
+    // already in the past before this session -- otherwise saving an
+    // unrelated field on an old, already-overdue deal would be blocked.
+    const deadlineUnchanged = isEdit && values.expectedCloseDate === (deal?.expectedCloseDate ?? "");
+    if (!deadlineUnchanged) {
+      const dateError = validate(values.expectedCloseDate, [
+        minDate(todayISO, "Expected deadline can't be in the past"),
+      ]);
+      if (dateError) nextErrors.expectedCloseDate = dateError;
+    }
 
     setErrors(nextErrors);
 
     // Jump to whichever tab actually holds the first invalid field.
-    if (nextErrors.name || nextErrors.otherParty || nextErrors.currentStageId) {
+    if (nextErrors.name || nextErrors.otherParty || nextErrors.currentStageId || nextErrors.expectedCloseDate) {
       setActiveTab("dealInfo");
     } else if (nextErrors.salesPersonId) {
       setActiveTab("team");
@@ -736,19 +752,20 @@ export function AddDealDialog({
               </div>
             )}
 
-            <TextField
+            <CountrySelect
               label="Deal Country"
-              name="dealCountry"
               value={values.dealCountry}
-              placeholder="e.g. Singapore"
-              onChange={(e) => setField("dealCountry", e.target.value)}
+              onChange={(val) => setField("dealCountry", val)}
+              placeholder="Search countries..."
             />
 
             <TextField
               label="Expected Deadline"
               name="expectedCloseDate"
               type="date"
+              min={todayISO}
               value={values.expectedCloseDate}
+              error={errors.expectedCloseDate}
               onChange={(e) => setField("expectedCloseDate", e.target.value)}
             />
 
