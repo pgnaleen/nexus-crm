@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { CountrySelect } from "@/components/ui/CountrySelect";
+import { PhoneField } from "@/components/ui/PhoneField";
 import { Spinner } from "@/components/ui/Spinner";
 import { PlusIcon, TrashIcon, UploadCloudIcon } from "@/components/ui/icons";
 import { email as emailValidator, min, minLength, required, validate } from "@/lib/validation";
@@ -785,10 +786,10 @@ export function CompanyFormDialog({
                         placeholder="name@company.com"
                         onChange={(e) => updateContact(contact.key, "email", e.target.value)}
                       />
-                      <TextField
+                      <PhoneField
                         label="Mobile number"
                         value={contact.mobileNo}
-                        onChange={(e) => updateContact(contact.key, "mobileNo", e.target.value)}
+                        onChange={(val) => updateContact(contact.key, "mobileNo", val)}
                       />
                     </div>
                     <div className="mb-[18px]">
