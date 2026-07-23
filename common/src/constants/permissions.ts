@@ -75,10 +75,15 @@ export const PERMISSIONS = {
 
   BACKUP_CREATE: "backup:create",
 
-  // Only VIEW exists so far -- CREATE/UPDATE/DELETE are added alongside their
-  // own stories (Employee Management epic, Story 1.1 is directory view only)
-  // rather than pre-seeded ahead of any endpoint that would enforce them.
+  // UPDATE/DELETE are added alongside their own stories (Employee Management
+  // epic) rather than pre-seeded ahead of any endpoint that would enforce
+  // them. EMPLOYEES_VIEW_SENSITIVE is a narrow extra gate (Story 1.2's
+  // Confidential tab: NIC/passport, base salary) -- named to match this
+  // project's "no _MANAGE key" rule, not the "EMPLOYEES_MANAGE_SENSITIVE"
+  // name in the original epics-hr.md story text.
   EMPLOYEES_VIEW: "employees:view",
+  EMPLOYEES_CREATE: "employees:create",
+  EMPLOYEES_VIEW_SENSITIVE: "employees:view_sensitive",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

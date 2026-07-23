@@ -17,3 +17,15 @@ export const ALLOWED_DEAL_DOCUMENT_MIME_TYPES = [
   "image/jpeg",
   "image/webp",
 ];
+
+export const EMPLOYEE_PHOTO_SUBDIR = "employee-photos";
+export const MAX_EMPLOYEE_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
+export const ALLOWED_EMPLOYEE_PHOTO_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"];
+
+export const EMPLOYEE_CV_SUBDIR = "employee-cvs";
+export const MAX_EMPLOYEE_CV_SIZE_BYTES = 20 * 1024 * 1024;
+export const ALLOWED_EMPLOYEE_CV_MIME_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];

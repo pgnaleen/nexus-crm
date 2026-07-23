@@ -12,6 +12,7 @@ export * from "./fiscal-year-end-month.enum";
 export * from "./region.enum";
 export * from "./credit-status.enum";
 export * from "./gender.enum";
+export * from "./employee-title.enum";
 export * from "./employment-type.enum";
 export * from "./employment-status.enum";
 export * from "./clearance-level.enum";

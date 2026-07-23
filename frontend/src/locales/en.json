@@ -22,12 +22,93 @@
       "terminated": "Terminated",
       "resigned": "Resigned"
     },
+    "titles": {
+      "mr": "Mr",
+      "mrs": "Mrs",
+      "ms": "Ms",
+      "miss": "Miss",
+      "dr": "Dr"
+    },
     "emptyState": {
       "title": "No employees found",
       "noneExist": "No employees exist yet.",
       "noMatch": "No employees match your search."
     },
-    "notSet": "Not set"
+    "notSet": "Not set",
+    "addButton": "Add Employee",
+    "dialog": {
+      "addTitle": "Add Employee",
+      "saveButton": "Create Employee",
+      "tabs": {
+        "personal": "Personal",
+        "employment": "Employment",
+        "contact": "Contact",
+        "confidential": "Confidential"
+      },
+      "personal": {
+        "fullName": "Full name *",
+        "fullNamePlaceholder": "e.g. Jane Doe",
+        "dateOfBirth": "Date of birth",
+        "gender": "Gender",
+        "nationality": "Nationality",
+        "bio": "Bio",
+        "bioPlaceholder": "A short bio...",
+        "photo": "Profile photo",
+        "uploadPhoto": "Upload photo",
+        "replacePhoto": "Replace photo",
+        "removePhoto": "Remove"
+      },
+      "employment": {
+        "employeeCode": "Employee code",
+        "title": "Title",
+        "designation": "Designation",
+        "department": "Department",
+        "employmentType": "Employment type",
+        "employmentStatus": "Employment status",
+        "dateOfJoined": "Date joined",
+        "primaryLocation": "Primary location",
+        "baseCountry": "Base country",
+        "clearanceLevel": "Clearance level",
+        "cv": "CV",
+        "uploadCv": "Upload CV",
+        "replaceCv": "Replace CV",
+        "removeCv": "Remove"
+      },
+      "contact": {
+        "email": "Email",
+        "mobileNo": "Mobile number",
+        "officeNo": "Office number"
+      },
+      "confidential": {
+        "notice": "Only visible to users with sensitive-data access.",
+        "nicPassport": "NIC / Passport number",
+        "baseSalary": "Base salary"
+      },
+      "genders": {
+        "male": "Male",
+        "female": "Female",
+        "other": "Other",
+        "prefer_not_to_say": "Prefer not to say"
+      },
+      "employmentTypes": {
+        "full_time": "Full-Time",
+        "part_time": "Part-Time",
+        "contract": "Contract",
+        "intern": "Intern",
+        "temporary": "Temporary"
+      },
+      "clearanceLevels": {
+        "public": "Public",
+        "internal": "Internal",
+        "confidential": "Confidential",
+        "restricted": "Restricted"
+      },
+      "errors": {
+        "photoUploadFailed": "Failed to upload photo",
+        "cvUploadFailed": "Failed to upload CV",
+        "saveFailed": "Failed to create employee"
+      }
+    }
   },
   "departments": {
     "title": "Department Management",

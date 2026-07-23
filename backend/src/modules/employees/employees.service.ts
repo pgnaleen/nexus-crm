@@ -1,12 +1,19 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { AuditLogService } from "../../core/audit-log/audit-log.service";
+import { CreateEmployeeDto } from "./dto/create-employee.dto";
 import { Employee } from "./entities/employee.entity";
 import { EmployeesRepository } from "./employees.repository";
+
+const AUDIT_ENTITY_TYPE = "employee";
 
 @Injectable()
 export class EmployeesService {
   private readonly logger = new Logger(EmployeesService.name);
 
-  constructor(private readonly employeesRepo: EmployeesRepository) {}
+  constructor(
+    private readonly employeesRepo: EmployeesRepository,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   async findPicker(): Promise<Employee[]> {
     this.logger.debug("findPicker called");
@@ -34,6 +41,49 @@ export class EmployeesService {
       return results;
     } catch (err) {
       this.logger.error(`findAll failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  async findOneOrFail(id: string): Promise<Employee> {
+    const employee = await this.employeesRepo.findOneScoped({
+      where: { id },
+      relations: ["department"],
+    });
+    if (!employee) {
+      throw new NotFoundException("Employee not found");
+    }
+    return employee;
+  }
+
+  // Story 1.2 -- reportingManagerId is deliberately never set here; every
+  // new employee starts unplaced in the reporting structure, set exclusively
+  // via the Organization Chart (Story 1.8). Sensitive-field stripping for
+  // callers without EMPLOYEES_VIEW_SENSITIVE happens in the controller,
+  // before the DTO ever reaches this method.
+  async create(dto: CreateEmployeeDto, userId: string): Promise<Employee> {
+    this.logger.debug(`create called by ${userId} (fullName="${dto.fullName}")`);
+    try {
+      const { cvUrl, ...employeeFields } = dto;
+      const employee = this.employeesRepo.createScoped({
+        ...employeeFields,
+        s3Key: cvUrl,
+        createdBy: userId,
+      });
+      const saved = await this.employeesRepo.saveScoped(employee);
+      this.logger.debug(`create succeeded for employee ${saved.id}`);
+
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: saved.id,
+        action: "insert",
+        actorId: userId,
+        changes: { ...employeeFields, s3Key: cvUrl },
+      });
+
+      return this.findOneOrFail(saved.id);
+    } catch (err) {
+      this.logger.error(`create failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }
