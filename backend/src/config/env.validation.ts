@@ -24,10 +24,12 @@ export const envValidationSchema = Joi.object({
 
   // DB backups (nightly pg_dump -> S3). All optional: if AWS_REGION/S3_BACKUPS_BUCKET
   // are unset the backup job logs a warning and no-ops instead of crashing startup.
-  AWS_REGION: Joi.string().optional(),
-  AWS_ACCESS_KEY_ID: Joi.string().optional(),
-  AWS_SECRET_ACCESS_KEY: Joi.string().optional(),
-  S3_BACKUPS_BUCKET: Joi.string().optional(),
+  // .empty("") treats the blank values from .env.example (e.g. `AWS_REGION=`) as
+  // unset — plain .optional() would still reject them ("is not allowed to be empty").
+  AWS_REGION: Joi.string().empty("").optional(),
+  AWS_ACCESS_KEY_ID: Joi.string().empty("").optional(),
+  AWS_SECRET_ACCESS_KEY: Joi.string().empty("").optional(),
+  S3_BACKUPS_BUCKET: Joi.string().empty("").optional(),
   BACKUP_RETENTION_DAYS: Joi.number().default(7),
   NIGHTLY_BACKUP_HOUR: Joi.number().min(0).max(23).default(2),
   PG_DUMP_PATH: Joi.string().default("pg_dump"),
