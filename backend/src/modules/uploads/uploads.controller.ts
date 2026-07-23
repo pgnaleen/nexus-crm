@@ -79,11 +79,10 @@ export class UploadsController {
     return { url: `/uploads/${LOGO_SUBDIR}/${file.filename}` };
   }
 
-  // Story 1.2 (Create Employee) -- Personal tab's profile photo. Gated on
-  // EMPLOYEES_CREATE only for now; broaden to include EMPLOYEES_UPDATE once
-  // Update Employee (Story 1.4) exists and can also change this field.
+  // Stories 1.2/1.4 (Create/Update Employee) -- Personal tab's profile
+  // photo, uploadable from either the create or the edit form.
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.EMPLOYEES_CREATE])
+  @RequirePermission([PERMISSIONS.EMPLOYEES_CREATE, PERMISSIONS.EMPLOYEES_UPDATE])
   @Post("employee-photo")
   @UseInterceptors(
     FileInterceptor("file", {
@@ -114,9 +113,10 @@ export class UploadsController {
     return { url: `/uploads/${EMPLOYEE_PHOTO_SUBDIR}/${file.filename}` };
   }
 
-  // Story 1.2 (Create Employee) -- Employment tab's CV upload.
+  // Stories 1.2/1.4 (Create/Update Employee) -- Employment tab's CV upload,
+  // uploadable from either the create or the edit form.
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.EMPLOYEES_CREATE])
+  @RequirePermission([PERMISSIONS.EMPLOYEES_CREATE, PERMISSIONS.EMPLOYEES_UPDATE])
   @Post("employee-cv")
   @UseInterceptors(
     FileInterceptor("file", {

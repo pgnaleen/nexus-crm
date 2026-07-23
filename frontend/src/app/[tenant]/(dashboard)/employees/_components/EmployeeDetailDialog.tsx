@@ -23,6 +23,9 @@ interface EmployeeDetailDialogProps {
   employeeId: string;
   canViewSensitive: boolean;
   onClose: () => void;
+  // Story 1.4 -- present only when the viewer holds EMPLOYEES_UPDATE; the
+  // widget swaps this dialog for the edit form with the loaded detail.
+  onEdit?: (detail: EmployeeDetailResponse) => void;
 }
 
 function DetailItem({ label, value }: { label: string; value: ReactNode }) {
@@ -34,7 +37,7 @@ function DetailItem({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-export function EmployeeDetailDialog({ employeeId, canViewSensitive, onClose }: EmployeeDetailDialogProps) {
+export function EmployeeDetailDialog({ employeeId, canViewSensitive, onClose, onEdit }: EmployeeDetailDialogProps) {
   const [activeTab, setActiveTab] = useState<TabId>("personal");
   const [detail, setDetail] = useState<EmployeeDetailResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -210,6 +213,11 @@ export function EmployeeDetailDialog({ employeeId, canViewSensitive, onClose }: 
       )}
 
       <div className="mt-2 flex justify-end gap-2.5">
+        {onEdit && detail && (
+          <Button type="button" variant="secondary" onClick={() => onEdit(detail)}>
+            {t("employees.dialog.editButton")}
+          </Button>
+        )}
         <Button type="button" onClick={onClose}>
           {t("common.actions.close")}
         </Button>

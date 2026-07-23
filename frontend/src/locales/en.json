@@ -38,8 +38,11 @@
     "addButton": "Add Employee",
     "dialog": {
       "addTitle": "Add Employee",
+      "editTitle": "Edit Employee",
       "viewTitle": "Employee Details",
+      "editButton": "Edit",
       "saveButton": "Create Employee",
+      "updateButton": "Save Changes",
       "tabs": {
         "personal": "Personal",
         "employment": "Employment",
@@ -171,6 +174,24 @@
     "partners": {
       "notConfigured": "No Partner relationship type has been set up yet. Go to Admin → Relationship Types to flag one.",
       "noneTagged": "No companies or contacts are tagged as Partner yet."
+    }
+  },
+  "priorityTracker": {
+    "title": "Priority Tracker",
+    "subtitle": "Your personal Eisenhower board — see what's urgent and important at a glance",
+    "quadrants": {
+      "do": { "label": "Do", "sublabel": "Urgent & Important" },
+      "decide": { "label": "Decide", "sublabel": "Not Urgent & Important" },
+      "delegate": { "label": "Delegate", "sublabel": "Urgent & Not Important" },
+      "delete": { "label": "Delete", "sublabel": "Not Urgent & Not Important" }
+    },
+    "badge": {
+      "owned": "Owned",
+      "received": "Received"
+    },
+    "emptyState": {
+      "title": "No tasks here yet",
+      "message": "Tasks placed in this quadrant will show up here."
     }
   }
 }

@@ -1,11 +1,12 @@
 import { EmployeeDetailResponse, EmployeeListItemResponse, PERMISSIONS } from "@orelia/common";
-import { Body, Controller, Get, Logger, Param, ParseUUIDPipe, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Logger, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
 import { RbacService } from "../rbac/rbac.service";
 import { CreateEmployeeDto } from "./dto/create-employee.dto";
+import { UpdateEmployeeDto } from "./dto/update-employee.dto";
 import { Employee } from "./entities/employee.entity";
 import { EmployeesService } from "./employees.service";
 
@@ -81,6 +82,37 @@ export class EmployeesController {
       return this.toDetailResponse(employee, hasSensitiveAccess);
     } catch (err) {
       this.logger.error(`GET /employees/${id} failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Story 1.4 -- partial update, same tabbed field set as create. Sensitive
+  // stripping here uses `delete` (not `= undefined`): the service only
+  // assigns/diffs keys present on the dto, so deleting the keys guarantees a
+  // caller without EMPLOYEES_VIEW_SENSITIVE can neither read, set, nor
+  // accidentally wipe nicPassportNumber/baseSalary.
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.EMPLOYEES_UPDATE])
+  @Patch(":id")
+  async update(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: UpdateEmployeeDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<EmployeeDetailResponse> {
+    this.logger.debug(`PATCH /employees/${id} called by ${user.sub}`);
+    try {
+      const hasSensitiveAccess = await this.hasSensitiveAccess(user.sub);
+      if (!hasSensitiveAccess) {
+        this.logger.debug(`PATCH /employees/${id}: caller lacks EMPLOYEES_VIEW_SENSITIVE, deleting confidential keys`);
+        delete dto.nicPassportNumber;
+        delete dto.baseSalary;
+      }
+
+      const employee = await this.employeesService.update(id, dto, user.sub);
+      this.logger.debug(`PATCH /employees/${id} succeeded`);
+      return this.toDetailResponse(employee, hasSensitiveAccess);
+    } catch (err) {
+      this.logger.error(`PATCH /employees/${id} failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }

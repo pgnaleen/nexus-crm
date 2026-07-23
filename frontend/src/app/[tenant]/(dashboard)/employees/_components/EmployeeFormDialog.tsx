@@ -2,8 +2,13 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import { ClearanceLevel, EmployeeTitle, EmploymentStatus, EmploymentType, Gender } from "@orelia/common";
-import type { DepartmentPickerResponse, EmployeeListItemResponse } from "@orelia/common";
-import { createEmployee } from "@/lib/api/employees";
+import type {
+  DepartmentPickerResponse,
+  EmployeeDetailResponse,
+  EmployeeListItemResponse,
+  UpdateEmployeeRequest,
+} from "@orelia/common";
+import { createEmployee, updateEmployee } from "@/lib/api/employees";
 import { resolveUploadUrl, uploadEmployeeCv, uploadEmployeePhoto } from "@/lib/api/uploads";
 import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
@@ -92,16 +97,60 @@ function emptyFormState(): FormState {
   };
 }
 
+// Story 1.4 -- edit mode pre-fill. Detail nulls map to "" (the form's own
+// empty representation); baseSalary may arrive as a numeric string from the
+// API (Postgres numeric), String() covers both.
+function formStateFromDetail(detail: EmployeeDetailResponse): FormState {
+  return {
+    fullName: detail.fullName,
+    dateOfBirth: detail.dateOfBirth ?? "",
+    gender: detail.gender ?? "",
+    nationality: detail.nationality ?? "",
+    bio: detail.bio ?? "",
+    profilePhotoUrl: detail.profilePhotoUrl ?? "",
+    employeeCode: detail.employeeCode ?? "",
+    title: detail.title ?? "",
+    currentDesignation: detail.currentDesignation ?? "",
+    departmentId: detail.departmentId ?? "",
+    employmentType: detail.employmentType ?? "",
+    employmentStatus: detail.employmentStatus ?? "",
+    dateOfJoined: detail.dateOfJoined ?? "",
+    primaryLocation: detail.primaryLocation ?? "",
+    baseCountry: detail.baseCountry ?? "",
+    clearanceLevel: detail.clearanceLevel ?? "",
+    cvUrl: detail.cvUrl ?? "",
+    employeeEmail: detail.employeeEmail ?? "",
+    mobileNo: detail.mobileNo ?? "",
+    officeNo: detail.officeNo ?? "",
+    nicPassportNumber: detail.nicPassportNumber ?? "",
+    baseSalary: detail.baseSalary != null ? String(detail.baseSalary) : "",
+  };
+}
+
 interface EmployeeFormDialogProps {
   departments: DepartmentPickerResponse[];
   canViewSensitive: boolean;
   onClose: () => void;
   onSaved: (employee: EmployeeListItemResponse) => void;
+  // Story 1.4 -- both present = edit mode: the form pre-fills from
+  // initialDetail and PATCHes instead of POSTing.
+  initialDetail?: EmployeeDetailResponse;
+  onUpdated?: (employee: EmployeeDetailResponse) => void;
 }
 
-export function EmployeeFormDialog({ departments, canViewSensitive, onClose, onSaved }: EmployeeFormDialogProps) {
+export function EmployeeFormDialog({
+  departments,
+  canViewSensitive,
+  onClose,
+  onSaved,
+  initialDetail,
+  onUpdated,
+}: EmployeeFormDialogProps) {
+  const isEditMode = Boolean(initialDetail);
   const [activeTab, setActiveTab] = useState<TabId>("personal");
-  const [values, setValues] = useState<FormState>(emptyFormState);
+  const [values, setValues] = useState<FormState>(() =>
+    initialDetail ? formStateFromDetail(initialDetail) : emptyFormState(),
+  );
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -165,6 +214,44 @@ export function EmployeeFormDialog({ departments, canViewSensitive, onClose, onS
 
     setIsSaving(true);
     try {
+      if (isEditMode && initialDetail) {
+        // Tri-state contract: every rendered field is sent, "" -> null so
+        // clearing a previously-set optional field genuinely clears it
+        // (unlike create's `|| undefined`). Confidential keys are omitted
+        // entirely without EMPLOYEES_VIEW_SENSITIVE -- the backend deletes
+        // them again server-side regardless.
+        const payload: UpdateEmployeeRequest = {
+          fullName: values.fullName.trim(),
+          dateOfBirth: values.dateOfBirth || null,
+          gender: values.gender || null,
+          nationality: values.nationality.trim() || null,
+          bio: values.bio.trim() || null,
+          profilePhotoUrl: values.profilePhotoUrl || null,
+          employeeCode: values.employeeCode.trim() || null,
+          title: values.title || null,
+          currentDesignation: values.currentDesignation.trim() || null,
+          departmentId: values.departmentId || null,
+          employmentType: values.employmentType || null,
+          employmentStatus: values.employmentStatus || null,
+          dateOfJoined: values.dateOfJoined || null,
+          primaryLocation: values.primaryLocation.trim() || null,
+          baseCountry: values.baseCountry.trim() || null,
+          clearanceLevel: values.clearanceLevel || null,
+          cvUrl: values.cvUrl || null,
+          employeeEmail: values.employeeEmail.trim() || null,
+          mobileNo: values.mobileNo || null,
+          officeNo: values.officeNo.trim() || null,
+        };
+        if (canViewSensitive) {
+          payload.nicPassportNumber = values.nicPassportNumber.trim() || null;
+          payload.baseSalary = values.baseSalary.trim() ? Number(values.baseSalary) : null;
+        }
+        const updated = await updateEmployee(initialDetail.id, payload);
+        onUpdated?.(updated);
+        onClose();
+        return;
+      }
+
       const employee = await createEmployee({
         fullName: values.fullName.trim(),
         dateOfBirth: values.dateOfBirth || undefined,
@@ -205,7 +292,12 @@ export function EmployeeFormDialog({ departments, canViewSensitive, onClose, onS
   const departmentOptions = withNotSet(departments.map((d) => ({ value: d.id, label: d.name })));
 
   return (
-    <Dialog open title={t("employees.dialog.addTitle")} onClose={onClose} maxWidth="720px">
+    <Dialog
+      open
+      title={isEditMode ? t("employees.dialog.editTitle") : t("employees.dialog.addTitle")}
+      onClose={onClose}
+      maxWidth="720px"
+    >
       <form onSubmit={handleSubmit}>
         <div className="dialog-tabs">
           <button
@@ -534,7 +626,7 @@ export function EmployeeFormDialog({ departments, canViewSensitive, onClose, onS
             {t("common.actions.cancel")}
           </Button>
           <Button type="submit" isLoading={isSaving}>
-            {t("employees.dialog.saveButton")}
+            {isEditMode ? t("employees.dialog.updateButton") : t("employees.dialog.saveButton")}
           </Button>
         </div>
       </form>

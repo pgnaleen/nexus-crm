@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { PERMISSIONS } from "@orelia/common";
-import type { DepartmentPickerResponse, EmployeeListItemResponse } from "@orelia/common";
+import type { DepartmentPickerResponse, EmployeeDetailResponse, EmployeeListItemResponse } from "@orelia/common";
 import { Button } from "@/components/ui/Button";
 import { SearchIcon } from "@/components/ui/icons";
 import { t } from "@/lib/i18n";
@@ -27,9 +27,13 @@ export function EmployeesWidget({ employees: initialEmployees, permissions, depa
   const [search, setSearch] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [viewingEmployeeId, setViewingEmployeeId] = useState<string | null>(null);
+  // Story 1.4 -- detail loaded via the view dialog, handed to the form
+  // dialog as edit-mode pre-fill.
+  const [editingDetail, setEditingDetail] = useState<EmployeeDetailResponse | null>(null);
 
   const canView = permissions.includes(PERMISSIONS.EMPLOYEES_VIEW);
   const canCreate = permissions.includes(PERMISSIONS.EMPLOYEES_CREATE);
+  const canUpdate = permissions.includes(PERMISSIONS.EMPLOYEES_UPDATE);
   const canViewSensitive = permissions.includes(PERMISSIONS.EMPLOYEES_VIEW_SENSITIVE);
 
   const filteredEmployees = employees.filter(
@@ -38,6 +42,25 @@ export function EmployeesWidget({ employees: initialEmployees, permissions, depa
 
   function handleSaved(employee: EmployeeListItemResponse) {
     setEmployees((current) => [...current, employee].sort((a, b) => a.fullName.localeCompare(b.fullName)));
+  }
+
+  // Story 1.4 -- replace the edited row in place (AC: name/title/department/
+  // status changes reflect in the directory immediately), re-sorting in case
+  // the name changed.
+  function handleUpdated(detail: EmployeeDetailResponse) {
+    const listItem: EmployeeListItemResponse = {
+      id: detail.id,
+      fullName: detail.fullName,
+      title: detail.title,
+      departmentId: detail.departmentId,
+      departmentName: detail.departmentName,
+      employmentStatus: detail.employmentStatus,
+    };
+    setEmployees((current) =>
+      current
+        .map((employee) => (employee.id === listItem.id ? listItem : employee))
+        .sort((a, b) => a.fullName.localeCompare(b.fullName)),
+    );
   }
 
   return (
@@ -156,11 +179,30 @@ export function EmployeesWidget({ employees: initialEmployees, permissions, depa
         />
       )}
 
-      {viewingEmployeeId && (
+      {editingDetail && (
+        <EmployeeFormDialog
+          departments={departments}
+          canViewSensitive={canViewSensitive}
+          initialDetail={editingDetail}
+          onClose={() => setEditingDetail(null)}
+          onSaved={handleSaved}
+          onUpdated={handleUpdated}
+        />
+      )}
+
+      {viewingEmployeeId && !editingDetail && (
         <EmployeeDetailDialog
           employeeId={viewingEmployeeId}
           canViewSensitive={canViewSensitive}
           onClose={() => setViewingEmployeeId(null)}
+          onEdit={
+            canUpdate
+              ? (detail) => {
+                  setViewingEmployeeId(null);
+                  setEditingDetail(detail);
+                }
+              : undefined
+          }
         />
       )}
     </div>
