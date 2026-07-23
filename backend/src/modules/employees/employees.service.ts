@@ -19,4 +19,22 @@ export class EmployeesService {
       throw err;
     }
   }
+
+  // Full Employee Directory listing (Story 1.1) -- every employee in the
+  // tenant, department relation loaded for display. Unlike findPicker(),
+  // this is the real admin-gated listing, not a narrow dropdown lookup.
+  async findAll(): Promise<Employee[]> {
+    this.logger.debug("findAll called");
+    try {
+      const results = await this.employeesRepo.findScoped({
+        relations: ["department"],
+        order: { fullName: "ASC" },
+      });
+      this.logger.debug(`findAll returning ${results.length} row(s)`);
+      return results;
+    } catch (err) {
+      this.logger.error(`findAll failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
 }

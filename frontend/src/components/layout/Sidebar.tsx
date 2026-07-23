@@ -85,6 +85,7 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
   const isHrActive = pathname === hrHref;
 
   const canSeeDeals = hasAnyPermissionForPrefix(permissions, "deals");
+  const canSeeEmployees = hasAnyPermissionForPrefix(permissions, "employees");
   const visibleAdminItems = ADMIN_ITEMS.filter(
     (item) => !item.prefix || hasAnyPermissionForPrefix(permissions, item.prefix),
   );
@@ -195,29 +196,33 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
         )}
 
         {/* HUMAN RESOURCES GROUP */}
-        <button
-          type="button"
-          className={GROUP_TOGGLE}
-          onClick={() => setIsHROpen((current) => !current)}
-          aria-expanded={isHROpen}
-        >
-          <UserIcon size={17} />
-          <span className="flex-1">Human Resources</span>
-          <span className={chevronClasses(isHROpen)}>
-            <ChevronDownIcon size={14} />
-          </span>
-        </button>
-
-        {isHROpen && (
-          <div className="mt-0.5 mb-1.5 flex flex-col gap-0.5 border-l border-white/10 pl-3">
-            <Link
-              href={hrHref}
-              className={linkClasses(isHrActive, true)}
-              onClick={() => handleLinkClick(isHrActive)}
+        {canSeeEmployees && (
+          <>
+            <button
+              type="button"
+              className={GROUP_TOGGLE}
+              onClick={() => setIsHROpen((current) => !current)}
+              aria-expanded={isHROpen}
             >
-              Employees
-            </Link>
-          </div>
+              <UserIcon size={17} />
+              <span className="flex-1">Human Resources</span>
+              <span className={chevronClasses(isHROpen)}>
+                <ChevronDownIcon size={14} />
+              </span>
+            </button>
+
+            {isHROpen && (
+              <div className="mt-0.5 mb-1.5 flex flex-col gap-0.5 border-l border-white/10 pl-3">
+                <Link
+                  href={hrHref}
+                  className={linkClasses(isHrActive, true)}
+                  onClick={() => handleLinkClick(isHrActive)}
+                >
+                  Employees
+                </Link>
+              </div>
+            )}
+          </>
         )}
         {/* CRM CONFIGURATION GROUP */}
         {visibleConfigItems.length > 0 && (

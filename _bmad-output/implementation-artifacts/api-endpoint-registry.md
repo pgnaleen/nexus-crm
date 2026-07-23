@@ -174,6 +174,20 @@ can list them); the dropdown/filter listing used elsewhere in the app lives in
 | 3 | PATCH | `/departments/:id` | RBAC | `DEPARTMENT_UPDATE` | Update a department's name/active state. | body: `{name?, isActive?}` | `DepartmentResponse` | `update` → `departments.service.ts::update` | `DepartmentsWidget.tsx` (Edit) | ✅ | Records an `audit_logs` update diff (field-level `{old, new}`). |
 | 4 | DELETE | `/departments/:id` | RBAC | `DEPARTMENT_DELETE` | Soft-delete a department. | none | `{success: true}` | `remove` → `departments.service.ts::remove` | `DepartmentsWidget.tsx` (Delete) | ✅ | Records an `audit_logs` delete entry. Verified live: created, renamed, deleted a real department via the API, confirmed all three `audit_logs` rows and the full debug-log trail at both layers. |
 
+## Employees (`backend/src/modules/employees/employees.controller.ts`)
+
+Employee Management epic, Story 1.1 (Employee Directory view) — only endpoint so far. Response is
+`EmployeeListItemResponse`, a deliberately narrow directory-listing shape (id, fullName, title,
+departmentId/departmentName, employmentStatus) — excludes every Confidential field the `Employee`
+entity/`IEmployee` type carries (NIC/passport, base salary, etc.); those stay gated behind a
+separate permission once that story (1.2+, Confidential tab) is built. The dropdown/picker listing
+used elsewhere in the app (Deal owner field, Relationship party referral field) lives in
+`PickersController` (`GET /pickers/employees`), not here — see the Pickers module section above.
+
+| # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | GET | `/employees` | RBAC | `EMPLOYEES_VIEW` | List every employee in the tenant (directory view). | none | `EmployeeListItemResponse[]` | `findAll` → `employees.service.ts::findAll` | `EmployeesWidget.tsx` | ✅ | **New 2026-07-23**, built with debug logging from day one. `EMPLOYEES_VIEW` is the only Employees permission that exists so far — `_CREATE`/`_UPDATE`/`_DELETE` are added alongside their own stories rather than pre-seeded ahead of any endpoint enforcing them (avoiding the dead-permission pattern found earlier in `COMPANIES_*`/`CONTACTS_*`). Sidebar's "Human Resources" group is now gated on this permission — previously visible to every user regardless of permission. |
+
 ## Deal Sources (`backend/src/modules/deal-sources/deal-sources.controller.ts`)
 
 Identical shape to Departments above — same permission-union `findAll`, same CRUD pattern.

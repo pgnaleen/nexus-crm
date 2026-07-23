@@ -1,5 +1,17 @@
 import { ActingTenant, AuthSessionResponse, PERMISSIONS, VerifyPasswordResponse } from "@orelia/common";
-import { Body, Controller, Get, HttpCode, HttpStatus, Logger, Post, Req, Res, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Logger,
+  Post,
+  Req,
+  Res,
+  UnauthorizedException,
+  UseGuards,
+} from "@nestjs/common";
 import type { Request, Response } from "express";
 import { ACT_AS_TENANT_COOKIE, ACT_AS_TENANT_TTL_MS } from "../../core/tenant";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
@@ -56,7 +68,16 @@ export class AuthController {
       this.logger.debug(`POST /auth/refresh succeeded for user ${session.user.id}`);
       return session;
     } catch (err) {
-      this.logger.error(`POST /auth/refresh failed: ${(err as Error).message}`, (err as Error).stack);
+      // A missing/invalid/expired refresh token is the expected outcome for
+      // a logged-out or already-expired session (apiFetch's 401-retry logic
+      // calls this route speculatively on every 401), not a system error --
+      // same treatment this codebase already gives NotFoundException/
+      // ConflictException elsewhere. Still always rethrown, never swallowed.
+      if (err instanceof UnauthorizedException) {
+        this.logger.debug(`POST /auth/refresh rejected: ${(err as Error).message}`);
+      } else {
+        this.logger.error(`POST /auth/refresh failed: ${(err as Error).message}`, (err as Error).stack);
+      }
       throw err;
     }
   }
