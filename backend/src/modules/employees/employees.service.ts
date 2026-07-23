@@ -1,10 +1,11 @@
 import { EmploymentStatus } from "@orelia/common";
-import { ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { IsNull } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { deleteUploadedEmployeeFile } from "../uploads/uploaded-file.util";
 import { CreateEmployeeDto } from "./dto/create-employee.dto";
 import { UpdateEmployeeDto } from "./dto/update-employee.dto";
+import { UpdateOrgChartStructureDto } from "./dto/update-org-chart-structure.dto";
 import { Employee } from "./entities/employee.entity";
 import { EmployeesRepository } from "./employees.repository";
 
@@ -230,6 +231,120 @@ export class EmployeesService {
       return results;
     } catch (err) {
       this.logger.error(`findForOrgChart failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Story 1.8 -- the org chart editor's batch commit: every changed
+  // reporting relationship saved together, in one transaction. Validates
+  // cross-field rules and cycles server-side even though the UI already
+  // blocks them at draw time -- the endpoint is the real boundary.
+  async updateOrgChartStructure(dto: UpdateOrgChartStructureDto, userId: string): Promise<void> {
+    this.logger.debug(`updateOrgChartStructure called by ${userId} (${dto.changes.length} change(s))`);
+    try {
+      const all = await this.employeesRepo.findScoped({});
+      const byId = new Map(all.map((employee) => [employee.id, employee]));
+      const exited = (employee: Employee) =>
+        employee.employmentStatus === EmploymentStatus.Terminated ||
+        employee.employmentStatus === EmploymentStatus.Resigned;
+
+      // Cross-field + reference validation, change by change.
+      const seen = new Set<string>();
+      for (const change of dto.changes) {
+        if (seen.has(change.employeeId)) {
+          throw new BadRequestException("Duplicate employee in change set");
+        }
+        seen.add(change.employeeId);
+
+        const employee = byId.get(change.employeeId);
+        if (!employee || exited(employee)) {
+          this.logger.debug(`updateOrgChartStructure: employee ${change.employeeId} missing or exited`);
+          throw new BadRequestException("Change set references an unknown or exited employee");
+        }
+        if (change.placedAtRoot && change.reportingManagerId) {
+          throw new BadRequestException("An employee cannot both report to a manager and sit at the root");
+        }
+        if (change.reportingManagerId) {
+          if (change.reportingManagerId === change.employeeId) {
+            throw new BadRequestException("An employee cannot report to themselves");
+          }
+          const manager = byId.get(change.reportingManagerId);
+          if (!manager || exited(manager)) {
+            this.logger.debug(`updateOrgChartStructure: manager ${change.reportingManagerId} missing or exited`);
+            throw new BadRequestException("Change set references an unknown or exited manager");
+          }
+        }
+      }
+
+      // Cycle detection over the WOULD-BE structure: current parents
+      // overlaid with the pending changes.
+      const pendingParent = new Map<string, string | null>();
+      for (const employee of all) {
+        pendingParent.set(employee.id, employee.reportingManagerId ?? null);
+      }
+      for (const change of dto.changes) {
+        pendingParent.set(change.employeeId, change.reportingManagerId);
+      }
+      for (const change of dto.changes) {
+        const visited = new Set<string>([change.employeeId]);
+        let cursor = change.reportingManagerId;
+        while (cursor) {
+          if (visited.has(cursor)) {
+            this.logger.debug(`updateOrgChartStructure: cycle detected at employee ${cursor}`);
+            throw new BadRequestException("The requested structure contains a reporting loop");
+          }
+          visited.add(cursor);
+          cursor = pendingParent.get(cursor) ?? null;
+        }
+      }
+
+      // Apply only the entries that actually change something.
+      const toSave: Employee[] = [];
+      const auditEntries: { id: string; changes: Record<string, { old: unknown; new: unknown }> }[] = [];
+      for (const change of dto.changes) {
+        const employee = byId.get(change.employeeId)!;
+        const oldManagerId = employee.reportingManagerId ?? null;
+        const oldPlacedAtRoot = employee.placedAtRoot;
+        if (oldManagerId === change.reportingManagerId && oldPlacedAtRoot === change.placedAtRoot) {
+          this.logger.debug(`updateOrgChartStructure: employee ${change.employeeId} unchanged, skipping`);
+          continue;
+        }
+        (employee as unknown as { reportingManagerId: string | null }).reportingManagerId =
+          change.reportingManagerId;
+        employee.placedAtRoot = change.placedAtRoot;
+        employee.updatedBy = userId;
+        toSave.push(employee);
+        const diff: Record<string, { old: unknown; new: unknown }> = {};
+        if (oldManagerId !== change.reportingManagerId) {
+          diff.reportingManagerId = { old: oldManagerId, new: change.reportingManagerId };
+        }
+        if (oldPlacedAtRoot !== change.placedAtRoot) {
+          diff.placedAtRoot = { old: oldPlacedAtRoot, new: change.placedAtRoot };
+        }
+        auditEntries.push({ id: change.employeeId, changes: diff });
+      }
+
+      if (toSave.length === 0) {
+        this.logger.debug("updateOrgChartStructure: no effective changes, nothing to save");
+        return;
+      }
+
+      await this.employeesRepo.saveManyScoped(toSave);
+      this.logger.debug(`updateOrgChartStructure saved ${toSave.length} row(s)`);
+
+      for (const entry of auditEntries) {
+        await this.auditLogService.record({
+          entityType: AUDIT_ENTITY_TYPE,
+          entityId: entry.id,
+          action: "update",
+          actorId: userId,
+          changes: entry.changes,
+        });
+      }
+    } catch (err) {
+      if (!(err instanceof BadRequestException)) {
+        this.logger.error(`updateOrgChartStructure failed: ${(err as Error).message}`, (err as Error).stack);
+      }
       throw err;
     }
   }

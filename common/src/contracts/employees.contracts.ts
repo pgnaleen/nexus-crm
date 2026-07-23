@@ -108,6 +108,26 @@ export interface OrgChartEmployeeResponse {
   departmentName: string | null;
   profilePhotoUrl: string | null;
   reportingManagerId: string | null;
+  // Story 1.8 -- placed directly beneath the Company root (top of a
+  // reporting line). Placed = reportingManagerId set OR placedAtRoot;
+  // neither = unplaced panel.
+  placedAtRoot: boolean;
+}
+
+// Story 1.8 (Restructure the Org Chart) -- batch save of every changed
+// reporting relationship in one request. Per entry: reportingManagerId set
+// = reports to that employee; placedAtRoot true (managerId must be null) =
+// top-level under the Company root; both null/false = back to unplaced.
+// The endpoint validates tenant membership, non-exited targets, and rejects
+// any cycle server-side (the UI also blocks cycles at draw time).
+export interface OrgChartStructureChange {
+  employeeId: string;
+  reportingManagerId: string | null;
+  placedAtRoot: boolean;
+}
+
+export interface UpdateOrgChartStructureRequest {
+  changes: OrgChartStructureChange[];
 }
 
 // Story 1.6 (Grant Login Access) -- options for User Management's "link to

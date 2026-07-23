@@ -7,6 +7,7 @@ import { PermissionsGuard } from "../rbac/guards/permissions.guard";
 import { RbacService } from "../rbac/rbac.service";
 import { CreateEmployeeDto } from "./dto/create-employee.dto";
 import { UpdateEmployeeDto } from "./dto/update-employee.dto";
+import { UpdateOrgChartStructureDto } from "./dto/update-org-chart-structure.dto";
 import { Employee } from "./entities/employee.entity";
 import { EmployeesService } from "./employees.service";
 
@@ -82,9 +83,34 @@ export class EmployeesController {
         departmentName: employee.department?.name ?? null,
         profilePhotoUrl: employee.profilePhotoUrl ?? null,
         reportingManagerId: employee.reportingManagerId ?? null,
+        placedAtRoot: employee.placedAtRoot,
       }));
     } catch (err) {
       this.logger.error(`GET /employees/org-chart failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Story 1.8 -- the chart editor's batch commit. Nothing is written while
+  // the user drags things around; this single call receives every changed
+  // reporting relationship together after the Save confirmation.
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.EMPLOYEES_UPDATE])
+  @Patch("org-chart/structure")
+  async updateOrgChartStructure(
+    @Body() dto: UpdateOrgChartStructureDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ success: true }> {
+    this.logger.debug(`PATCH /employees/org-chart/structure called by ${user.sub} (${dto.changes.length} change(s))`);
+    try {
+      await this.employeesService.updateOrgChartStructure(dto, user.sub);
+      this.logger.debug("PATCH /employees/org-chart/structure succeeded");
+      return { success: true };
+    } catch (err) {
+      this.logger.error(
+        `PATCH /employees/org-chart/structure failed: ${(err as Error).message}`,
+        (err as Error).stack,
+      );
       throw err;
     }
   }

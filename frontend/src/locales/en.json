@@ -49,11 +49,26 @@
     "orgChart": {
       "title": "Organization Chart",
       "subtitle": "Who reports to whom across the organization, colored by department",
+      "editSubtitle": "Edit mode — drag people in, draw reporting lines, then Save. Nothing is stored until you do.",
       "companyLabel": "Company",
       "navLabel": "Organization Chart",
+      "editButton": "Edit Chart",
+      "saveButton": "Save",
       "unplacedTitle": "Unplaced",
       "unplacedHint": "Employees not yet placed in the reporting structure. Placement is done from the chart's edit mode.",
+      "unplacedDragHint": "Drag an employee onto the canvas, then draw a line from their manager down to them.",
       "unplacedEmpty": "Everyone is placed in the structure.",
+      "anchorsTitle": "Department Anchors",
+      "anchorsHint": "Visual markers only — dropping one on the canvas never changes anyone's actual department.",
+      "loopRejected": "That connection would create a reporting loop.",
+      "saveConfirm": {
+        "title": "Save Organization Chart",
+        "message": "Save {count} change(s) to the reporting structure? Everyone viewing the chart will see the new structure.",
+        "confirmLabel": "Save changes"
+      },
+      "errors": {
+        "saveFailed": "Failed to save the organization chart"
+      },
       "noAccess": "You don't have permission to view the organization chart."
     },
     "exitDialog": {
@@ -252,6 +267,23 @@
       "errors": {
         "titleRequired": "Title is required",
         "saveFailed": "Failed to create task"
+      }
+    },
+    "detailDialog": {
+      "quadrantLabel": "Quadrant",
+      "statusLabel": "Status",
+      "progressLabel": "Progress",
+      "notesLabel": "Notes",
+      "notesPlaceholder": "Optional details or context...",
+      "notesReadOnlyHint": "Only the current owner can edit notes.",
+      "saveNotesButton": "Save Notes",
+      "historyLabel": "History",
+      "historyCreatedEntry": "Created",
+      "status": {
+        "placed": "Placed"
+      },
+      "errors": {
+        "saveFailed": "Failed to save notes"
       }
     }
   }

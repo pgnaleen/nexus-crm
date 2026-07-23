@@ -43,6 +43,13 @@ export class Employee extends AuditedTenantEntity {
   @JoinColumn({ name: "reporting_manager_id" })
   reportingManager?: Employee;
 
+  // Story 1.8 -- placed directly beneath the Company root on the org chart
+  // (i.e. top of a reporting line). Distinct from "unplaced": both have
+  // reportingManagerId NULL, but unplaced employees sit in the side panel.
+  // Only ever written by the org chart editor's batch save.
+  @Column({ default: false })
+  placedAtRoot!: boolean;
+
   @Column({ type: "enum", enum: EmploymentType, nullable: true })
   employmentType?: EmploymentType;
 

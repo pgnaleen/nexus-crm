@@ -3,7 +3,9 @@ import type {
   EmployeeDetailResponse,
   EmployeeLinkPickerResponse,
   EmployeeListItemResponse,
+  OrgChartEmployeeResponse,
   UpdateEmployeeRequest,
+  UpdateOrgChartStructureRequest,
 } from "@orelia/common";
 import { apiFetch } from "./client";
 
@@ -27,6 +29,21 @@ export function getEmployee(id: string): Promise<EmployeeDetailResponse> {
 
 export function deleteEmployee(id: string): Promise<{ success: true }> {
   return apiFetch<{ success: true }>(`/employees/${id}`, { method: "DELETE" });
+}
+
+// Story 1.8 -- fresh chart data after a structure save (same endpoint the
+// page's server fetch uses).
+export function getOrgChart(): Promise<OrgChartEmployeeResponse[]> {
+  return apiFetch<OrgChartEmployeeResponse[]>("/employees/org-chart");
+}
+
+// Story 1.8 -- the chart editor's batch commit: every changed reporting
+// relationship in one request.
+export function updateOrgChartStructure(payload: UpdateOrgChartStructureRequest): Promise<{ success: true }> {
+  return apiFetch<{ success: true }>("/employees/org-chart/structure", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
 // Story 1.6 -- User Management's "link to Employee" picker options (picker
