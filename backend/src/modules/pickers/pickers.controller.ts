@@ -5,6 +5,8 @@ import {
   EmployeePickerResponse,
   IndustryResponse,
   PERMISSIONS,
+  RelationshipRolePickerResponse,
+  SystemRole,
 } from "@orelia/common";
 import { Controller, Get, Logger, Query, UseGuards } from "@nestjs/common";
 import { CompaniesService } from "../companies/companies.service";
@@ -14,6 +16,7 @@ import { EmployeesService } from "../employees/employees.service";
 import { IndustriesService } from "../industries/industries.service";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
+import { RelationshipTypesService } from "../relationship-types/relationship-types.service";
 
 // Held by anyone who can see the Relationships section at all -- any one of
 // these four is enough, since the parties list itself decides what a given
@@ -48,7 +51,69 @@ export class PickersController {
     private readonly departmentsService: DepartmentsService,
     private readonly employeesService: EmployeesService,
     private readonly industriesService: IndustriesService,
+    private readonly relationshipTypesService: RelationshipTypesService,
   ) {}
+
+  // Resolves whichever type this tenant flagged for `role`, then returns the
+  // companies/contacts tagged under it. `configured: false` means no type is
+  // flagged yet (distinct from `configured: true` with empty arrays, which
+  // means a type is flagged but nothing's tagged under it).
+  private async findRolePickerParties(role: SystemRole): Promise<RelationshipRolePickerResponse> {
+    const typeId = await this.relationshipTypesService.findSystemRoleTypeId(role);
+    if (!typeId) {
+      this.logger.debug(`No relationship type flagged as ${role} for this tenant`);
+      return { configured: false, companies: [], contacts: [] };
+    }
+    const [companies, contacts] = await Promise.all([
+      this.companiesService.findPickerForRelationshipType(typeId),
+      this.contactsService.findPickerForRelationshipType(typeId),
+    ]);
+    return {
+      configured: true,
+      companies: companies.map((company) => ({ id: company.id, name: company.name, country: company.country ?? null })),
+      contacts: contacts.map((contact) => ({
+        id: contact.id,
+        fullName: contact.fullName,
+        companyId: contact.companyId ?? null,
+      })),
+    };
+  }
+
+  // Gated on DEALS_VIEW only -- the only real caller is Add Deal's Customer field.
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.DEALS_VIEW])
+  @Get("deal-customer-parties")
+  async findDealCustomerParties(): Promise<RelationshipRolePickerResponse> {
+    this.logger.debug("GET /pickers/deal-customer-parties called");
+    try {
+      const result = await this.findRolePickerParties(SystemRole.Customer);
+      this.logger.debug(
+        `GET /pickers/deal-customer-parties returning configured=${result.configured}, ${result.companies.length} company(ies), ${result.contacts.length} contact(s)`,
+      );
+      return result;
+    } catch (err) {
+      this.logger.error(`GET /pickers/deal-customer-parties failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Gated on DEALS_VIEW only -- the only real caller is Add Deal's Partners field.
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.DEALS_VIEW])
+  @Get("deal-partner-parties")
+  async findDealPartnerParties(): Promise<RelationshipRolePickerResponse> {
+    this.logger.debug("GET /pickers/deal-partner-parties called");
+    try {
+      const result = await this.findRolePickerParties(SystemRole.Partner);
+      this.logger.debug(
+        `GET /pickers/deal-partner-parties returning configured=${result.configured}, ${result.companies.length} company(ies), ${result.contacts.length} contact(s)`,
+      );
+      return result;
+    } catch (err) {
+      this.logger.error(`GET /pickers/deal-partner-parties failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
 
   @UseGuards(PermissionsGuard)
   @RequirePermission([PERMISSIONS.DEALS_VIEW])

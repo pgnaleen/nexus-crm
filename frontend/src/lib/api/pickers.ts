@@ -1,4 +1,9 @@
-import type { CompanyPickerResponse, ContactPickerResponse, EmployeePickerResponse } from "@orelia/common";
+import type {
+  CompanyPickerResponse,
+  ContactPickerResponse,
+  EmployeePickerResponse,
+  RelationshipRolePickerResponse,
+} from "@orelia/common";
 import { apiFetch } from "./client";
 
 export function listCompaniesPicker(): Promise<CompanyPickerResponse[]> {
@@ -7,6 +12,14 @@ export function listCompaniesPicker(): Promise<CompanyPickerResponse[]> {
 
 export function listContactsPicker(): Promise<ContactPickerResponse[]> {
   return apiFetch<ContactPickerResponse[]>("/pickers/contacts");
+}
+
+export function listDealCustomerParties(): Promise<RelationshipRolePickerResponse> {
+  return apiFetch<RelationshipRolePickerResponse>("/pickers/deal-customer-parties");
+}
+
+export function listDealPartnerParties(): Promise<RelationshipRolePickerResponse> {
+  return apiFetch<RelationshipRolePickerResponse>("/pickers/deal-partner-parties");
 }
 
 export function listEmployeesPicker(): Promise<EmployeePickerResponse[]> {

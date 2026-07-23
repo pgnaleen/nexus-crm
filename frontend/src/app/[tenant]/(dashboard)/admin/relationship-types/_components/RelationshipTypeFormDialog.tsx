@@ -1,21 +1,37 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import type { RelationshipTypeResponse } from "@orelia/common";
+import { SystemRole, type RelationshipTypeResponse } from "@orelia/common";
 import { createRelationshipType, updateRelationshipType } from "@/lib/api/relationship-types";
 import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
+import { CustomSelect } from "@/components/ui/CustomSelect";
 import { minLength, required, validate } from "@/lib/validation";
+import { t } from "@/lib/i18n";
 
 interface FormState {
   name: string;
+  systemRole: SystemRole | "";
+}
+
+const SYSTEM_ROLE_OPTIONS = [
+  { value: "", label: t("relationshipTypes.dialog.systemRoleNone") },
+  { value: SystemRole.Customer, label: "Customer" },
+  { value: SystemRole.Partner, label: "Partner" },
+];
+
+function systemRoleLabel(role: SystemRole | null): string {
+  if (role === SystemRole.Customer) return "Customer";
+  if (role === SystemRole.Partner) return "Partner";
+  return t("relationshipTypes.dialog.systemRoleNone");
 }
 
 function toFormState(type?: RelationshipTypeResponse): FormState {
   return {
     name: type?.name ?? "",
+    systemRole: type?.systemRole ?? "",
   };
 }
 
@@ -63,6 +79,7 @@ export function RelationshipTypeFormDialog({
 
     const payload = {
       name: values.name.trim(),
+      systemRole: values.systemRole === "" ? null : values.systemRole,
     };
 
     setIsSaving(true);
@@ -99,6 +116,29 @@ export function RelationshipTypeFormDialog({
           placeholder="e.g. Customer"
           onChange={(e) => handleNameChange(e.target.value)}
         />
+
+        <div className="mb-[18px]">
+          {isViewOnly ? (
+            <TextField
+              label={t("relationshipTypes.dialog.systemRoleLabel")}
+              value={systemRoleLabel(relationshipType?.systemRole ?? null)}
+              disabled
+            />
+          ) : (
+            <>
+              <CustomSelect
+                label={t("relationshipTypes.dialog.systemRoleLabel")}
+                fullWidth
+                value={values.systemRole}
+                onChange={(v) => setField("systemRole", v as SystemRole | "")}
+                options={SYSTEM_ROLE_OPTIONS}
+              />
+              <p className="mt-1.5 text-xs text-[var(--color-text-muted)]">
+                {t("relationshipTypes.dialog.systemRoleHelp")}
+              </p>
+            </>
+          )}
+        </div>
 
         <div className="mt-2 flex justify-end gap-2.5">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>

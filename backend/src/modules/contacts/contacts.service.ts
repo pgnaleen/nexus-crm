@@ -8,6 +8,38 @@ export class ContactsService {
 
   constructor(private readonly contactsRepo: ContactsRepository) {}
 
+  // Used by the Deal Customer/Partner pickers. Matches contacts EITHER
+  // directly tagged with their own map row OR owned by a company that has a
+  // map row for this type -- company-owned contacts deliberately don't get
+  // their own map row (the 2026-07-22 double-counting fix), so without this
+  // OR they'd vanish from the filtered list entirely instead of correctly
+  // inheriting their parent company's tag.
+  async findPickerForRelationshipType(relationshipTypeId: string): Promise<Contact[]> {
+    this.logger.debug(`findPickerForRelationshipType called (relationshipTypeId=${relationshipTypeId})`);
+    try {
+      const results = await this.contactsRepo
+        .queryBuilderScoped("contact")
+        .andWhere(
+          `contact.id IN (
+             SELECT contact_id FROM relationship_company_contact_map
+             WHERE relationship_type_id = :relationshipTypeId AND contact_id IS NOT NULL AND deleted_at IS NULL
+           )
+           OR contact.company_id IN (
+             SELECT company_id FROM relationship_company_contact_map
+             WHERE relationship_type_id = :relationshipTypeId AND company_id IS NOT NULL AND deleted_at IS NULL
+           )`,
+          { relationshipTypeId },
+        )
+        .orderBy("contact.fullName", "ASC")
+        .getMany();
+      this.logger.debug(`findPickerForRelationshipType returning ${results.length} row(s)`);
+      return results;
+    } catch (err) {
+      this.logger.error(`findPickerForRelationshipType failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
   async findPicker(companyId?: string): Promise<Contact[]> {
     this.logger.debug(`findPicker called (companyId=${companyId ?? "none"})`);
     try {

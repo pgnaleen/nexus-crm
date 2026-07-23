@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { PERMISSIONS } from "@orelia/common";
+import { PERMISSIONS, SystemRole } from "@orelia/common";
 import type { ActingTenant, RelationshipTypeResponse, TenantSummaryResponse } from "@orelia/common";
 import { deleteRelationshipType } from "@/lib/api/relationship-types";
 import { ApiError } from "@/lib/api/client";
@@ -24,6 +24,12 @@ type DialogState =
   | { mode: "create" }
   | { mode: "edit" | "view"; relationshipType: RelationshipTypeResponse }
   | null;
+
+function systemRoleLabel(role: SystemRole | null): string {
+  if (role === SystemRole.Customer) return "Customer";
+  if (role === SystemRole.Partner) return "Partner";
+  return "—";
+}
 
 // Format ISO date string for display
 function formatDate(iso: string): string {
@@ -183,6 +189,9 @@ export function RelationshipTypesWidget({
                   Name
                 </th>
                 <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  System Role
+                </th>
+                <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
                   Created
                 </th>
                 {showActionsColumn && (
@@ -209,6 +218,9 @@ export function RelationshipTypesWidget({
                 >
                   <td className="border-b border-[var(--color-border)] p-3 font-medium text-crm-text">
                     {type.name}
+                  </td>
+                  <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
+                    {systemRoleLabel(type.systemRole)}
                   </td>
                   <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
                     {formatDate(type.createdAt)}

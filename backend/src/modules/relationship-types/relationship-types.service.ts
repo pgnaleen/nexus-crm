@@ -1,5 +1,6 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
+import { SystemRole } from "@orelia/common";
 import { DataSource } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { CreateRelationshipTypeDto } from "./dto/create-relationship-type.dto";
@@ -46,49 +47,106 @@ export class RelationshipTypesService {
     return this.partiesRepo.countActiveForType(id);
   }
 
+  // Resolves which row (if any) this tenant has flagged for a given system
+  // role -- used by the Deal Customer/Partner pickers to filter by id, never
+  // by name, so renaming a flagged type never breaks the filter.
+  async findSystemRoleTypeId(role: SystemRole): Promise<string | null> {
+    this.logger.debug(`findSystemRoleTypeId called for role=${role}`);
+    const type = await this.relationshipTypesRepo.findOneScoped({ where: { systemRole: role } });
+    if (!type) {
+      this.logger.debug(`No relationship type flagged as ${role} for this tenant`);
+      return null;
+    }
+    this.logger.debug(`Resolved ${role} to relationship type ${type.id}`);
+    return type.id;
+  }
+
+  // Pre-DB-constraint check so a duplicate flag attempt is a clean 400 with
+  // a readable message, not a raw partial-unique-index 500.
+  private async assertSystemRoleAvailable(role: SystemRole, excludeId?: string): Promise<void> {
+    const existing = await this.relationshipTypesRepo.findOneScoped({ where: { systemRole: role } });
+    if (existing && existing.id !== excludeId) {
+      throw new BadRequestException(
+        `"${existing.name}" is already flagged as ${role}. Unflag it first before flagging another type.`,
+      );
+    }
+  }
+
   async create(dto: CreateRelationshipTypeDto, userId: string): Promise<RelationshipType> {
-    const type = this.relationshipTypesRepo.createScoped({ ...dto, createdBy: userId });
-    const saved = await this.relationshipTypesRepo.saveScoped(type);
-    await this.auditLogService.record({
-      entityType: AUDIT_ENTITY_TYPE,
-      entityId: saved.id,
-      action: "insert",
-      actorId: userId,
-      changes: { name: saved.name },
-    });
-    return saved;
+    this.logger.debug(`create called by ${userId} (name="${dto.name}", systemRole=${dto.systemRole ?? "none"})`);
+    try {
+      if (dto.systemRole != null) {
+        await this.assertSystemRoleAvailable(dto.systemRole);
+      }
+      const type = this.relationshipTypesRepo.createScoped({ ...dto, createdBy: userId });
+      const saved = await this.relationshipTypesRepo.saveScoped(type);
+      this.logger.debug(`create succeeded for relationship type ${saved.id}`);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: saved.id,
+        action: "insert",
+        actorId: userId,
+        changes: { name: saved.name, systemRole: saved.systemRole ?? null },
+      });
+      return saved;
+    } catch (err) {
+      this.logger.error(`create failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   async update(id: string, dto: UpdateRelationshipTypeDto, userId: string): Promise<RelationshipType> {
+    this.logger.debug(`update called for relationship type ${id} by ${userId}`);
     const type = await this.findOneOrFail(id);
-    const before = { name: type.name };
-    Object.assign(type, dto, { updatedBy: userId });
-    await this.relationshipTypesRepo.saveScoped(type);
-    // Re-fetch rather than return the in-memory object -- Object.assign copies
-    // omitted dto fields as explicit `undefined`, which would misreport
-    // untouched columns as missing in the API response (see rbac.service.ts).
-    const updated = await this.findOneOrFail(id);
 
-    const changes: Record<string, { old: unknown; new: unknown }> = {};
-    if (before.name !== updated.name) {
-      changes.name = { old: before.name, new: updated.name };
+    const before: Record<string, unknown> = {};
+    const typeAsRecord = type as unknown as Record<string, unknown>;
+    for (const key of Object.keys(dto)) {
+      before[key] = typeAsRecord[key];
     }
-    if (Object.keys(changes).length > 0) {
-      await this.auditLogService.record({
-        entityType: AUDIT_ENTITY_TYPE,
-        entityId: id,
-        action: "update",
-        actorId: userId,
-        changes,
-      });
+
+    try {
+      if (dto.systemRole != null) {
+        await this.assertSystemRoleAvailable(dto.systemRole, id);
+      }
+      Object.assign(type, dto, { updatedBy: userId });
+      await this.relationshipTypesRepo.saveScoped(type);
+      // Re-fetch rather than return the in-memory object -- Object.assign copies
+      // omitted dto fields as explicit `undefined`, which would misreport
+      // untouched columns as missing in the API response (see rbac.service.ts).
+      const updated = await this.findOneOrFail(id);
+      this.logger.debug(`update succeeded for relationship type ${id}`);
+
+      const changes: Record<string, { old: unknown; new: unknown }> = {};
+      const updatedAsRecord = updated as unknown as Record<string, unknown>;
+      for (const key of Object.keys(dto)) {
+        const newValue = updatedAsRecord[key];
+        if (before[key] !== newValue) {
+          changes[key] = { old: before[key], new: newValue };
+        }
+      }
+      if (Object.keys(changes).length > 0) {
+        await this.auditLogService.record({
+          entityType: AUDIT_ENTITY_TYPE,
+          entityId: id,
+          action: "update",
+          actorId: userId,
+          changes,
+        });
+      }
+      return updated;
+    } catch (err) {
+      this.logger.error(`update failed for relationship type ${id}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
     }
-    return updated;
   }
 
   // Cascades to every tagged Company/Contact map row, per CLAUDE.md's
   // cascade-delete rule -- done explicitly here, in one transaction, rather
   // than relying on the map table's raw DB-level ON DELETE CASCADE (which
   // only fires on a hard DELETE and would never run for our soft-deletes).
+  // No special-casing for a flagged (systemRole) row: deleting it just frees
+  // that role's slot, exactly like deleting any other row.
   async remove(id: string, userId: string): Promise<void> {
     const type = await this.findOneOrFail(id);
     this.logger.debug(`remove called for relationship type ${id}`);

@@ -1,3 +1,4 @@
+import { SystemRole } from "@orelia/common";
 import { Column, Entity } from "typeorm";
 import { AuditedTenantEntity } from "../../../core/tenant";
 
@@ -5,4 +6,7 @@ import { AuditedTenantEntity } from "../../../core/tenant";
 export class RelationshipType extends AuditedTenantEntity {
   @Column()
   name!: string;
+
+  @Column({ type: "enum", enum: SystemRole, name: "system_role", nullable: true })
+  systemRole?: SystemRole | null;
 }

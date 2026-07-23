@@ -47,5 +47,22 @@
         "saveFailed": "Failed to save department"
       }
     }
+  },
+  "relationshipTypes": {
+    "dialog": {
+      "systemRoleLabel": "System Role",
+      "systemRoleNone": "None",
+      "systemRoleHelp": "Flag this as the tenant's Customer or Partner type to make it available in the Deal's Customer/Partners pickers. Only one type per role."
+    }
+  },
+  "addDealDialog": {
+    "customer": {
+      "notConfigured": "No Customer relationship type has been set up yet. Go to Admin → Relationship Types to flag one.",
+      "noneTagged": "No companies or contacts are tagged as Customer yet."
+    },
+    "partners": {
+      "notConfigured": "No Partner relationship type has been set up yet. Go to Admin → Relationship Types to flag one.",
+      "noneTagged": "No companies or contacts are tagged as Partner yet."
+    }
   }
 }

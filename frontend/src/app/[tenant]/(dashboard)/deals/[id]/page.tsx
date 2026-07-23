@@ -8,6 +8,8 @@ import {
   listCompaniesPicker,
   listCompanyCountries,
   listContactsPicker,
+  listDealCustomerParties,
+  listDealPartnerParties,
   listDepartmentsPicker,
   listEmployeesPicker,
   listIndustries,
@@ -33,6 +35,8 @@ export default async function MainStageDealsPage({
     countries,
     relationshipTypes,
     industries,
+    customerParties,
+    partnerParties,
   ] = await Promise.all([
     getServerSession(params.tenant),
     listDealSources(),
@@ -46,6 +50,8 @@ export default async function MainStageDealsPage({
     listCompanyCountries(),
     listRelationshipTypes(),
     listIndustries(),
+    listDealCustomerParties(),
+    listDealPartnerParties(),
   ]);
 
   const mainStage = (mainStages ?? []).find((stage) => stage.id === params.id);
@@ -72,6 +78,8 @@ export default async function MainStageDealsPage({
       countries={countries ?? []}
       relationshipTypes={relationshipTypes ?? []}
       industries={industries ?? []}
+      customerParties={customerParties ?? { configured: false, companies: [], contacts: [] }}
+      partnerParties={partnerParties ?? { configured: false, companies: [], contacts: [] }}
       initialDeals={deals ?? []}
       title={mainStage.name}
       subtitle={

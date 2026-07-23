@@ -37,6 +37,30 @@ export class CompaniesService {
     }
   }
 
+  // Used by the Deal Customer/Partner pickers -- only companies tagged under
+  // the tenant's flagged Customer/Partner relationship type, resolved by id
+  // (never by name) so renaming the flagged type never breaks this filter.
+  async findPickerForRelationshipType(relationshipTypeId: string): Promise<Company[]> {
+    this.logger.debug(`findPickerForRelationshipType called (relationshipTypeId=${relationshipTypeId})`);
+    try {
+      const results = await this.companiesRepo
+        .queryBuilderScoped("company")
+        .innerJoin(
+          "relationship_company_contact_map",
+          "party",
+          "party.company_id = company.id AND party.relationship_type_id = :relationshipTypeId AND party.deleted_at IS NULL",
+          { relationshipTypeId },
+        )
+        .orderBy("company.name", "ASC")
+        .getMany();
+      this.logger.debug(`findPickerForRelationshipType returning ${results.length} row(s)`);
+      return results;
+    } catch (err) {
+      this.logger.error(`findPickerForRelationshipType failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
   async findCountries(): Promise<string[]> {
     this.logger.debug("findCountries called");
     try {

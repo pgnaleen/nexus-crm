@@ -67,6 +67,7 @@ export class RelationshipTypesController {
       tenantId: type.tenantId,
       name: type.name,
       dependentCount,
+      systemRole: type.systemRole ?? null,
       createdAt: type.createdAt.toISOString(),
       updatedAt: type.updatedAt.toISOString(),
     };

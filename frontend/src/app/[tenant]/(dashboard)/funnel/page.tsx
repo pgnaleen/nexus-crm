@@ -7,6 +7,8 @@ import {
   listCompaniesPicker,
   listCompanyCountries,
   listContactsPicker,
+  listDealCustomerParties,
+  listDealPartnerParties,
   listDepartmentsPicker,
   listEmployeesPicker,
   listIndustries,
@@ -28,6 +30,8 @@ export default async function FunnelPage({ params }: { params: { tenant: string 
     countries,
     relationshipTypes,
     industries,
+    customerParties,
+    partnerParties,
   ] = await Promise.all([
     getServerSession(params.tenant),
     listDealSources(),
@@ -41,6 +45,8 @@ export default async function FunnelPage({ params }: { params: { tenant: string 
     listCompanyCountries(),
     listRelationshipTypes(),
     listIndustries(),
+    listDealCustomerParties(),
+    listDealPartnerParties(),
   ]);
 
   // Board columns stay grouped by Main Stage here (the tenant-wide overview),
@@ -81,6 +87,8 @@ export default async function FunnelPage({ params }: { params: { tenant: string 
       countries={countries ?? []}
       relationshipTypes={relationshipTypes ?? []}
       industries={industries ?? []}
+      customerParties={customerParties ?? { configured: false, companies: [], contacts: [] }}
+      partnerParties={partnerParties ?? { configured: false, companies: [], contacts: [] }}
       initialDeals={deals ?? []}
       currentUserId={session?.user.id}
       permissions={session?.permissions ?? []}

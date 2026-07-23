@@ -11,6 +11,7 @@ import type {
   DepartmentPickerResponse,
   EmployeePickerResponse,
   IndustryResponse,
+  RelationshipRolePickerResponse,
   RelationshipTypeResponse,
 } from "@orelia/common";
 import { FunnelBoard, type FunnelColumn } from "@/components/funnel/FunnelBoard";
@@ -103,6 +104,8 @@ interface FunnelSourceTabsProps {
   countries: string[];
   relationshipTypes: RelationshipTypeResponse[];
   industries: IndustryResponse[];
+  customerParties: RelationshipRolePickerResponse;
+  partnerParties: RelationshipRolePickerResponse;
   initialDeals?: DealResponse[];
   title?: string;
   subtitle?: string;
@@ -129,6 +132,8 @@ export function FunnelSourceTabs({
   countries,
   relationshipTypes,
   industries,
+  customerParties,
+  partnerParties,
   initialDeals = [],
   title = "Funnel",
   subtitle = "Track deals by acquisition source",
@@ -467,6 +472,8 @@ export function FunnelSourceTabs({
           departments={departments}
           relationshipTypes={relationshipTypes}
           industries={industries}
+          customerParties={customerParties}
+          partnerParties={partnerParties}
           defaultDealSourceId={activeId !== "all" ? activeId : dealSources[0]?.id}
           onClose={() => setAddDealOpen(false)}
           onCreated={handleDealCreated}
@@ -507,6 +514,8 @@ export function FunnelSourceTabs({
           departments={departments}
           relationshipTypes={relationshipTypes}
           industries={industries}
+          customerParties={customerParties}
+          partnerParties={partnerParties}
           onClose={() => setEditDeal(null)}
           onUpdated={(deal) => {
             handleDealUpdated(deal);

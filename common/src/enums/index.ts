@@ -25,3 +25,4 @@ export * from "./notification-type.enum";
 export * from "./reminder-repeat-type.enum";
 export * from "./reminder-status.enum";
 export * from "./deal-source-category.enum";
+export * from "./system-role.enum";

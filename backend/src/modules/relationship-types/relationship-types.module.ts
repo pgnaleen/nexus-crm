@@ -37,5 +37,6 @@ import { RelationshipTypesService } from "./relationship-types.service";
     CompaniesRepository,
     ContactsRepository,
   ],
+  exports: [RelationshipTypesService],
 })
 export class RelationshipTypesModule {}

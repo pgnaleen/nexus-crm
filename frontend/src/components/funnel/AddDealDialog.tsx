@@ -13,6 +13,7 @@ import {
   type DepartmentPickerResponse,
   type EmployeePickerResponse,
   type IndustryResponse,
+  type RelationshipRolePickerResponse,
   type RelationshipTypeResponse,
 } from "@orelia/common";
 import { type FunnelColumn } from "@/components/funnel/FunnelBoard";
@@ -28,7 +29,12 @@ import {
   updateDeal,
   uploadDealDocument,
 } from "@/lib/api/deals";
-import { listCompaniesPicker, listContactsPicker } from "@/lib/api/pickers";
+import {
+  listCompaniesPicker,
+  listContactsPicker,
+  listDealCustomerParties,
+  listDealPartnerParties,
+} from "@/lib/api/pickers";
 import { ApiError } from "@/lib/api/client";
 import { useToast } from "@/components/providers/ToastProvider";
 import { computeCosting, formatBytes, formatLkr, formatNoteTime, formatPercent, getInitials } from "@/lib/deals/deal-display";
@@ -40,6 +46,7 @@ import { MultiSelect } from "@/components/ui/MultiSelect";
 import { SearchSelect, type SearchSelectOption } from "@/components/ui/SearchSelect";
 import { BuildingIcon, EditIcon, FileIcon, TrashIcon, UploadCloudIcon, UserIcon } from "@/components/ui/icons";
 import { required, validate } from "@/lib/validation";
+import { t } from "@/lib/i18n";
 import { CompanyFormDialog } from "@/app/[tenant]/(dashboard)/relationships/[id]/_components/CompanyFormDialog";
 import { ContactFormDialog } from "@/app/[tenant]/(dashboard)/relationships/[id]/_components/ContactFormDialog";
 
@@ -198,6 +205,12 @@ interface AddDealDialogProps {
   departments: DepartmentPickerResponse[];
   relationshipTypes: RelationshipTypeResponse[];
   industries: IndustryResponse[];
+  // Companies/contacts tagged under the tenant's flagged Customer/Partner
+  // relationship type -- what actually populates the Customer/Partners
+  // pickers below, distinct from the unfiltered `companies`/`contacts` above
+  // (which are still needed for companyNameById/primaryContactOptions/etc).
+  customerParties: RelationshipRolePickerResponse;
+  partnerParties: RelationshipRolePickerResponse;
   defaultDealSourceId?: string;
   onClose: () => void;
   onCreated?: (deal: DealResponse) => void;
@@ -216,6 +229,8 @@ export function AddDealDialog({
   departments,
   relationshipTypes,
   industries,
+  customerParties: initialCustomerParties,
+  partnerParties: initialPartnerParties,
   defaultDealSourceId,
   onClose,
   onCreated,
@@ -226,6 +241,8 @@ export function AddDealDialog({
   const [activeTab, setActiveTab] = useState<TabId>("dealInfo");
   const [companies, setCompanies] = useState(initialCompanies);
   const [contacts, setContacts] = useState(initialContacts);
+  const [customerParties, setCustomerParties] = useState(initialCustomerParties);
+  const [partnerParties, setPartnerParties] = useState(initialPartnerParties);
   const [values, setValues] = useState<DetailsFormState>(() => ({
     name: deal?.name ?? "",
     sourceId:
@@ -306,9 +323,16 @@ export function AddDealDialog({
 
   async function refreshPickers() {
     try {
-      const [freshCompanies, freshContacts] = await Promise.all([listCompaniesPicker(), listContactsPicker()]);
+      const [freshCompanies, freshContacts, freshCustomerParties, freshPartnerParties] = await Promise.all([
+        listCompaniesPicker(),
+        listContactsPicker(),
+        listDealCustomerParties(),
+        listDealPartnerParties(),
+      ]);
       setCompanies(freshCompanies);
       setContacts(freshContacts);
+      setCustomerParties(freshCustomerParties);
+      setPartnerParties(freshPartnerParties);
     } catch {
       // Non-fatal -- the newly created party just won't show up until the
       // next natural refresh (e.g. reopening the dialog).
@@ -579,21 +603,30 @@ export function AddDealDialog({
     onClose();
   }
 
+  // companyNameById stays sourced from the unfiltered `companies` prop --
+  // needed for primaryContactOptions below even for companies outside the
+  // Customer-tagged set (e.g. viewing an existing deal's already-picked
+  // customer, or looking up a partner's contacts).
   const companyNameById = new Map(companies.map((c) => [c.id, c.name]));
-  const otherPartyOptions: SearchSelectOption[] = [
-    ...companies.map((c) => ({
-      value: `company:${c.id}`,
-      label: c.name,
-      sublabel: "Company",
-      icon: <BuildingIcon size={14} />,
-    })),
-    ...contacts.map((c) => ({
-      value: `contact:${c.id}`,
-      label: c.fullName,
-      sublabel: c.companyId ? companyNameById.get(c.companyId) ?? "Person" : "Person (no company)",
-      icon: <UserIcon size={14} />,
-    })),
-  ];
+
+  function toPartyOptions(parties: RelationshipRolePickerResponse): SearchSelectOption[] {
+    return [
+      ...parties.companies.map((c) => ({
+        value: `company:${c.id}`,
+        label: c.name,
+        sublabel: "Company",
+        icon: <BuildingIcon size={14} />,
+      })),
+      ...parties.contacts.map((c) => ({
+        value: `contact:${c.id}`,
+        label: c.fullName,
+        sublabel: c.companyId ? companyNameById.get(c.companyId) ?? "Person" : "Person (no company)",
+        icon: <UserIcon size={14} />,
+      })),
+    ];
+  }
+
+  const otherPartyOptions: SearchSelectOption[] = toPartyOptions(customerParties);
 
   // Excludes whichever party is already the deal's customer, and (in edit
   // mode) whichever parties are already linked as partners -- a company or
@@ -601,7 +634,7 @@ export function AddDealDialog({
   const existingPartnerValues = new Set(
     existingPartners.map((p) => (p.kind === "company" ? `company:${p.companyId}` : `contact:${p.contactId}`)),
   );
-  const partnerOptions: SearchSelectOption[] = otherPartyOptions.filter(
+  const partnerOptions: SearchSelectOption[] = toPartyOptions(partnerParties).filter(
     (opt) => opt.value !== partyValue(otherParty) && !existingPartnerValues.has(opt.value),
   );
 
@@ -704,6 +737,10 @@ export function AddDealDialog({
                   {otherParty?.kind === "company" ? <BuildingIcon size={14} /> : <UserIcon size={14} />}
                   {deal?.companyName ?? deal?.contactName ?? "—"}
                 </div>
+              ) : !customerParties.configured ? (
+                <p className="text-[12.5px] text-[var(--color-danger)]">{t("addDealDialog.customer.notConfigured")}</p>
+              ) : otherPartyOptions.length === 0 ? (
+                <p className="text-[12.5px] text-[var(--color-text-muted)]">{t("addDealDialog.customer.noneTagged")}</p>
               ) : (
                 <>
                   <SearchSelect
@@ -817,14 +854,24 @@ export function AddDealDialog({
                       ))}
                     </div>
                   )}
-                  <SearchSelect
-                    value=""
-                    onChange={handleAddExistingPartner}
-                    options={partnerOptions}
-                    placeholder="Add a partner..."
-                    searchPlaceholder="Search by name..."
-                  />
+                  {!partnerParties.configured ? (
+                    <p className="text-[12.5px] text-[var(--color-danger)]">{t("addDealDialog.partners.notConfigured")}</p>
+                  ) : partnerOptions.length === 0 ? (
+                    <p className="text-[12.5px] text-[var(--color-text-muted)]">{t("addDealDialog.partners.noneTagged")}</p>
+                  ) : (
+                    <SearchSelect
+                      value=""
+                      onChange={handleAddExistingPartner}
+                      options={partnerOptions}
+                      placeholder="Add a partner..."
+                      searchPlaceholder="Search by name..."
+                    />
+                  )}
                 </>
+              ) : !partnerParties.configured ? (
+                <p className="text-[12.5px] text-[var(--color-danger)]">{t("addDealDialog.partners.notConfigured")}</p>
+              ) : partnerParties.companies.length === 0 && partnerParties.contacts.length === 0 ? (
+                <p className="text-[12.5px] text-[var(--color-text-muted)]">{t("addDealDialog.partners.noneTagged")}</p>
               ) : (
                 <MultiSelect
                   values={partnerValues}

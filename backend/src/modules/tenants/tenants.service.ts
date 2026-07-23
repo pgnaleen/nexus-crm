@@ -1,7 +1,9 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { InjectDataSource, InjectRepository } from "@nestjs/typeorm";
+import { SystemRole } from "@orelia/common";
+import { DataSource, Repository } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
+import { RelationshipType } from "../relationship-types/entities/relationship-type.entity";
 import { CreateTenantDto } from "./dto/create-tenant.dto";
 import { UpdateTenantDto } from "./dto/update-tenant.dto";
 import { Industry } from "./entities/industry.entity";
@@ -19,6 +21,7 @@ export class TenantsService {
     @InjectRepository(Plan) private readonly planRepo: Repository<Plan>,
     @InjectRepository(Industry) private readonly industryRepo: Repository<Industry>,
     private readonly auditLogService: AuditLogService,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   findAllPlans(): Promise<Plan[]> {
@@ -55,13 +58,32 @@ export class TenantsService {
     return tenant;
   }
 
+  // Seeds two default Relationship Type rows (Customer/Partner, pre-flagged
+  // via systemRole) so a brand-new tenant's Add Deal Customer/Partner pickers
+  // aren't empty on day one. Purely an onboarding convenience -- the tenant
+  // can rename, unflag, or delete either row at any time; nothing here (or
+  // anywhere else in the app) special-cases these two rows as protected.
+  // Wrapped in the same transaction as the tenant insert so a seeding failure
+  // rolls back the tenant too, rather than leaving it half-provisioned.
   async create(dto: CreateTenantDto, createdBy: string): Promise<Tenant> {
     this.logger.debug(`create called by ${createdBy} (name="${dto.name}", slug="${dto.slug}")`);
     await this.assertSlugAvailable(dto.slug);
     try {
-      const tenant = this.tenantRepo.create({ ...dto, createdBy });
-      const saved = await this.tenantRepo.save(tenant);
-      this.logger.debug(`create succeeded for tenant ${saved.id}`);
+      const saved = await this.dataSource.transaction(async (manager) => {
+        const tenant = manager.getRepository(Tenant).create({ ...dto, createdBy });
+        const savedTenant = await manager.getRepository(Tenant).save(tenant);
+
+        const typeRepo = manager.getRepository(RelationshipType);
+        await typeRepo.save(
+          typeRepo.create({ tenantId: savedTenant.id, name: "Customer", systemRole: SystemRole.Customer, createdBy }),
+        );
+        await typeRepo.save(
+          typeRepo.create({ tenantId: savedTenant.id, name: "Partner", systemRole: SystemRole.Partner, createdBy }),
+        );
+
+        return savedTenant;
+      });
+      this.logger.debug(`create succeeded for tenant ${saved.id} (seeded default Customer/Partner types)`);
       await this.auditLogService.record({
         entityType: AUDIT_ENTITY_TYPE,
         entityId: saved.id,
