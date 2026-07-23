@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   AccountTier,
   CreditStatus,
@@ -14,12 +14,14 @@ import {
 import type {
   CompanyPickerResponse,
   CompanyResponse,
+  ContactResponse,
   EmployeePickerResponse,
   IndustryResponse,
 } from "@orelia/common";
 import {
   createRelationshipPartyCompany,
   createRelationshipPartyContact,
+  listCompanyContacts,
   updateRelationshipPartyCompany,
 } from "@/lib/api/relationship-parties";
 import { resolveUploadUrl, uploadLogo } from "@/lib/api/uploads";
@@ -28,6 +30,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import { CustomSelect } from "@/components/ui/CustomSelect";
+import { Spinner } from "@/components/ui/Spinner";
 import { PlusIcon, TrashIcon, UploadCloudIcon } from "@/components/ui/icons";
 import { email as emailValidator, minLength, required, validate } from "@/lib/validation";
 
@@ -226,6 +229,8 @@ export function CompanyFormDialog({
   const [values, setValues] = useState<FormState>(() => toFormState(company));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [contacts, setContacts] = useState<ContactRow[]>([]);
+  const [existingContacts, setExistingContacts] = useState<ContactResponse[]>([]);
+  const [isLoadingExistingContacts, setIsLoadingExistingContacts] = useState(mode === "edit");
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
@@ -234,6 +239,29 @@ export function CompanyFormDialog({
   // successfully posted -- if row 3 of 5 fails and the user fixes it and
   // saves again, rows 1-2 must not be re-posted as duplicates.
   const savedContactKeysRef = useRef<Set<string>>(new Set());
+
+  // Existing contacts at this company (people already saved here) are no
+  // longer carried in the relationship-party list they used to piggyback
+  // on -- fetched directly by companyId instead, same fix that stopped them
+  // double-counting as independent top-level relationship-type entries.
+  useEffect(() => {
+    if (mode !== "edit" || !mapId) return;
+    let cancelled = false;
+    setIsLoadingExistingContacts(true);
+    listCompanyContacts(relationshipTypeId, mapId)
+      .then((rows) => {
+        if (!cancelled) setExistingContacts(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setFormError("Failed to load this company's existing contacts");
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingExistingContacts(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, mapId, relationshipTypeId]);
 
   function setField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setValues((current) => ({ ...current, [field]: value }));
@@ -421,7 +449,7 @@ export function CompanyFormDialog({
             className={`dialog-tab${activeTab === "contacts" ? " dialog-tab-active" : ""}`}
             onClick={() => setActiveTab("contacts")}
           >
-            Contacts{contacts.length > 0 ? ` (${contacts.length})` : ""}
+            Contacts{contacts.length + existingContacts.length > 0 ? ` (${contacts.length + existingContacts.length})` : ""}
           </button>
         </div>
 
@@ -683,9 +711,53 @@ export function CompanyFormDialog({
         {/* ── Tab 3: Contacts ─────────────────────────────── */}
         {activeTab === "contacts" && (
           <div>
+            {mode === "edit" && (
+              <div style={{ marginBottom: "20px" }}>
+                <p style={{ fontWeight: 600, marginBottom: "8px" }}>Existing contacts</p>
+                {isLoadingExistingContacts ? (
+                  <Spinner size={20} />
+                ) : existingContacts.length === 0 ? (
+                  <p className="deal-empty-tab">No contacts added yet.</p>
+                ) : (
+                  <>
+                    {existingContacts.map((existing) => (
+                      <div key={existing.id} className="deal-contact-row">
+                        <div className="deal-contact-fields">
+                          <div className="field-row">
+                            <div className="field">
+                              <label>Full name</label>
+                              <p>{existing.fullName}</p>
+                            </div>
+                            <div className="field">
+                              <label>Title</label>
+                              <p>{existing.title || "—"}</p>
+                            </div>
+                          </div>
+                          <div className="field-row">
+                            <div className="field">
+                              <label>Email</label>
+                              <p>{existing.email || "—"}</p>
+                            </div>
+                            <div className="field">
+                              <label>Mobile number</label>
+                              <p>{existing.mobileNo || "—"}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <p style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>
+                      Editing or removing an existing contact isn't available here yet — add a
+                      replacement below if their details changed.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+
             {contacts.length === 0 && (
               <p className="deal-empty-tab">
-                No contacts added yet. Add one or more people at this company below.
+                {mode === "edit" ? "No new contacts to add." : "No contacts added yet. Add one or more people at this company below."}
               </p>
             )}
 
