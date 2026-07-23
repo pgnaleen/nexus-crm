@@ -161,6 +161,29 @@ own), plus a new author-ownership check `deal_documents` doesn't need.
 
 ---
 
+## Deal Tender Details (`backend/src/modules/deals/deal-tender-details.controller.ts`, route `deals/:dealId/tender-details`)
+
+New 2026-07-23, alongside the Tender/Non-Tender toggle (`Deal.isTender`, added earlier the same
+day). `deal_tender_details` had existed since the initial schema pass as a migration + TypeORM
+entity class with zero wiring — no controller/service/DTOs, not even registered in any module's
+`TypeOrmModule.forFeature()` (so outside the running app's ORM metadata entirely), and shipped as
+a bare `AuditedEntity` with **no `tenant_id` column at all**, unlike every other table. Both fixed
+in the same migration that finally wires this up: added `tenant_id` (NOT NULL, safe since the
+table was guaranteed empty — nothing had ever written to it), added a `UNIQUE(deal_id)` constraint
+(one row per deal), and dropped `submission_deadline` (redundant with `Deal.expectedCloseDate`,
+never populated, dropped rather than shipped unused).
+
+One row per deal — modeled as an upsert (`PUT`, create-if-missing else update), not separate
+create/update endpoints, since there's no meaningful "doesn't exist yet" state the caller needs to
+branch on.
+
+| # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | GET | `/deals/:dealId/tender-details` | RBAC | `DEALS_VIEW` | Fetch this deal's tender details, if any exist yet. | none | `DealTenderDetailsResponse \| null` — `null` (not a 404) when nothing has been saved yet, since that's an expected, normal state for a Tender deal whose Tender tab hasn't been filled in | `findOne` → `deal-tender-details.service.ts::findOne` | `AddDealDialog.tsx` (`mode="edit"`, only when the deal's `isTender` is true) via `lib/api/deals.ts::getDealTenderDetails` | ✅ | |
+| 2 | PUT | `/deals/:dealId/tender-details` | RBAC | `DEALS_UPDATE` | Create or update this deal's tender details (whichever applies). | body: `UpsertDealTenderDetailsRequest` — `tenderReference`, `issuingBody` (both required), `bidBondRequired?`, `bidBondAmount?`, `emdAmount?`, `submissionMode?` (`online`\|`physical`\|`hybrid`), `evaluationType?` (`technical`\|`financial`\|`technical_and_financial`) | `DealTenderDetailsResponse` | `upsert` → `deal-tender-details.service.ts::upsert` | `AddDealDialog.tsx` — create mode: called right after the deal itself is created, same `Promise.all` step as Documents/Partners/Notes, only when `isTender` is checked; edit mode: called alongside `updateDeal` inside the same save action | ✅ | Records an `audit_logs` insert (new row) or field-level `{old, new}` update diff (existing row), `entityType: "deal_tender_details"`. |
+
+---
+
 ## Departments (`backend/src/modules/departments/departments.controller.ts`)
 
 `findAll` is gated on the union of all four Department permissions (any Department-admin visitor

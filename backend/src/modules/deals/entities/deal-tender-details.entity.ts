@@ -1,10 +1,10 @@
 import { EvaluationType, SubmissionMode } from "@orelia/common";
 import { Column, Entity, JoinColumn, ManyToOne } from "typeorm";
-import { AuditedEntity } from "../../../core/audited.entity";
+import { AuditedTenantEntity } from "../../../core/tenant";
 import { Deal } from "./deal.entity";
 
 @Entity("deal_tender_details")
-export class DealTenderDetails extends AuditedEntity {
+export class DealTenderDetails extends AuditedTenantEntity {
   @Column({ type: "uuid" })
   dealId!: string;
 
@@ -18,9 +18,9 @@ export class DealTenderDetails extends AuditedEntity {
   @Column()
   issuingBody!: string;
 
-  @Column({ type: "timestamptz", nullable: true })
-  submissionDeadline?: Date;
-
+  // Deliberately no submission deadline column here -- Deal.expectedCloseDate
+  // already covers it, and duplicating it here would just be a second date
+  // that can drift out of sync.
   @Column({ default: false })
   bidBondRequired!: boolean;
 

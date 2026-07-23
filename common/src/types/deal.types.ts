@@ -113,7 +113,6 @@ export interface IDealTenderDetails {
   dealId: string;
   tenderReference: string;
   issuingBody: string;
-  submissionDeadline?: string | null;
   bidBondRequired: boolean;
   bidBondAmount?: number | null;
   emdAmount?: number | null;

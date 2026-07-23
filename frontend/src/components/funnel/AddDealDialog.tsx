@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "rea
 import {
   DealType,
   DocumentType,
+  EvaluationType,
+  SubmissionMode,
   type CompanyPickerResponse,
   type ContactPickerResponse,
   type DealDocumentResponse,
@@ -22,10 +24,12 @@ import {
   createDeal,
   createDealNote,
   deleteDealDocument,
+  getDealTenderDetails,
   listDealDocuments,
   listDealPartners,
   removeDealPartner,
   updateDeal,
+  upsertDealTenderDetails,
   uploadDealDocument,
 } from "@/lib/api/deals";
 import { listCompaniesPicker, listContactsPicker } from "@/lib/api/pickers";
@@ -48,6 +52,26 @@ import { ContactFormDialog } from "@/app/[tenant]/(dashboard)/relationships/[id]
 // requires one on create -- default silently to the most common case until
 // the field comes back.
 const DEFAULT_DEAL_TYPE = DealType.NewBusiness;
+
+const SUBMISSION_MODE_LABELS: Record<SubmissionMode, string> = {
+  [SubmissionMode.Online]: "Online",
+  [SubmissionMode.Physical]: "Physical",
+  [SubmissionMode.Hybrid]: "Hybrid",
+};
+const SUBMISSION_MODE_OPTIONS = [
+  { value: "", label: "Not set" },
+  ...Object.values(SubmissionMode).map((value) => ({ value, label: SUBMISSION_MODE_LABELS[value] })),
+];
+
+const EVALUATION_TYPE_LABELS: Record<EvaluationType, string> = {
+  [EvaluationType.Technical]: "Technical",
+  [EvaluationType.Financial]: "Financial",
+  [EvaluationType.TechnicalAndFinancial]: "Technical & Financial",
+};
+const EVALUATION_TYPE_OPTIONS = [
+  { value: "", label: "Not set" },
+  ...Object.values(EvaluationType).map((value) => ({ value, label: EVALUATION_TYPE_LABELS[value] })),
+];
 
 // Shared Tailwind equivalent of the app-wide `.field-textarea` class, used
 // four times in this file. Kept as a constant rather than repeating the
@@ -114,6 +138,16 @@ interface DetailsFormState {
   salesPersonId: string;
   preSalesPersonId: string;
   pmoId: string;
+  // Tender tab -- only shown/sent when isTender is checked, saved to its own
+  // deal_tender_details row via a separate upsert call, not part of the
+  // deal's own PATCH/POST body.
+  tenderReference: string;
+  issuingBody: string;
+  bidBondRequired: boolean;
+  bidBondAmount: string;
+  emdAmount: string;
+  submissionMode: SubmissionMode | "";
+  evaluationType: EvaluationType | "";
 }
 
 type PartyKind = "company" | "contact";
@@ -247,6 +281,15 @@ export function AddDealDialog({
     salesPersonId: deal?.ownerId ?? "",
     preSalesPersonId: deal?.preSalesPersonId ?? "",
     pmoId: deal?.pmoId ?? "",
+    // Tender fields aren't on DealResponse -- fetched separately below and
+    // merged in once loaded (edit mode only, when the deal is a tender).
+    tenderReference: "",
+    issuingBody: "",
+    bidBondRequired: false,
+    bidBondAmount: "",
+    emdAmount: "",
+    submissionMode: "",
+    evaluationType: "",
   }));
   const [otherParty, setOtherParty] = useState<OtherParty | null>(() => {
     if (!deal) return null;
@@ -289,6 +332,34 @@ export function AddDealDialog({
       })
       .catch(() => {
         // Non-fatal -- the tabs just show empty until the dialog is reopened.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isEdit, deal]);
+
+  // Edit mode only, and only when the deal is already a tender -- tender
+  // fields live in their own table, not on DealResponse, so they're fetched
+  // separately and merged into `values` once loaded.
+  useEffect(() => {
+    if (!isEdit || !deal || !deal.isTender) return;
+    let cancelled = false;
+    getDealTenderDetails(deal.id)
+      .then((row) => {
+        if (cancelled || !row) return;
+        setValues((current) => ({
+          ...current,
+          tenderReference: row.tenderReference,
+          issuingBody: row.issuingBody,
+          bidBondRequired: row.bidBondRequired,
+          bidBondAmount: row.bidBondAmount != null ? String(row.bidBondAmount) : "",
+          emdAmount: row.emdAmount != null ? String(row.emdAmount) : "",
+          submissionMode: row.submissionMode ?? "",
+          evaluationType: row.evaluationType ?? "",
+        }));
+      })
+      .catch(() => {
+        // Non-fatal -- the Tender tab just starts blank if this fails.
       });
     return () => {
       cancelled = true;
@@ -359,12 +430,20 @@ export function AddDealDialog({
       ]);
       if (dateError) nextErrors.expectedCloseDate = dateError;
     }
+    if (values.isTender) {
+      const tenderReferenceError = validate(values.tenderReference, [required("Tender reference is required")]);
+      if (tenderReferenceError) nextErrors.tenderReference = tenderReferenceError;
+      const issuingBodyError = validate(values.issuingBody, [required("Issuing body is required")]);
+      if (issuingBodyError) nextErrors.issuingBody = issuingBodyError;
+    }
 
     setErrors(nextErrors);
 
     // Jump to whichever tab actually holds the first invalid field.
     if (nextErrors.name || nextErrors.otherParty || nextErrors.currentStageId || nextErrors.expectedCloseDate) {
       setActiveTab("dealInfo");
+    } else if (nextErrors.tenderReference || nextErrors.issuingBody) {
+      setActiveTab("tender");
     } else if (nextErrors.salesPersonId) {
       setActiveTab("team");
     }
@@ -478,6 +557,18 @@ export function AddDealDialog({
     addFiles(event.dataTransfer.files);
   }
 
+  function buildTenderDetailsPayload() {
+    return {
+      tenderReference: values.tenderReference.trim(),
+      issuingBody: values.issuingBody.trim(),
+      bidBondRequired: values.bidBondRequired,
+      bidBondAmount: values.bidBondAmount.trim() ? Number(values.bidBondAmount) : undefined,
+      emdAmount: values.emdAmount.trim() ? Number(values.emdAmount) : undefined,
+      submissionMode: values.submissionMode || undefined,
+      evaluationType: values.evaluationType || undefined,
+    };
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setFormError(null);
@@ -512,6 +603,24 @@ export function AddDealDialog({
             competitors.length > 0 ? competitors.map((c) => ({ name: c.name, details: c.details })) : undefined,
         });
         onUpdated?.(updated);
+
+        // Separate call, separate failure mode -- the deal itself already
+        // saved successfully by this point, so a tender-details failure must
+        // never be reported as "failed to save deal" (same reasoning as the
+        // create-mode attachments below).
+        if (values.isTender) {
+          try {
+            await upsertDealTenderDetails(deal.id, buildTenderDetailsPayload());
+          } catch (err) {
+            showToast({
+              message: `Deal saved, but tender details failed to save (${
+                err instanceof ApiError ? err.message : "unknown error"
+              }).`,
+              durationMs: 8000,
+            });
+          }
+        }
+
         onClose();
       } catch (err) {
         setFormError(err instanceof ApiError ? err.message : "Failed to save deal");
@@ -593,6 +702,7 @@ export function AddDealDialog({
             : addDealPartnerContact(createdDeal.id, partner.id);
         }),
         ...notes.map((note) => createDealNote(createdDeal.id, { text: note.text })),
+        ...(values.isTender ? [upsertDealTenderDetails(createdDeal.id, buildTenderDetailsPayload())] : []),
       ]);
     } catch (err) {
       showToast({
@@ -829,9 +939,80 @@ export function AddDealDialog({
         {/* ── Tender ────────────────────────────────────── */}
         {activeTab === "tender" && (
           <div className="min-h-[420px]">
-            <p className="text-[13.5px] text-[var(--color-text-muted)]">
-              Tender details form — fields coming soon.
-            </p>
+            <TextField
+              label="Tender Reference Number *"
+              name="tenderReference"
+              value={values.tenderReference}
+              error={errors.tenderReference}
+              placeholder="e.g. TND-2026-0142"
+              onChange={(e) => setField("tenderReference", e.target.value)}
+            />
+
+            <TextField
+              label="Issuing Body *"
+              name="issuingBody"
+              value={values.issuingBody}
+              error={errors.issuingBody}
+              placeholder="e.g. Ministry of Health"
+              onChange={(e) => setField("issuingBody", e.target.value)}
+            />
+
+            <label className="mb-[18px] flex cursor-pointer items-center gap-2.5 text-[13.5px] text-crm-text">
+              <input
+                type="checkbox"
+                checked={values.bidBondRequired}
+                onChange={(e) => setField("bidBondRequired", e.target.checked)}
+              />
+              <span>Bid Bond Required</span>
+            </label>
+
+            {values.bidBondRequired && (
+              <TextField
+                label="Bid Bond Amount"
+                name="bidBondAmount"
+                type="number"
+                min="0"
+                value={values.bidBondAmount}
+                placeholder="0"
+                onChange={(e) => setField("bidBondAmount", e.target.value)}
+              />
+            )}
+
+            <TextField
+              label="EMD Amount"
+              name="emdAmount"
+              type="number"
+              min="0"
+              value={values.emdAmount}
+              placeholder="0"
+              onChange={(e) => setField("emdAmount", e.target.value)}
+            />
+
+            <div className="mb-[18px]">
+              <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                Submission Mode
+              </label>
+              <CustomSelect
+                fullWidth
+                label=""
+                value={values.submissionMode}
+                onChange={(val) => setField("submissionMode", val as SubmissionMode | "")}
+                options={SUBMISSION_MODE_OPTIONS}
+              />
+            </div>
+
+            <div className="mb-[18px]">
+              <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                Evaluation Type
+              </label>
+              <CustomSelect
+                fullWidth
+                label=""
+                value={values.evaluationType}
+                onChange={(val) => setField("evaluationType", val as EvaluationType | "")}
+                options={EVALUATION_TYPE_OPTIONS}
+              />
+            </div>
           </div>
         )}
 

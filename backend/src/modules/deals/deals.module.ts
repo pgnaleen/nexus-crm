@@ -15,6 +15,7 @@ import { RbacModule } from "../rbac/rbac.module";
 import { DealPartnersMap } from "./entities/deal-partners-map.entity";
 import { DealDocument } from "./entities/deal-document.entity";
 import { DealNote } from "./entities/deal-note.entity";
+import { DealTenderDetails } from "./entities/deal-tender-details.entity";
 import { Deal } from "./entities/deal.entity";
 import { MainStageHistory } from "./entities/main-stage-history.entity";
 import { SubStageHistory } from "./entities/sub-stage-history.entity";
@@ -26,6 +27,9 @@ import { DealNotesController } from "./deal-notes.controller";
 import { DealNotesService } from "./deal-notes.service";
 import { DealStageHistoryController } from "./deal-stage-history.controller";
 import { DealStageHistoryService } from "./deal-stage-history.service";
+import { DealTenderDetailsController } from "./deal-tender-details.controller";
+import { DealTenderDetailsRepository } from "./deal-tender-details.repository";
+import { DealTenderDetailsService } from "./deal-tender-details.service";
 import { DealsController } from "./deals.controller";
 import { DealsRepository } from "./deals.repository";
 import { DealsService } from "./deals.service";
@@ -37,6 +41,7 @@ import { DealsService } from "./deals.service";
       DealDocument,
       DealNote,
       DealPartnersMap,
+      DealTenderDetails,
       SubStageHistory,
       MainStageHistory,
       Company,
@@ -54,6 +59,7 @@ import { DealsService } from "./deals.service";
     DealNotesController,
     DealPartnersController,
     DealStageHistoryController,
+    DealTenderDetailsController,
   ],
   providers: [
     DealsService,
@@ -62,6 +68,8 @@ import { DealsService } from "./deals.service";
     DealNotesService,
     DealPartnersService,
     DealStageHistoryService,
+    DealTenderDetailsService,
+    DealTenderDetailsRepository,
     CompaniesRepository,
     ContactsRepository,
     DealSourcesRepository,
