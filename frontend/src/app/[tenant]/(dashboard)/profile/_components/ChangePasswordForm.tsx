@@ -69,9 +69,9 @@ export function ChangePasswordForm() {
 
   return (
     <form onSubmit={handleSubmit}>
-      {formError && <p className="field-error">{formError}</p>}
+      {formError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{formError}</p>}
       {successMessage && (
-        <p className="field-hint" style={{ color: "#059669", marginBottom: "16px" }}>
+        <p className="mb-4 text-[13px] text-[#059669]">
           {successMessage}
         </p>
       )}
@@ -84,7 +84,7 @@ export function ChangePasswordForm() {
         onChange={(e) => setField("currentPassword", e.target.value)}
       />
 
-      <div className="field-row">
+      <div className="grid grid-cols-2 gap-3.5">
         <PasswordField
           label="New Password *"
           name="newPassword"
@@ -102,7 +102,7 @@ export function ChangePasswordForm() {
       </div>
       <PasswordStrengthHint password={values.newPassword} />
 
-      <div className="dialog-actions">
+      <div className="mt-2 flex justify-end gap-2.5">
         <Button type="submit" isLoading={isSaving}>
           Change password
         </Button>

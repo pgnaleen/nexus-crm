@@ -103,7 +103,7 @@ export function RelationshipTypesWidget({
   }
 
   return (
-    <div className="tenant-management-wrapper">
+    <div className="flex flex-col">
       {canImpersonate && (
         <TenantActingAsSwitcher
           tenants={tenants}
@@ -112,17 +112,17 @@ export function RelationshipTypesWidget({
         />
       )}
 
-      <div className="funnel-header-top">
-        <div className="funnel-header-left">
-          <h1 className="funnel-title">Relationship Types</h1>
-          <p className="funnel-subtitle">
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex flex-col">
+          <h1 className="m-0 mb-0.5 text-[26px] font-bold text-crm-text">Relationship Types</h1>
+          <p className="m-0 text-[13.5px] text-[var(--color-text-muted)]">
             Manage relationship groupings such as Customers, Suppliers, and Partners
           </p>
         </div>
         {canCreate && (
           <button
             type="button"
-            className="funnel-add-btn"
+            className="cursor-pointer rounded-lg border-none bg-crm-primary px-5 py-2.5 text-[13.5px] font-semibold text-white transition-opacity duration-150 hover:opacity-90"
             onClick={() => setDialogState({ mode: "create" })}
           >
             Add Type
@@ -130,15 +130,18 @@ export function RelationshipTypesWidget({
         )}
       </div>
 
-      <div className="funnel-filters-container">
-        <div className="funnel-filters-left">
-          <div className="funnel-filters-search">
-            <SearchIcon />
+      <div className="mb-6 flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[#f8fafc] px-4 py-3">
+        <div className="flex items-center gap-4">
+          <div className="relative w-[280px]">
+            <span className="pointer-events-none absolute top-1/2 left-[10px] -translate-y-1/2 text-[var(--color-text-muted)]">
+              <SearchIcon />
+            </span>
             <input
               type="text"
               placeholder="Search by name..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-[var(--color-border)] bg-white py-2 pl-8 pr-3 font-[inherit] text-[13px] transition-colors duration-150 focus:border-crm-primary focus:outline-none"
             />
           </div>
         </div>
@@ -173,19 +176,29 @@ export function RelationshipTypesWidget({
             </p>
           </div>
         ) : (
-          <table className="data-table">
+          <table className="w-full border-collapse text-[13px]">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Created</th>
-                {showActionsColumn && <th aria-label="Actions" />}
+                <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  Name
+                </th>
+                <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  Created
+                </th>
+                {showActionsColumn && (
+                  <th className="border-b border-[var(--color-border)] px-3 py-2.5" aria-label="Actions" />
+                )}
               </tr>
             </thead>
             <tbody>
               {filteredTypes.map((type) => (
                 <tr
                   key={type.id}
-                  className={canUpdate || canView ? "interactive-row" : undefined}
+                  className={
+                    canUpdate || canView
+                      ? "cursor-pointer transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f1f5f9]"
+                      : "transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f7f8fc]"
+                  }
                   onClick={
                     canUpdate
                       ? () => setDialogState({ mode: "edit", relationshipType: type })
@@ -194,10 +207,14 @@ export function RelationshipTypesWidget({
                         : undefined
                   }
                 >
-                  <td style={{ fontWeight: 500 }}>{type.name}</td>
-                  <td>{formatDate(type.createdAt)}</td>
+                  <td className="border-b border-[var(--color-border)] p-3 font-medium text-crm-text">
+                    {type.name}
+                  </td>
+                  <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
+                    {formatDate(type.createdAt)}
+                  </td>
                   {showActionsColumn && (
-                    <td className="table-actions">
+                    <td className="flex justify-end gap-1.5 border-b border-[var(--color-border)] p-3">
                       {canUpdate && (
                         <button
                           type="button"

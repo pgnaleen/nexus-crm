@@ -15,9 +15,11 @@ export function PhoneField({ label, error, id, name, value, onChange, ...inputPr
   const fieldId = id ?? name;
 
   return (
-    <div className={error ? "field has-error" : "field"}>
-      <label htmlFor={fieldId}>{label}</label>
-      <div 
+    <div className="mb-[18px]">
+      <label htmlFor={fieldId} className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+        {label}
+      </label>
+      <div
         className="phone-field-wrapper"
         style={{
           border: error ? "1px solid var(--color-error)" : "1px solid var(--color-border)",
@@ -39,7 +41,7 @@ export function PhoneField({ label, error, id, name, value, onChange, ...inputPr
           {...(inputProps as any)}
         />
       </div>
-      {error && <p className="field-error">{error}</p>}
+      {error && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{error}</p>}
       
       <style>{`
         /* Override react-phone-number-input default styles to match our premium theme */

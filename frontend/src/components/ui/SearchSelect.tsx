@@ -72,15 +72,21 @@ export function SearchSelect({
   }
 
   return (
-    <div className="search-select-wrapper" ref={ref}>
+    <div className="relative" ref={ref}>
       {label && <label className="field-label">{label}</label>}
       <button
         type="button"
-        className={`search-select-trigger${isOpen ? " is-open" : ""}`}
+        className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-sm text-crm-text transition-colors duration-150 disabled:cursor-default disabled:opacity-60 ${
+          isOpen ? "border-crm-primary" : "border-[var(--color-border)] hover:border-crm-primary"
+        }`}
         onClick={() => !disabled && setIsOpen((o) => !o)}
         disabled={disabled}
       >
-        <span className={`search-select-value${!selected ? " is-placeholder" : ""}`}>
+        <span
+          className={`flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap ${
+            !selected ? "text-[var(--color-text-muted)]" : ""
+          }`}
+        >
           {selected ? (
             <>
               {selected.icon}
@@ -90,7 +96,9 @@ export function SearchSelect({
             placeholder
           )}
         </span>
-        <ChevronDownIcon size={14} />
+        <span className="flex-shrink-0 text-[var(--color-text-muted)]">
+          <ChevronDownIcon size={14} />
+        </span>
       </button>
 
       {isOpen && !disabled && (

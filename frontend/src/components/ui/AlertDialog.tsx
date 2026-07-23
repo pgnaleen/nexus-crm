@@ -53,7 +53,7 @@ export function AlertDialog({
         </div>
       </div>
       
-      <div className="dialog-actions" style={{ marginTop: "0", borderTop: "1px solid var(--color-border)", paddingTop: "20px", justifyContent: "flex-end" }}>
+      <div className="mt-0 flex justify-end gap-2.5 border-t border-[var(--color-border)] pt-5">
         <Button 
           type="button" 
           variant="primary" 

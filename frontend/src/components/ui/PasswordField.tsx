@@ -13,13 +13,23 @@ export function PasswordField({ label, error, id, name, ...inputProps }: Passwor
   const fieldId = id ?? name;
 
   return (
-    <div className={error ? "field has-error" : "field"}>
-      <label htmlFor={fieldId}>{label}</label>
-      <div className="password-input-wrapper">
-        <input id={fieldId} name={name} type={visible ? "text" : "password"} {...inputProps} />
+    <div className="mb-[18px]">
+      <label htmlFor={fieldId} className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          id={fieldId}
+          name={name}
+          type={visible ? "text" : "password"}
+          className={`w-full rounded-lg border py-2.5 pr-[42px] pl-3 text-sm text-crm-text transition-colors duration-150 focus:outline-none focus:shadow-[0_0_0_3px_rgba(233,28,45,0.15)] ${
+            error ? "border-[var(--color-danger)]" : "border-[var(--color-border)] focus:border-crm-primary"
+          }`}
+          {...inputProps}
+        />
         <button
           type="button"
-          className="password-toggle"
+          className="absolute top-1/2 right-1.5 flex -translate-y-1/2 items-center justify-center rounded-md border-none bg-none p-1.5 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#f3f4f6] hover:text-crm-text"
           onClick={() => setVisible((current) => !current)}
           aria-label={visible ? "Hide password" : "Show password"}
           tabIndex={-1}
@@ -27,7 +37,7 @@ export function PasswordField({ label, error, id, name, ...inputProps }: Passwor
           {visible ? <EyeOffIcon /> : <EyeIcon />}
         </button>
       </div>
-      {error && <p className="field-error">{error}</p>}
+      {error && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{error}</p>}
     </div>
   );
 }

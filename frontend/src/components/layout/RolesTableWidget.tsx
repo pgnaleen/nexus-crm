@@ -92,27 +92,34 @@ export function RolesTableWidget({
         <TenantActingAsSwitcher tenants={tenants} currentTenantId={currentTenantId} actingTenant={actingTenant} />
       )}
 
-      <div className="funnel-header-top">
-        <div className="funnel-header-left">
-          <h1 className="funnel-title">Roles Management</h1>
-          <p className="funnel-subtitle">Manage roles and their assigned permissions</p>
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex flex-col">
+          <h1 className="m-0 mb-0.5 text-[26px] font-bold text-crm-text">Roles Management</h1>
+          <p className="m-0 text-[13.5px] text-[var(--color-text-muted)]">Manage roles and their assigned permissions</p>
         </div>
         {canCreate && (
-          <button type="button" className="funnel-add-btn" onClick={() => setDialogState({ mode: "create" })}>
+          <button
+            type="button"
+            className="cursor-pointer rounded-lg border-none bg-crm-primary px-5 py-2.5 text-[13.5px] font-semibold text-white transition-opacity duration-150 hover:opacity-90"
+            onClick={() => setDialogState({ mode: "create" })}
+          >
             Add Role
           </button>
         )}
       </div>
 
-      <div className="funnel-filters-container">
-        <div className="funnel-filters-left">
-          <div className="funnel-filters-search">
-            <SearchIcon />
+      <div className="mb-6 flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[#f8fafc] px-4 py-3">
+        <div className="flex items-center gap-4">
+          <div className="relative w-[280px]">
+            <span className="pointer-events-none absolute top-1/2 left-[10px] -translate-y-1/2 text-[var(--color-text-muted)]">
+              <SearchIcon />
+            </span>
             <input
               type="text"
               placeholder="Search roles..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-[var(--color-border)] bg-white py-2 pl-8 pr-3 font-[inherit] text-[13px] transition-colors duration-150 focus:border-crm-primary focus:outline-none"
             />
           </div>
         </div>
@@ -125,27 +132,41 @@ export function RolesTableWidget({
             <p className="empty-state-message">No roles match the current search.</p>
           </div>
         ) : (
-          <table className="data-table">
+          <table className="w-full border-collapse text-[13px]">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Description</th>
-                <th>Permissions</th>
-                {showActionsColumn && <th aria-label="Actions" />}
+                <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  Name
+                </th>
+                <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  Description
+                </th>
+                <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  Permissions
+                </th>
+                {showActionsColumn && (
+                  <th className="border-b border-[var(--color-border)] px-3 py-2.5" aria-label="Actions" />
+                )}
               </tr>
             </thead>
             <tbody>
               {filteredRoles.map((role) => (
                 <tr
                   key={role.id}
-                  className={canView ? "interactive-row" : undefined}
+                  className={
+                    canView
+                      ? "cursor-pointer transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f1f5f9]"
+                      : "transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f7f8fc]"
+                  }
                   onClick={canView ? () => setDialogState({ mode: "view", role }) : undefined}
                 >
-                  <td>{role.name}</td>
-                  <td>{role.description ?? <span style={{ color: "var(--color-text-muted)" }}>&mdash;</span>}</td>
-                  <td>{role.resourceCount}</td>
+                  <td className="border-b border-[var(--color-border)] p-3 text-crm-text">{role.name}</td>
+                  <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
+                    {role.description ?? <span className="text-[var(--color-text-muted)]">&mdash;</span>}
+                  </td>
+                  <td className="border-b border-[var(--color-border)] p-3 text-crm-text">{role.resourceCount}</td>
                   {showActionsColumn && (
-                    <td className="table-actions">
+                    <td className="flex justify-end gap-1.5 border-b border-[var(--color-border)] p-3">
                       {canUpdate && (
                         <button
                           type="button"

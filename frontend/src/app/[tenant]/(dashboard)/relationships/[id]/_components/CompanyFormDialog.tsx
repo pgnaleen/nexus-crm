@@ -425,7 +425,7 @@ export function CompanyFormDialog({
           </button>
         </div>
 
-        {formError && <p className="field-error">{formError}</p>}
+        {formError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{formError}</p>}
 
         {/* ── Tab 1: Company Details ─────────────────────── */}
         {activeTab === "details" && (
@@ -447,9 +447,9 @@ export function CompanyFormDialog({
               onChange={(e) => setField("url", e.target.value)}
             />
 
-            <div className="field-row">
-              <div className="field">
-                <label>Industry</label>
+            <div className="grid grid-cols-2 gap-3.5">
+              <div className="mb-[18px]">
+                <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Industry</label>
                 <CustomSelect
                   fullWidth
                   label=""
@@ -466,9 +466,9 @@ export function CompanyFormDialog({
               />
             </div>
 
-            <div className="field-row">
-              <div className="field">
-                <label>Sector</label>
+            <div className="grid grid-cols-2 gap-3.5">
+              <div className="mb-[18px]">
+                <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Sector</label>
                 <CustomSelect
                   fullWidth
                   label=""
@@ -477,8 +477,8 @@ export function CompanyFormDialog({
                   options={SECTOR_OPTIONS}
                 />
               </div>
-              <div className="field">
-                <label>Account tier</label>
+              <div className="mb-[18px]">
+                <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Account tier</label>
                 <CustomSelect
                   fullWidth
                   label=""
@@ -489,9 +489,9 @@ export function CompanyFormDialog({
               </div>
             </div>
 
-            <div className="field-row">
-              <div className="field">
-                <label>Employee count</label>
+            <div className="grid grid-cols-2 gap-3.5">
+              <div className="mb-[18px]">
+                <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Employee count</label>
                 <CustomSelect
                   fullWidth
                   label=""
@@ -500,8 +500,8 @@ export function CompanyFormDialog({
                   options={EMPLOYEE_COUNT_OPTIONS}
                 />
               </div>
-              <div className="field">
-                <label>Revenue band</label>
+              <div className="mb-[18px]">
+                <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Revenue band</label>
                 <CustomSelect
                   fullWidth
                   label=""
@@ -512,7 +512,7 @@ export function CompanyFormDialog({
               </div>
             </div>
 
-            <div className="field-row">
+            <div className="grid grid-cols-2 gap-3.5">
               <TextField
                 label="Country"
                 name="country"
@@ -532,8 +532,8 @@ export function CompanyFormDialog({
         {/* ── Tab 2: Business Details ────────────────────── */}
         {activeTab === "business" && (
           <div>
-            <div className="field">
-              <label>Logo</label>
+            <div className="mb-[18px]">
+              <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Logo</label>
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                 {values.logo && (
                   <img
@@ -573,15 +573,15 @@ export function CompanyFormDialog({
               onChange={(e) => setField("brands", e.target.value)}
             />
 
-            <div className="field-row">
+            <div className="grid grid-cols-2 gap-3.5">
               <TextField
                 label="Stock ticker"
                 name="stockTicker"
                 value={values.stockTicker}
                 onChange={(e) => setField("stockTicker", e.target.value)}
               />
-              <div className="field">
-                <label>Fiscal year end</label>
+              <div className="mb-[18px]">
+                <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Fiscal year end</label>
                 <CustomSelect
                   fullWidth
                   label=""
@@ -592,9 +592,9 @@ export function CompanyFormDialog({
               </div>
             </div>
 
-            <div className="field-row">
-              <div className="field">
-                <label>Region</label>
+            <div className="grid grid-cols-2 gap-3.5">
+              <div className="mb-[18px]">
+                <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Region</label>
                 <CustomSelect
                   fullWidth
                   label=""
@@ -622,9 +622,9 @@ export function CompanyFormDialog({
               onChange={(e) => setField("branches", e.target.value)}
             />
 
-            <div className="field-row">
-              <div className="field">
-                <label>Parent company (existing)</label>
+            <div className="grid grid-cols-2 gap-3.5">
+              <div className="mb-[18px]">
+                <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Parent company (existing)</label>
                 <CustomSelect
                   fullWidth
                   label=""
@@ -643,9 +643,9 @@ export function CompanyFormDialog({
               />
             </div>
 
-            <div className="field-row">
-              <div className="field">
-                <label>Credit status</label>
+            <div className="grid grid-cols-2 gap-3.5">
+              <div className="mb-[18px]">
+                <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Credit status</label>
                 <CustomSelect
                   fullWidth
                   label=""
@@ -654,8 +654,8 @@ export function CompanyFormDialog({
                   options={CREDIT_STATUS_OPTIONS}
                 />
               </div>
-              <div className="field">
-                <label>Territory owner</label>
+              <div className="mb-[18px]">
+                <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Territory owner</label>
                 <CustomSelect
                   fullWidth
                   label=""
@@ -666,11 +666,11 @@ export function CompanyFormDialog({
               </div>
             </div>
 
-            <div className="field">
-              <label htmlFor="territoryNotes">Territory notes</label>
+            <div className="mb-[18px]">
+              <label htmlFor="territoryNotes" className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Territory notes</label>
               <textarea
                 id="territoryNotes"
-                className="field-textarea"
+                className="w-full resize-y rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5 font-[inherit] text-sm text-crm-text transition-colors duration-150 focus:border-crm-primary focus:shadow-[0_0_0_3px_rgba(233,28,45,0.15)] focus:outline-none"
                 rows={3}
                 value={values.territoryNotes}
                 placeholder="Any additional context about this account's territory..."
@@ -694,7 +694,7 @@ export function CompanyFormDialog({
               return (
                 <div key={contact.key} className="deal-contact-row">
                   <div className="deal-contact-fields">
-                    <div className="field-row">
+                    <div className="grid grid-cols-2 gap-3.5">
                       <TextField
                         label="Full name"
                         value={contact.fullName}
@@ -708,7 +708,7 @@ export function CompanyFormDialog({
                         onChange={(e) => updateContact(contact.key, "title", e.target.value)}
                       />
                     </div>
-                    <div className="field-row">
+                    <div className="grid grid-cols-2 gap-3.5">
                       <TextField
                         label="Email"
                         type="email"
@@ -723,8 +723,8 @@ export function CompanyFormDialog({
                         onChange={(e) => updateContact(contact.key, "mobileNo", e.target.value)}
                       />
                     </div>
-                    <div className="field">
-                      <label>Buying role</label>
+                    <div className="mb-[18px]">
+                      <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Buying role</label>
                       <CustomSelect
                         fullWidth
                         label=""
@@ -752,7 +752,7 @@ export function CompanyFormDialog({
           </div>
         )}
 
-        <div className="dialog-actions">
+        <div className="mt-2 flex justify-end gap-2.5">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>

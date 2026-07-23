@@ -82,17 +82,16 @@ export function TenantsTableWidget({
   }
 
   return (
-    <div className="tenant-management-wrapper">
-      {/* â”€â”€ Title â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <div className="funnel-header-top">
-        <div className="funnel-header-left">
-          <h1 className="funnel-title">Tenant Management</h1>
-          <p className="funnel-subtitle">Manage all companies, workspaces, and accounts</p>
+    <div className="flex flex-col">
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex flex-col">
+          <h1 className="m-0 mb-0.5 text-[26px] font-bold text-crm-text">Tenant Management</h1>
+          <p className="m-0 text-[13.5px] text-[var(--color-text-muted)]">Manage all companies, workspaces, and accounts</p>
         </div>
         {canCreate && (
           <button
             type="button"
-            className="funnel-add-btn"
+            className="cursor-pointer rounded-lg border-none bg-crm-primary px-5 py-2.5 text-[13.5px] font-semibold text-white transition-opacity duration-150 hover:opacity-90"
             onClick={() => setDialogState({ mode: "create" })}
           >
             Add Tenant
@@ -100,19 +99,22 @@ export function TenantsTableWidget({
         )}
       </div>
 
-      <div className="funnel-filters-container">
-        <div className="funnel-filters-left">
-          <div className="funnel-filters-search">
-            <SearchIcon />
-            <input 
-              type="text" 
-              placeholder="Search tenants..." 
+      <div className="mb-6 flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[#f8fafc] px-4 py-3">
+        <div className="flex items-center gap-4">
+          <div className="relative w-[280px]">
+            <span className="pointer-events-none absolute top-1/2 left-[10px] -translate-y-1/2 text-[var(--color-text-muted)]">
+              <SearchIcon />
+            </span>
+            <input
+              type="text"
+              placeholder="Search tenants..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-[var(--color-border)] bg-white py-2 pl-8 pr-3 font-[inherit] text-[13px] transition-colors duration-150 focus:border-crm-primary focus:outline-none"
             />
           </div>
-          <div className="funnel-filters-selects">
-            <CustomSelect 
+          <div className="flex gap-3">
+            <CustomSelect
               label="Plan"
               value={planFilter}
               onChange={setPlanFilter}
@@ -121,8 +123,8 @@ export function TenantsTableWidget({
                 ...plans.map(p => ({ value: p.id, label: p.name }))
               ]}
             />
-            
-            <CustomSelect 
+
+            <CustomSelect
               label="Industry"
               value={industryFilter}
               onChange={setIndustryFilter}
@@ -135,10 +137,10 @@ export function TenantsTableWidget({
         </div>
 
         {hasFilters && (
-          <div className="funnel-filters-right">
-            <button 
-              type="button" 
-              className="funnel-clear-btn"
+          <div>
+            <button
+              type="button"
+              className="cursor-pointer rounded-md border-none bg-transparent px-3 py-1.5 text-[13px] font-medium text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#e2e8f0] hover:text-crm-text"
               onClick={() => {
                 setSearch("");
                 setPlanFilter("");
@@ -159,33 +161,51 @@ export function TenantsTableWidget({
           <p className="empty-state-message">No tenants match the current filters.</p>
         </div>
       ) : (
-        <table className="data-table">
+        <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Slug</th>
-              <th>Plan</th>
-              <th>Industry</th>
-              <th>Status</th>
-              {showActionsColumn && <th aria-label="Actions" />}
+              <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                Name
+              </th>
+              <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                Slug
+              </th>
+              <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                Plan
+              </th>
+              <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                Industry
+              </th>
+              <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                Status
+              </th>
+              {showActionsColumn && (
+                <th className="border-b border-[var(--color-border)] px-3 py-2.5" aria-label="Actions" />
+              )}
             </tr>
           </thead>
           <tbody>
             {filteredTenants.map((tenant) => (
               <tr
                 key={tenant.id}
-                className={canView ? "interactive-row" : undefined}
+                className={
+                  canView
+                    ? "cursor-pointer transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f1f5f9]"
+                    : "transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f7f8fc]"
+                }
                 onClick={canView ? () => setDialogState({ mode: "view", tenant }) : undefined}
               >
-                <td>{tenant.name}</td>
-                <td>{tenant.slug}</td>
-                <td>{tenant.planName}</td>
-                <td>{tenant.industryName ?? <span style={{ color: "var(--color-text-muted)" }}>&mdash;</span>}</td>
-                <td>
+                <td className="border-b border-[var(--color-border)] p-3 text-crm-text">{tenant.name}</td>
+                <td className="border-b border-[var(--color-border)] p-3 text-crm-text">{tenant.slug}</td>
+                <td className="border-b border-[var(--color-border)] p-3 text-crm-text">{tenant.planName}</td>
+                <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
+                  {tenant.industryName ?? <span className="text-[var(--color-text-muted)]">&mdash;</span>}
+                </td>
+                <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
                   <StatusBadge status={tenant.status} />
                 </td>
                 {showActionsColumn && (
-                  <td className="table-actions">
+                  <td className="flex justify-end gap-1.5 border-b border-[var(--color-border)] p-3">
                     <button
                       type="button"
                       className="icon-btn"

@@ -55,7 +55,7 @@ export function UserDetailsDialog({ user, onClose }: UserDetailsDialogProps) {
 
   return (
     <Dialog open title="User Details" onClose={onClose}>
-      {loadError && <p className="field-error">{loadError}</p>}
+      {loadError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{loadError}</p>}
 
       {isLoading || !detail ? (
         <div className="dialog-loading">

@@ -186,7 +186,7 @@ export function ContactFormDialog({
           </button>
         </div>
 
-        {formError && <p className="field-error">{formError}</p>}
+        {formError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{formError}</p>}
 
         {/* ── Tab 1: Person Details ──────────────────────── */}
         {activeTab === "details" && (
@@ -200,7 +200,7 @@ export function ContactFormDialog({
               onChange={(e) => setField("fullName", e.target.value)}
             />
 
-            <div className="field-row">
+            <div className="grid grid-cols-2 gap-3.5">
               <TextField
                 label="Title"
                 name="title"
@@ -215,8 +215,8 @@ export function ContactFormDialog({
               />
             </div>
 
-            <div className="field">
-              <label>Buying role</label>
+            <div className="mb-[18px]">
+              <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Buying role</label>
               <CustomSelect
                 fullWidth
                 label=""
@@ -240,7 +240,7 @@ export function ContactFormDialog({
         {/* ── Tab 2: Contact Details ──────────────────────── */}
         {activeTab === "contact" && (
           <div>
-            <div className="field-row">
+            <div className="grid grid-cols-2 gap-3.5">
               <PhoneField
                 label="Mobile number"
                 name="mobileNo"
@@ -262,7 +262,7 @@ export function ContactFormDialog({
               onChange={(e) => setField("linkedIn", e.target.value)}
             />
 
-            <div className="field-row">
+            <div className="grid grid-cols-2 gap-3.5">
               <TextField
                 label="Country"
                 name="country"
@@ -277,8 +277,8 @@ export function ContactFormDialog({
               />
             </div>
 
-            <div className="field">
-              <label>Company</label>
+            <div className="mb-[18px]">
+              <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Company</label>
               <CustomSelect
                 fullWidth
                 label=""
@@ -290,7 +290,7 @@ export function ContactFormDialog({
           </div>
         )}
 
-        <div className="dialog-actions">
+        <div className="mt-2 flex justify-end gap-2.5">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>

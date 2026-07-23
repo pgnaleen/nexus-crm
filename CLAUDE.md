@@ -30,17 +30,62 @@ real CSS custom properties too (Tailwind exposes every `@theme` value at `:root`
 
 | Token | Hex | Usage |
 |---|---|---|
-| `--color-crm-primary` | `#E91C2D` | Primary action buttons, active sidebar item, key badges/status indicators, form focus rings |
+| `--color-crm-primary` | `#E91C2D` | Primary action buttons, active sidebar item, key badges/status indicators, form focus rings — never the shell background |
 | `--color-crm-primary-hover` | `#C4101F` | Hover / pressed state for primary actions |
 | `--color-crm-primary-tint` | `#FDECED` | Alert backgrounds, row highlights (light tint of primary) |
-| `--color-crm-shell` | `#022B5D` | Sidebar, header, app shell background |
+| `--color-crm-shell` | `#022B5D` | Sidebar/header/app-shell background — the navy base of the shell's dot+gradient treatment (see below) |
+| `--color-crm-shell-gradient-start` | `#04162E` | Same shell gradient's darker navy starting point (0% stop) |
+| `--color-crm-shell-gradient-end` | `#1A5FA8` | Same shell gradient's lighter navy corner-glow endpoint (100% stop); `--color-crm-shell` itself is the 55% midpoint |
 | `--color-crm-bg` | `#F8FAFC` | Page and card background |
 | `--color-crm-text` | `#0F172A` | Body copy and headings |
 
 **Rule:** the primary red (`#E91C2D`) must stay confined to primary action buttons, the active
-sidebar menu item, key badges/status indicators, and form focus rings. Never use it as a large
-solid surface fill. If it starts showing up elsewhere, replace it with the navy shell color or a
-neutral grey.
+sidebar menu item, key badges/status indicators, and form focus rings. **Never** use it as a
+large solid surface fill, and never in the shell's background gradient — the shell background is
+navy only. If red starts showing up elsewhere, replace it with the navy shell color or a neutral
+grey.
+
+**Brand color note.** The client's real brand accent is `#EA0A2A` (confirmed directly from
+`orelit.com`'s own theme CSS: `--wp--preset--color--accent: #ea0a2a`), which is effectively
+identical to `--color-crm-primary` above — genuinely red, not orange, despite how it can read on
+some displays. This does **not** change where red is allowed to appear (see the rule above) — the
+client separately confirmed the shell background should stay navy (matching this section's
+original `#022B5D` value) with no red in it at all; red stays confined to the four usages listed.
+
+**Shell background technique.** The dashboard/sidebar shell (`frontend/src/app/[tenant]/
+(dashboard)/layout.tsx`) uses the same dot+gradient+blur-blob technique as the login page
+(`frontend/src/app/[tenant]/page.module.css`), but anchored entirely to the `--color-crm-shell*`
+tokens above instead of the login page's own separate blue hex values — a radial-gradient dot
+texture, a soft linear-gradient from `-gradient-start` through `--color-crm-shell` to
+`-gradient-end`, plus two blurred glow blobs (`bg-crm-shell-gradient-end/30`,
+`bg-crm-shell/30`). Sidebar nav-item hover state is a plain `white/10` overlay, not red — the
+written rule above only lists the *active* item as an approved red usage, not hover.
+
+**Single-source-of-truth rule:** never hardcode a raw hex or `rgba()` color value in a component
+for anything that represents one of the tokens above — reference the token instead, either as a
+plain Tailwind utility (`bg-crm-primary`, `hover:bg-crm-shell/30` for opacity variants) or, for
+complex arbitrary properties Tailwind can't express as a simple utility (e.g. a multi-stop
+`background-image` gradient), via `var(--color-crm-primary)` inside the arbitrary-value bracket
+syntax. The point: changing the brand color should only ever require editing the six lines in
+`globals.css`'s `@theme` block, never hunting through component files for hardcoded hex strings.
+
+### Typography
+
+No formal type scale exists yet — this is the first written note on it, extracted from what
+`.funnel-title` (used by every admin section's page title: Departments, Deal Sources, etc.)
+already established as the de-facto convention. Documenting it now so it doesn't drift the way
+the Dashboard heading did (was built at 15px/600, a leftover from an old unrelated CSS rule,
+before being caught and corrected to match).
+
+| Role | Size / weight |
+|---|---|
+| Page title (e.g. "Dashboard", "Department Management") | `text-[26px] font-bold` |
+| Card/section title (e.g. "Widgets" panel header) | `text-sm font-semibold` (14px) |
+| Body / table cell text | `text-sm` (14px) or `text-[13.5px]`, regular weight |
+| Muted/secondary text (labels, timestamps) | `text-xs` (12px) or smaller, `text-[var(--color-text-muted)]` |
+
+This isn't exhaustive — extend it as new patterns get established, the same way the color tokens
+above grew from a handful of documented rules into the actual palette in use.
 
 ### Migration discipline
 
@@ -60,16 +105,50 @@ neutral grey.
    full `next build` + visual regression across login/dashboard/funnel/Add-Deal-dialog/an admin
    section — no breakage.
 3. ✅ Add the color tokens above (as a Tailwind `@theme` block — see note above).
-4. Phase 1 — app shell only (sidebar, top nav, main content wrapper, page background). **Not
-   started** — do this only when actually restyling the existing shell; building new
-   Funnel/Deal-Management screens with Tailwind/FlyonUI classes does not require this phase
-   first.
+4. Phase 1 — app shell only (sidebar, top nav, main content wrapper, page background). **In
+   progress**: sidebar, top nav (search bar, date/time, account/notification trigger buttons),
+   main-content wrapper, and shell background (navy dot+gradient+glow, see Color tokens above)
+   are done, restyled with Tailwind utility classes referencing the `@theme` tokens (no
+   hardcoded hex). Account-menu and notification dropdown *contents* (not their trigger buttons)
+   are deliberately deferred to Phase 5 (dropdown menus).
 5. Phase 2 — dashboard cards (KPI/metric cards, activity cards, quick actions, empty
-   states/skeletons).
+   states/skeletons). **Done** for the two cards that exist today: the KPI stat-card grid
+   (`StatCard.tsx`, `dashboard/page.tsx`) and the activity list (`ActivityWidget.tsx`), including
+   switching their icon-box tint from the old ad-hoc blue (`#eef1fb`/`--color-brand`) to the
+   documented `--color-crm-primary-tint`/`--color-crm-primary` tokens, consistent with "no blue
+   anywhere." No quick-actions widget or empty-state UI exists on the dashboard yet, so that part
+   of this phase's listed scope doesn't apply to current code — revisit if/when one is built.
 6. Phase 3 — tables and lists (data tables, search bars, filter dropdowns, status badges,
-   pagination, row hover states, empty states).
+   pagination, row hover states, empty states). **Done** across all 15 consumers (5 admin
+   widgets, 4 layout table widgets, `RelationshipViewWidget`, Backups/Employees/Contacts/
+   Companies/Deals pages) plus the shared `SearchSelect` trigger, `StatusBadge`, and
+   `UserStatusBadge` components. Deliberately **not** touched, staying in scope for Phase 5
+   instead: `SearchSelect`'s open-menu content (a dropdown menu), and the shared `.icon-btn`/
+   `.icon-btn-danger`/`.content-card`/`.empty-state*`/`.field-label` classes, which remain in
+   `globals.css` since components outside this phase's table/list scope still depend on them.
+   Two status-badge components (`StatusBadge`, `UserStatusBadge`) had a real color fix alongside
+   the class migration: "Trial"/"Invited" used the old ad-hoc blue (`#eef1fb`/`#2f6feb`) —
+   switched to the same amber pairing used elsewhere for a neutral "pending" state, per the
+   client's "no blue anywhere" rule (see the Color tokens section above). No pagination exists
+   anywhere yet, so that part of this phase's listed scope doesn't apply to current code.
 7. Phase 4 — forms (text inputs, selects, textareas, checkboxes/radios, validation error
-   styling, save/cancel buttons).
+   styling, save/cancel buttons). **Done.** Shared components migrated first for leverage:
+   `Button.tsx` (fixed a real bug in the same pass: its primary variant used the old
+   `--color-primary` dark-grey token, never the brand red, despite being *the* save/submit button
+   on every form — now `bg-crm-primary`), `TextField.tsx`, `EmailField.tsx`, `PhoneField.tsx`
+   (wrapper only; the third-party phone-input library's own internal styling untouched),
+   `PasswordField.tsx`, `PasswordStrengthHint.tsx`, and the `.dialog-actions` footer wrapper
+   across all 17 of its consumers. Also fixed the shared focus-ring glow from blue
+   (`rgba(47,111,235,...)`) to the brand red, per the "form focus rings" rule and "no blue
+   anywhere." Then all ~20 remaining dialogs with inline `.field`/`.field-error`/
+   `.field-checkbox-row`/`.field-textarea`/`.field-hint`/`.field-locked-value`/`.field-row` usage
+   were migrated file-by-file: 5 admin form dialogs, 6 layout form/detail dialogs, 2 relationship
+   dialogs (`CompanyFormDialog`/`ContactFormDialog` — the largest, ~750 lines each), and several
+   smaller standalone error messages found during a final sweep that weren't in the original
+   survey. All now-dead CSS rules removed from `globals.css`, including the `.password-*` rules
+   that became dead once `PasswordField`/`PasswordStrengthHint` were migrated. `.field-label`
+   (used by `SearchSelect`/`MultiSelect`) and `.permissions-*` (a bespoke picker UI, not a
+   standard form field) were deliberately left alone — out of scope for this phase.
 8. Phase 5 — modals and interactive components (modals, confirmation dialogs, toasts/alerts,
    dropdown menus, tabs, drawers).
 9. Phase 6 — responsive QA pass (mobile/tablet sidebar collapse, sticky top bar, card stacking,

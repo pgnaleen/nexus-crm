@@ -180,7 +180,7 @@ export function RolePermissionsDialog({ role, resources, onClose, onSaved }: Rol
 
   return (
     <Dialog open title={`Permissions — ${role.name}`} onClose={onClose} maxWidth="850px">
-      {formError && <p className="field-error">{formError}</p>}
+      {formError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{formError}</p>}
 
       {!isLoading && (
         <div className="permissions-controls">
@@ -286,7 +286,7 @@ export function RolePermissionsDialog({ role, resources, onClose, onSaved }: Rol
         </div>
       )}
 
-      <div className="dialog-actions">
+      <div className="mt-2 flex justify-end gap-2.5">
         <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
           Cancel
         </Button>

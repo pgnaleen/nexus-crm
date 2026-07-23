@@ -43,18 +43,18 @@ export function BackupsWidget({ permissions }: BackupsWidgetProps) {
   }
 
   return (
-    <div className="tenant-management-wrapper">
-      <div className="funnel-header-top">
-        <div className="funnel-header-left">
-          <h1 className="funnel-title">Database Backups</h1>
-          <p className="funnel-subtitle">
+    <div className="flex flex-col">
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex flex-col">
+          <h1 className="m-0 mb-0.5 text-[26px] font-bold text-crm-text">Database Backups</h1>
+          <p className="m-0 text-[13.5px] text-[var(--color-text-muted)]">
             The full database is backed up automatically every night. Use this to trigger an extra backup on demand.
           </p>
         </div>
       </div>
 
       <div className="content-card">
-        <Button type="button" isLoading={isRunning} onClick={handleRun}>
+        <Button type="button" isLoading={isRunning} onClick={handleRun} className="w-full">
           Run Backup Now
         </Button>
       </div>

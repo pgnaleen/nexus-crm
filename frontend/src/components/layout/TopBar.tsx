@@ -37,17 +37,23 @@ export function TopBar({ tenantName, userDisplayName, tenantSlug }: TopBarProps)
     : "";
 
   return (
-    <header className="topbar">
-      <div className="topbar-search">
-        <SearchIcon />
-        <input type="text" placeholder="Search..." />
+    <header className="flex flex-shrink-0 items-center gap-4 border-b border-[var(--color-border)] bg-white px-6 py-3.5">
+      <div className="relative w-80 transition-[width] duration-200 focus-within:w-[400px]">
+        <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-[var(--color-text-muted)]">
+          <SearchIcon />
+        </span>
+        <input
+          type="text"
+          placeholder="Search..."
+          className="w-full rounded-lg border border-[var(--color-border)] bg-[#f5f6fa] py-[7px] pr-3 pl-8 text-[13px] focus:border-crm-primary focus:bg-white focus:outline-none"
+        />
       </div>
 
-      <div className="topbar-actions">
+      <div className="ml-auto flex items-center gap-2.5">
         {time && (
-          <div className="topbar-datetime">
-            <span className="topbar-date">{formattedDate}</span>
-            <span className="topbar-time">{formattedTime}</span>
+          <div className="mr-2 flex items-center gap-2">
+            <span className="text-[13px] font-medium text-[var(--color-text-muted)]">{formattedDate}</span>
+            <span className="text-[13px] font-semibold text-[var(--color-text)] tabular-nums">{formattedTime}</span>
           </div>
         )}
 

@@ -24,6 +24,23 @@ function hasAnyPermissionForPrefix(permissions: string[], prefix: string): boole
   return permissions.some((p) => p.startsWith(`${prefix}:`));
 }
 
+const LINK_BASE =
+  "flex items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-sm font-medium text-white/65 no-underline transition-colors duration-150 hover:bg-white/10 hover:text-white";
+const LINK_ACTIVE = "bg-crm-primary font-semibold text-white hover:bg-crm-primary hover:text-white";
+const SUBMENU_LINK_BASE =
+  "flex items-center gap-2.5 rounded-[10px] px-3 py-[9px] text-[13.5px] font-medium text-white/65 no-underline transition-colors duration-150 hover:bg-white/10 hover:text-white";
+const GROUP_TOGGLE =
+  "flex w-full cursor-pointer items-center gap-2.5 rounded-[10px] border-none bg-transparent px-3 py-2.5 text-left text-sm font-medium text-white/65 transition-colors duration-150 hover:bg-white/10 hover:text-white";
+
+function linkClasses(isActive: boolean, isSubmenu = false): string {
+  const base = isSubmenu ? SUBMENU_LINK_BASE : LINK_BASE;
+  return isActive ? `${base} ${LINK_ACTIVE}` : base;
+}
+
+function chevronClasses(isOpen: boolean): string {
+  return isOpen ? "flex rotate-180 transition-transform duration-150" : "flex transition-transform duration-150";
+}
+
 const CRM_CONFIG_ITEMS: { label: string; segment: string; prefix?: string; isRoot?: boolean }[] = [
   { label: "Teams", segment: "teams", prefix: "teams" },
   { label: "Relationship Types", segment: "relationship-types", prefix: "relationship_type" },
@@ -81,14 +98,14 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
 
   return (
     <>
-      <nav className="sidebar">
-        <div className="sidebar-logo">
+      <nav className="flex w-[250px] flex-shrink-0 flex-col gap-0.5 overflow-y-auto px-3.5 py-5">
+        <div className="px-2.5 pt-2 pb-[26px]">
           <OreliaLogo dark size={26} showTagline={false} />
         </div>
 
-        <Link 
-          href={dashboardHref} 
-          className={isDashboardActive ? "sidebar-link active" : "sidebar-link"}
+        <Link
+          href={dashboardHref}
+          className={linkClasses(isDashboardActive)}
           onClick={() => handleLinkClick(isDashboardActive)}
         >
           <DashboardIcon size={17} />
@@ -99,7 +116,7 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
         {canSeeDeals && (
           <Link
             href={funnelHref}
-            className={isFunnelActive ? "sidebar-link active" : "sidebar-link"}
+            className={linkClasses(isFunnelActive)}
             onClick={() => handleLinkClick(isFunnelActive)}
           >
             <FunnelIcon size={17} />
@@ -112,19 +129,19 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
           <>
             <button
               type="button"
-              className="sidebar-group-toggle"
+              className={GROUP_TOGGLE}
               onClick={() => setIsDealsOpen((current) => !current)}
               aria-expanded={isDealsOpen}
             >
               <ActivityIcon size={17} />
-              <span>Deals</span>
-              <span className={isDealsOpen ? "sidebar-chevron open" : "sidebar-chevron"}>
+              <span className="flex-1">Deals</span>
+              <span className={chevronClasses(isDealsOpen)}>
                 <ChevronDownIcon size={14} />
               </span>
             </button>
 
             {isDealsOpen && (
-              <div className="sidebar-submenu">
+              <div className="mt-0.5 mb-1.5 flex flex-col gap-0.5 border-l border-white/10 pl-3">
                 {mainStages.map((stage) => {
                   const href = `/${tenantSlug}/deals/${stage.id}`;
                   const isActive = pathname === href;
@@ -132,7 +149,7 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
                     <Link
                       key={href}
                       href={href}
-                      className={isActive ? "sidebar-link active" : "sidebar-link"}
+                      className={linkClasses(isActive, true)}
                       onClick={() => handleLinkClick(isActive)}
                     >
                       {stage.name}
@@ -147,27 +164,27 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
         {/* RELATIONSHIPS GROUP */}
         <button
           type="button"
-          className="sidebar-group-toggle"
+          className={GROUP_TOGGLE}
           onClick={() => setIsRelationshipsOpen((current) => !current)}
           aria-expanded={isRelationshipsOpen}
         >
           <UsersGroupIcon size={17} />
-          <span>Relationships</span>
-          <span className={isRelationshipsOpen ? "sidebar-chevron open" : "sidebar-chevron"}>
+          <span className="flex-1">Relationships</span>
+          <span className={chevronClasses(isRelationshipsOpen)}>
             <ChevronDownIcon size={14} />
           </span>
         </button>
 
         {isRelationshipsOpen && (
-          <div className="sidebar-submenu">
+          <div className="mt-0.5 mb-1.5 flex flex-col gap-0.5 border-l border-white/10 pl-3">
             {relationshipTypes.map((type) => {
               const href = `/${tenantSlug}/relationships/${type.id}`;
               const isActive = pathname === href;
               return (
-                <Link 
-                  key={href} 
-                  href={href} 
-                  className={isActive ? "sidebar-link active" : "sidebar-link"}
+                <Link
+                  key={href}
+                  href={href}
+                  className={linkClasses(isActive, true)}
                   onClick={() => handleLinkClick(isActive)}
                 >
                   {type.name}
@@ -180,22 +197,22 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
         {/* HUMAN RESOURCES GROUP */}
         <button
           type="button"
-          className="sidebar-group-toggle"
+          className={GROUP_TOGGLE}
           onClick={() => setIsHROpen((current) => !current)}
           aria-expanded={isHROpen}
         >
           <UserIcon size={17} />
-          <span>Human Resources</span>
-          <span className={isHROpen ? "sidebar-chevron open" : "sidebar-chevron"}>
+          <span className="flex-1">Human Resources</span>
+          <span className={chevronClasses(isHROpen)}>
             <ChevronDownIcon size={14} />
           </span>
         </button>
 
         {isHROpen && (
-          <div className="sidebar-submenu">
-            <Link 
-              href={hrHref} 
-              className={isHrActive ? "sidebar-link active" : "sidebar-link"}
+          <div className="mt-0.5 mb-1.5 flex flex-col gap-0.5 border-l border-white/10 pl-3">
+            <Link
+              href={hrHref}
+              className={linkClasses(isHrActive, true)}
               onClick={() => handleLinkClick(isHrActive)}
             >
               Employees
@@ -206,28 +223,28 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
         {visibleConfigItems.length > 0 && (
           <button
             type="button"
-            className="sidebar-group-toggle"
+            className={GROUP_TOGGLE}
             onClick={() => setIsConfigOpen((current) => !current)}
             aria-expanded={isConfigOpen}
           >
             <SlidersIcon size={17} />
-            <span>CRM Configuration</span>
-            <span className={isConfigOpen ? "sidebar-chevron open" : "sidebar-chevron"}>
+            <span className="flex-1">CRM Configuration</span>
+            <span className={chevronClasses(isConfigOpen)}>
               <ChevronDownIcon size={14} />
             </span>
           </button>
         )}
 
         {isConfigOpen && visibleConfigItems.length > 0 && (
-          <div className="sidebar-submenu">
+          <div className="mt-0.5 mb-1.5 flex flex-col gap-0.5 border-l border-white/10 pl-3">
             {visibleConfigItems.map(({ label, segment, isRoot }) => {
               const href = isRoot ? `/${tenantSlug}/${segment}` : `${adminBasePath}${segment}`;
               const isActive = pathname === href;
               return (
-                <Link 
-                  key={href} 
-                  href={href} 
-                  className={isActive ? "sidebar-link active" : "sidebar-link"}
+                <Link
+                  key={href}
+                  href={href}
+                  className={linkClasses(isActive, true)}
                   onClick={() => handleLinkClick(isActive)}
                 >
                   {label}
@@ -241,28 +258,28 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
         {visibleAdminItems.length > 0 && (
           <button
             type="button"
-            className="sidebar-group-toggle"
+            className={GROUP_TOGGLE}
             onClick={() => setIsAdminOpen((current) => !current)}
             aria-expanded={isAdminOpen}
           >
             <SettingsIcon size={17} />
-            <span>System Administration</span>
-            <span className={isAdminOpen ? "sidebar-chevron open" : "sidebar-chevron"}>
+            <span className="flex-1">System Administration</span>
+            <span className={chevronClasses(isAdminOpen)}>
               <ChevronDownIcon size={14} />
             </span>
           </button>
         )}
 
         {isAdminOpen && visibleAdminItems.length > 0 && (
-          <div className="sidebar-submenu">
+          <div className="mt-0.5 mb-1.5 flex flex-col gap-0.5 border-l border-white/10 pl-3">
             {visibleAdminItems.map(({ label, segment, isRoot }) => {
               const href = isRoot ? `/${tenantSlug}/${segment}` : `${adminBasePath}${segment}`;
               const isActive = pathname === href;
               return (
-                <Link 
-                  key={href} 
-                  href={href} 
-                  className={isActive ? "sidebar-link active" : "sidebar-link"}
+                <Link
+                  key={href}
+                  href={href}
+                  className={linkClasses(isActive, true)}
                   onClick={() => handleLinkClick(isActive)}
                 >
                   {label}

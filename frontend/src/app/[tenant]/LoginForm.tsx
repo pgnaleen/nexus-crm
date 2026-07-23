@@ -89,7 +89,7 @@ export function LoginForm({ tenantSlug, tenantName }: { tenantSlug: string; tena
 
           {formError && <p className={styles.formError}>{formError}</p>}
 
-          <Button type="submit" isLoading={isSubmitting}>
+          <Button type="submit" isLoading={isSubmitting} className="w-full">
             Sign in
           </Button>
         </form>

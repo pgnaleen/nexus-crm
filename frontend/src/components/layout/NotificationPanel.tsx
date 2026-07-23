@@ -58,14 +58,16 @@ export function NotificationPanel() {
 
   return (
     <div className="notification-panel-wrapper" ref={ref}>
-      <button 
-        type="button" 
-        className={`icon-btn ${isOpen ? "is-active" : ""}`} 
+      <button
+        type="button"
+        className={`relative flex h-8 w-8 items-center justify-center rounded-lg border-none text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#eceefc] ${isOpen ? "bg-[#eceefc]" : "bg-[#f5f6fa]"}`}
         aria-label="Notifications"
         onClick={() => setIsOpen(!isOpen)}
       >
         <BellIcon />
-        {unreadCount > 0 && <span className="icon-btn-dot" />}
+        {unreadCount > 0 && (
+          <span className="absolute top-1.5 right-[7px] h-1.5 w-1.5 rounded-full border-[1.5px] border-white bg-crm-primary" />
+        )}
       </button>
 
       {isOpen && (

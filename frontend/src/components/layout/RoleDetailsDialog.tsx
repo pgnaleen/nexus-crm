@@ -52,7 +52,7 @@ export function RoleDetailsDialog({ role, resources, onClose }: RoleDetailsDialo
         </div>
       </div>
 
-      {loadError && <p className="field-error">{loadError}</p>}
+      {loadError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{loadError}</p>}
 
       {isLoading ? (
         <div className="dialog-loading">
@@ -87,7 +87,7 @@ export function RoleDetailsDialog({ role, resources, onClose }: RoleDetailsDialo
         </div>
       )}
 
-      <div className="dialog-actions">
+      <div className="mt-2 flex justify-end gap-2.5">
         <Button type="button" onClick={onClose}>
           Close
         </Button>

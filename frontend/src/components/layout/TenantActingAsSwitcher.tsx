@@ -67,7 +67,7 @@ export function TenantActingAsSwitcher({ tenants, currentTenantId, actingTenant 
           ]}
         />
       )}
-      {error && <p className="field-error">{error}</p>}
+      {error && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{error}</p>}
     </div>
   );
 }

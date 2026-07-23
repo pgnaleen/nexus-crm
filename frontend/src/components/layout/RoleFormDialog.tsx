@@ -71,7 +71,7 @@ export function RoleFormDialog({ mode, role, onClose, onSaved }: RoleFormDialogP
   return (
     <Dialog open title={mode === "create" ? "Add Role" : "Edit Role"} onClose={onClose}>
       <form onSubmit={handleSubmit}>
-        {formError && <p className="field-error">{formError}</p>}
+        {formError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{formError}</p>}
 
         <TextField
           label="Name *"
@@ -90,7 +90,7 @@ export function RoleFormDialog({ mode, role, onClose, onSaved }: RoleFormDialogP
           onChange={(e) => setField("description", e.target.value)}
         />
 
-        <div className="dialog-actions">
+        <div className="mt-2 flex justify-end gap-2.5">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>

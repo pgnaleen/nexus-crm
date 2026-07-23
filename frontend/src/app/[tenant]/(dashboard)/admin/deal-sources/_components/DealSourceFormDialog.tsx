@@ -115,7 +115,7 @@ export function DealSourceFormDialog({
       maxWidth="480px"
     >
       <form onSubmit={handleSubmit}>
-        {formError && <p className="field-error">{formError}</p>}
+        {formError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{formError}</p>}
 
         <TextField
           label="Name *"
@@ -127,10 +127,12 @@ export function DealSourceFormDialog({
           onChange={(e) => setField("name", e.target.value)}
         />
 
-        <div className="field">
-          <label>Category</label>
+        <div className="mb-[18px]">
+          <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+            Category
+          </label>
           {isViewOnly ? (
-            <div className="field-locked-value">
+            <div className="rounded-lg border border-[var(--color-border)] bg-[#f8fafc] px-3 py-2.5 text-sm text-[var(--color-text-muted)]">
               {CATEGORY_OPTIONS.find((opt) => opt.value === values.category)?.label ?? "No category"}
             </div>
           ) : (
@@ -144,7 +146,7 @@ export function DealSourceFormDialog({
           )}
         </div>
 
-        <label className="field-checkbox-row">
+        <label className="mb-[18px] flex cursor-pointer items-center gap-2.5 text-[13.5px] text-crm-text">
           <input
             type="checkbox"
             checked={values.isActive}
@@ -154,7 +156,7 @@ export function DealSourceFormDialog({
           <span>Active — visible when assigning a source to a deal</span>
         </label>
 
-        <div className="dialog-actions">
+        <div className="mt-2 flex justify-end gap-2.5">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
             {isViewOnly ? "Close" : "Cancel"}
           </Button>

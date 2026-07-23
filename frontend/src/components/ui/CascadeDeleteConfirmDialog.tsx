@@ -61,7 +61,7 @@ export function CascadeDeleteConfirmDialog({
         {error && <p className="mt-2 text-sm font-medium text-[var(--color-crm-primary)]">{error}</p>}
       </div>
 
-      <div className="dialog-actions mt-6 flex justify-end gap-2 border-t border-[var(--color-border)] pt-5">
+      <div className="mt-6 flex justify-end gap-2 border-t border-[var(--color-border)] pt-5">
         <Button type="button" variant="secondary" onClick={onCancel} disabled={verifying}>
           Cancel
         </Button>

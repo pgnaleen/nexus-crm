@@ -148,7 +148,7 @@ export function RelationshipViewWidget({
   }
 
   return (
-    <div className="tenant-management-wrapper">
+    <div className="flex flex-col">
       {canImpersonate && (
         <TenantActingAsSwitcher
           tenants={tenants}
@@ -157,29 +157,36 @@ export function RelationshipViewWidget({
         />
       )}
 
-      <div className="funnel-header-top">
-        <div className="funnel-header-left">
-          <h1 className="funnel-title">{relationshipType.name}</h1>
-          <p className="funnel-subtitle">
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex flex-col">
+          <h1 className="m-0 mb-0.5 text-[26px] font-bold text-crm-text">{relationshipType.name}</h1>
+          <p className="m-0 text-[13.5px] text-[var(--color-text-muted)]">
             Manage all contacts and companies associated with the {relationshipType.name.toLowerCase()} relationship type
           </p>
         </div>
         {canCreate && (
-          <button type="button" className="funnel-add-btn" onClick={() => setDialogState({ mode: "choose" })}>
+          <button
+            type="button"
+            className="cursor-pointer rounded-lg border-none bg-crm-primary px-5 py-2.5 text-[13.5px] font-semibold text-white transition-opacity duration-150 hover:opacity-90"
+            onClick={() => setDialogState({ mode: "choose" })}
+          >
             Add {relationshipType.name}
           </button>
         )}
       </div>
 
-      <div className="funnel-filters-container">
-        <div className="funnel-filters-left">
-          <div className="funnel-filters-search">
-            <SearchIcon />
+      <div className="mb-6 flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[#f8fafc] px-4 py-3">
+        <div className="flex items-center gap-4">
+          <div className="relative w-[280px]">
+            <span className="pointer-events-none absolute top-1/2 left-[10px] -translate-y-1/2 text-[var(--color-text-muted)]">
+              <SearchIcon />
+            </span>
             <input
               type="text"
               placeholder={`Search ${relationshipType.name.toLowerCase()}...`}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-[var(--color-border)] bg-white py-2 pl-8 pr-3 font-[inherit] text-[13px] transition-colors duration-150 focus:border-crm-primary focus:outline-none"
             />
           </div>
         </div>
@@ -214,35 +221,55 @@ export function RelationshipViewWidget({
             </p>
           </div>
         ) : (
-          <table className="data-table">
+          <table className="w-full border-collapse text-[13px]">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Details</th>
-                <th>Status</th>
-                <th>Created</th>
-                {showActionsColumn && <th aria-label="Actions" />}
+                <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  Name
+                </th>
+                <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  Type
+                </th>
+                <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  Details
+                </th>
+                <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  Status
+                </th>
+                <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  Created
+                </th>
+                {showActionsColumn && (
+                  <th className="border-b border-[var(--color-border)] px-3 py-2.5" aria-label="Actions" />
+                )}
               </tr>
             </thead>
             <tbody>
               {filteredParties.map((party) => (
                 <tr
                   key={party.id}
-                  className={canUpdate ? "interactive-row" : undefined}
+                  className={
+                    canUpdate
+                      ? "cursor-pointer transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f1f5f9]"
+                      : "transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f7f8fc]"
+                  }
                   onClick={canUpdate ? () => openEdit(party) : undefined}
                 >
-                  <td style={{ fontWeight: 500 }}>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                  <td className="border-b border-[var(--color-border)] p-3 font-medium text-crm-text">
+                    <span className="inline-flex items-center gap-2">
                       {party.kind === "company" ? <BuildingIcon size={15} /> : <UserIcon size={15} />}
                       {partyName(party)}
                     </span>
                   </td>
-                  <td>{party.kind === "company" ? "Company" : "Person"}</td>
-                  <td style={{ color: "var(--color-text-muted)" }}>{partyDetail(party)}</td>
-                  <td>
+                  <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
+                    {party.kind === "company" ? "Company" : "Person"}
+                  </td>
+                  <td className="border-b border-[var(--color-border)] p-3 text-[var(--color-text-muted)]">
+                    {partyDetail(party)}
+                  </td>
+                  <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
                     <span
-                      className="status-badge"
+                      className="inline-block rounded-full px-2.5 py-[3px] text-[11.5px] font-semibold"
                       style={{
                         background: party.isActive ? "#e6f7ee" : "#f3f4f6",
                         color: party.isActive ? "#1a9c5f" : "#6b7280",
@@ -251,9 +278,11 @@ export function RelationshipViewWidget({
                       {party.isActive ? "Active" : "Inactive"}
                     </span>
                   </td>
-                  <td>{formatDate(party.createdAt)}</td>
+                  <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
+                    {formatDate(party.createdAt)}
+                  </td>
                   {showActionsColumn && (
-                    <td className="table-actions">
+                    <td className="flex justify-end gap-1.5 border-b border-[var(--color-border)] p-3">
                       {canUpdate && (
                         <button
                           type="button"
@@ -306,22 +335,20 @@ export function RelationshipViewWidget({
 
       {dialogState?.mode === "choose" && (
         <Dialog open title={`Add ${relationshipType.name}`} onClose={() => setDialogState(null)} maxWidth="420px">
-          <p style={{ marginBottom: "16px", color: "var(--color-text-muted)" }}>
+          <p className="mb-4 text-[var(--color-text-muted)]">
             Is this a company or an individual person?
           </p>
-          <div style={{ display: "flex", gap: "12px" }}>
+          <div className="flex gap-3">
             <button
               type="button"
-              className="funnel-add-btn"
-              style={{ flex: 1, justifyContent: "center", display: "flex", alignItems: "center", gap: "8px" }}
+              className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border-none bg-crm-primary px-5 py-2.5 text-[13.5px] font-semibold text-white transition-opacity duration-150 hover:opacity-90"
               onClick={() => setDialogState({ mode: "create-company" })}
             >
               <BuildingIcon size={16} /> Company
             </button>
             <button
               type="button"
-              className="funnel-add-btn"
-              style={{ flex: 1, justifyContent: "center", display: "flex", alignItems: "center", gap: "8px" }}
+              className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border-none bg-crm-primary px-5 py-2.5 text-[13.5px] font-semibold text-white transition-opacity duration-150 hover:opacity-90"
               onClick={() => setDialogState({ mode: "create-contact" })}
             >
               <UserIcon size={16} /> Person

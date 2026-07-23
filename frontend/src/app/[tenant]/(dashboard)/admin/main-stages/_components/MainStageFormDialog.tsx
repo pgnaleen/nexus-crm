@@ -92,7 +92,7 @@ export function MainStageFormDialog({
       maxWidth="480px"
     >
       <form onSubmit={handleSubmit}>
-        {formError && <p className="field-error">{formError}</p>}
+        {formError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{formError}</p>}
 
         <TextField
           label="Name *"
@@ -113,11 +113,11 @@ export function MainStageFormDialog({
           disabled={isViewOnly}
           onChange={(e) => setField("position", e.target.value)}
         />
-        <p className="field-hint" style={{ marginTop: "-10px", marginBottom: "18px" }}>
+        <p className="-mt-2.5 mb-[18px] text-[13px] text-[var(--color-text-muted)]">
           Used to order stages in the pipeline. Lower numbers appear first.
         </p>
 
-        <div className="dialog-actions">
+        <div className="mt-2 flex justify-end gap-2.5">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
             {isViewOnly ? "Close" : "Cancel"}
           </Button>

@@ -15,11 +15,14 @@ const RULES: { label: string; test: (value: string) => boolean }[] = [
 // where these requirements don't apply.
 export function PasswordStrengthHint({ password }: PasswordStrengthHintProps) {
   return (
-    <ul className="password-strength-hint">
+    <ul className="-mt-2 mb-4 flex list-none flex-wrap gap-x-3.5 gap-y-1 p-0 text-[12.5px]">
       {RULES.map((rule) => {
         const met = rule.test(password);
         return (
-          <li key={rule.label} style={{ color: met ? "#059669" : "var(--color-text-muted)" }}>
+          <li
+            key={rule.label}
+            className={`flex items-center gap-[5px] ${met ? "text-[#059669]" : "text-[var(--color-text-muted)]"}`}
+          >
             <span aria-hidden="true">{met ? "✓" : "○"}</span> {rule.label}
           </li>
         );

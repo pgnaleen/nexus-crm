@@ -54,11 +54,11 @@ export function ResetPasswordDialog({ user, onClose, onReset }: ResetPasswordDia
   return (
     <Dialog open title={`Reset Password — ${user.displayName}`} onClose={onClose}>
       <form onSubmit={handleSubmit}>
-        <p className="field-hint" style={{ marginTop: 0, marginBottom: "16px" }}>
+        <p className="mt-0 mb-4 text-[13px] text-[var(--color-text-muted)]">
           Sets a temporary password for this user. They will be required to change it on next login.
         </p>
 
-        {formError && <p className="field-error">{formError}</p>}
+        {formError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{formError}</p>}
 
         <PasswordField
           label="New Password *"
@@ -76,7 +76,7 @@ export function ResetPasswordDialog({ user, onClose, onReset }: ResetPasswordDia
           onChange={(e) => setConfirmPassword(e.target.value)}
         />
 
-        <div className="dialog-actions">
+        <div className="mt-2 flex justify-end gap-2.5">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>

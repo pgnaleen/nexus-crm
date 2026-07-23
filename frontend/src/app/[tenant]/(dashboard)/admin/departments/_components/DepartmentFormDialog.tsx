@@ -93,7 +93,7 @@ export function DepartmentFormDialog({
       maxWidth="480px"
     >
       <form onSubmit={handleSubmit}>
-        {formError && <p className="field-error">{formError}</p>}
+        {formError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{formError}</p>}
 
         <TextField
           label={t("departments.dialog.nameLabel")}
@@ -105,7 +105,7 @@ export function DepartmentFormDialog({
           onChange={(e) => setField("name", e.target.value)}
         />
 
-        <label className="field-checkbox-row">
+        <label className="mb-[18px] flex cursor-pointer items-center gap-2.5 text-[13.5px] text-crm-text">
           <input
             type="checkbox"
             checked={values.isActive}
@@ -115,7 +115,7 @@ export function DepartmentFormDialog({
           <span>{t("departments.dialog.activeLabel")}</span>
         </label>
 
-        <div className="dialog-actions">
+        <div className="mt-2 flex justify-end gap-2.5">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
             {isViewOnly ? t("common.actions.close") : t("common.actions.cancel")}
           </Button>

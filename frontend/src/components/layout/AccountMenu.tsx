@@ -53,7 +53,7 @@ export function AccountMenu({ tenantName, userDisplayName, tenantSlug }: Account
     <div className="account-menu" ref={containerRef}>
       <button
         type="button"
-        className="avatar-btn"
+        className="flex h-8 w-8 items-center justify-center rounded-lg border-none bg-crm-shell text-xs font-bold text-white"
         onClick={() => setIsOpen((current) => !current)}
         aria-label="Account menu"
       >

@@ -101,12 +101,14 @@ export function SubStageFormDialog({
       maxWidth="480px"
     >
       <form onSubmit={handleSubmit}>
-        {formError && <p className="field-error">{formError}</p>}
+        {formError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{formError}</p>}
 
-        <div className="field">
-          <label>Main stage *</label>
+        <div className="mb-[18px]">
+          <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+            Main stage *
+          </label>
           {isViewOnly ? (
-            <div className="field-locked-value">
+            <div className="rounded-lg border border-[var(--color-border)] bg-[#f8fafc] px-3 py-2.5 text-sm text-[var(--color-text-muted)]">
               {mainStageOptions.find((opt) => opt.value === values.mainStageId)?.label ?? "—"}
             </div>
           ) : (
@@ -118,7 +120,9 @@ export function SubStageFormDialog({
                 onChange={(val) => setField("mainStageId", val)}
                 options={mainStageOptions}
               />
-              {errors.mainStageId && <p className="field-error">{errors.mainStageId}</p>}
+              {errors.mainStageId && (
+                <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{errors.mainStageId}</p>
+              )}
             </>
           )}
         </div>
@@ -142,7 +146,7 @@ export function SubStageFormDialog({
           onChange={(e) => setField("sortOrder", e.target.value)}
         />
 
-        <label className="field-checkbox-row">
+        <label className="mb-[18px] flex cursor-pointer items-center gap-2.5 text-[13.5px] text-crm-text">
           <input
             type="checkbox"
             checked={values.isWon}
@@ -152,7 +156,7 @@ export function SubStageFormDialog({
           <span>Won — this stage represents a closed-won outcome</span>
         </label>
 
-        <label className="field-checkbox-row">
+        <label className="mb-[18px] flex cursor-pointer items-center gap-2.5 text-[13.5px] text-crm-text">
           <input
             type="checkbox"
             checked={values.isLost}
@@ -162,7 +166,7 @@ export function SubStageFormDialog({
           <span>Lost — this stage represents a closed-lost outcome</span>
         </label>
 
-        <div className="dialog-actions">
+        <div className="mt-2 flex justify-end gap-2.5">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
             {isViewOnly ? "Close" : "Cancel"}
           </Button>

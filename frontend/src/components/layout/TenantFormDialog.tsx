@@ -151,7 +151,7 @@ export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onS
   return (
     <Dialog open title={mode === "create" ? "Add Tenant" : "Edit Tenant"} onClose={onClose} maxWidth="720px">
       <form onSubmit={handleSubmit}>
-        {formError && <p className="field-error">{formError}</p>}
+        {formError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{formError}</p>}
 
         {isLoadingDetail ? (
           <div className="dialog-loading">
@@ -159,7 +159,7 @@ export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onS
           </div>
         ) : (
         <>
-        <div className="field-row">
+        <div className="grid grid-cols-2 gap-3.5">
           <TextField
             label="Name *"
             name="name"
@@ -182,9 +182,11 @@ export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onS
           />
         </div>
 
-        <div className="field-row">
-          <div className="field">
-            <label>Plan *</label>
+        <div className="grid grid-cols-2 gap-3.5">
+          <div className="mb-[18px]">
+            <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+              Plan *
+            </label>
             <CustomSelect
               fullWidth
               label=""
@@ -195,11 +197,13 @@ export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onS
                 ...plans.map((p) => ({ value: p.id, label: p.name }))
               ]}
             />
-            {errors.planId && <p className="field-error">{errors.planId}</p>}
+            {errors.planId && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{errors.planId}</p>}
           </div>
 
-          <div className="field">
-            <label>Industry</label>
+          <div className="mb-[18px]">
+            <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+              Industry
+            </label>
             <CustomSelect
               fullWidth
               label=""
@@ -213,8 +217,10 @@ export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onS
           </div>
         </div>
 
-        <div className="field">
-          <label>Status *</label>
+        <div className="mb-[18px]">
+          <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+            Status *
+          </label>
           <CustomSelect
             fullWidth
             label=""
@@ -234,7 +240,7 @@ export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onS
           onChange={(e) => setField("tagline", e.target.value)}
         />
 
-        <div className="field-row">
+        <div className="grid grid-cols-2 gap-3.5">
           <EmailField
             label="Contact email *"
             name="contactEmail"
@@ -255,7 +261,7 @@ export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onS
           />
         </div>
 
-        <div className="field-row">
+        <div className="grid grid-cols-2 gap-3.5">
           <PhoneField
             label="Phone *"
             name="phoneNo"
@@ -276,7 +282,7 @@ export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onS
         </>
         )}
 
-        <div className="dialog-actions">
+        <div className="mt-2 flex justify-end gap-2.5">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>

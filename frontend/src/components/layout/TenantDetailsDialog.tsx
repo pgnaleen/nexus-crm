@@ -54,7 +54,7 @@ export function TenantDetailsDialog({ open, tenant, onClose }: TenantDetailsDial
 
   return (
     <Dialog open={open} onClose={onClose} title="Tenant Details">
-      {loadError && <p className="field-error">{loadError}</p>}
+      {loadError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{loadError}</p>}
 
       {isLoading || !detail ? (
         <div className="dialog-loading">

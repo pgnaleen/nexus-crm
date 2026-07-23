@@ -193,7 +193,7 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
         </div>
       ) : (
         <form onSubmit={handleSubmit}>
-          {formError && <p className="field-error">{formError}</p>}
+          {formError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{formError}</p>}
 
           {mode === "create" && (
             <TextField
@@ -226,7 +226,7 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
 
           {mode === "create" && (
             <>
-              <div className="field-row">
+              <div className="grid grid-cols-2 gap-3.5">
                 <PasswordField
                   label="Initial Password *"
                   name="password"
@@ -246,8 +246,10 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
             </>
           )}
 
-          <div className="field">
-            <label>Status *</label>
+          <div className="mb-[18px]">
+            <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+              Status *
+            </label>
             <CustomSelect
               fullWidth
               label=""
@@ -257,7 +259,7 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
             />
           </div>
 
-          <label className="field-checkbox-row">
+          <label className="mb-[18px] flex cursor-pointer items-center gap-2.5 text-[13.5px] text-crm-text">
             <input
               type="checkbox"
               checked={values.mustChangePassword}
@@ -266,8 +268,10 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
             <span>Require password change on next login</span>
           </label>
 
-          <div className="field">
-            <label>Roles</label>
+          <div className="mb-[18px]">
+            <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+              Roles
+            </label>
             {isLoadingRoles ? (
               <div className="dialog-loading" style={{ padding: "12px 0" }}>
                 <Spinner size={20} />
@@ -281,10 +285,12 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
             )}
           </div>
 
-          <div className="field">
-            <label>Notes</label>
+          <div className="mb-[18px]">
+            <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+              Notes
+            </label>
             <textarea
-              className="field-textarea"
+              className="w-full resize-y rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5 font-[inherit] text-sm text-crm-text transition-colors duration-150 focus:border-crm-primary focus:shadow-[0_0_0_3px_rgba(233,28,45,0.15)] focus:outline-none"
               rows={3}
               value={values.extras}
               onChange={(e) => setField("extras", e.target.value)}
@@ -292,7 +298,7 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
             />
           </div>
 
-          <div className="dialog-actions">
+          <div className="mt-2 flex justify-end gap-2.5">
             <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
               Cancel
             </Button>
