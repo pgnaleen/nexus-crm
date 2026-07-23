@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { EmploymentStatus } from "@orelia/common";
 import type { EmployeeDetailResponse } from "@orelia/common";
 import { getEmployee } from "@/lib/api/employees";
 import { resolveUploadUrl } from "@/lib/api/uploads";
@@ -26,6 +27,11 @@ interface EmployeeDetailDialogProps {
   // Story 1.4 -- present only when the viewer holds EMPLOYEES_UPDATE; the
   // widget swaps this dialog for the edit form with the loaded detail.
   onEdit?: (detail: EmployeeDetailResponse) => void;
+  // Story 1.5 -- present only when the viewer holds EMPLOYEES_UPDATE; only
+  // rendered for employees not already in an exited status.
+  onExit?: (detail: EmployeeDetailResponse) => void;
+  // Story 1.5 -- present only when the viewer holds EMPLOYEES_DELETE.
+  onDelete?: (detail: EmployeeDetailResponse) => void;
 }
 
 function DetailItem({ label, value }: { label: string; value: ReactNode }) {
@@ -37,7 +43,14 @@ function DetailItem({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-export function EmployeeDetailDialog({ employeeId, canViewSensitive, onClose, onEdit }: EmployeeDetailDialogProps) {
+export function EmployeeDetailDialog({
+  employeeId,
+  canViewSensitive,
+  onClose,
+  onEdit,
+  onExit,
+  onDelete,
+}: EmployeeDetailDialogProps) {
   const [activeTab, setActiveTab] = useState<TabId>("personal");
   const [detail, setDetail] = useState<EmployeeDetailResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -156,6 +169,9 @@ export function EmployeeDetailDialog({ employeeId, canViewSensitive, onClose, on
                 value={detail.employmentStatus ? EMPLOYMENT_STATUS_LABELS[detail.employmentStatus] : null}
               />
               <DetailItem label={t("employees.dialog.employment.dateOfJoined")} value={detail.dateOfJoined} />
+              {detail.dateOfExit && (
+                <DetailItem label={t("employees.dialog.employment.dateOfExit")} value={detail.dateOfExit} />
+              )}
               <DetailItem
                 label={t("employees.dialog.employment.clearanceLevel")}
                 value={detail.clearanceLevel ? CLEARANCE_LEVEL_LABELS[detail.clearanceLevel] : null}
@@ -212,15 +228,41 @@ export function EmployeeDetailDialog({ employeeId, canViewSensitive, onClose, on
         </>
       )}
 
-      <div className="mt-2 flex justify-end gap-2.5">
-        {onEdit && detail && (
-          <Button type="button" variant="secondary" onClick={() => onEdit(detail)}>
-            {t("employees.dialog.editButton")}
+      <div className="mt-2 flex items-center justify-between gap-2.5">
+        <div className="flex gap-2.5">
+          {/* Story 1.5 -- Delete is a distinct, EMPLOYEES_DELETE-gated action
+              for records created by mistake; Mark as Exited (EMPLOYEES_UPDATE)
+              is the normal leave-the-company flow and stays available to
+              editors who can't delete. */}
+          {onDelete && detail && (
+            <Button
+              type="button"
+              variant="secondary"
+              style={{ color: "#ef4444", borderColor: "#ef4444" }}
+              onClick={() => onDelete(detail)}
+            >
+              {t("employees.dialog.deleteButton")}
+            </Button>
+          )}
+        </div>
+        <div className="flex gap-2.5">
+          {onExit &&
+            detail &&
+            detail.employmentStatus !== EmploymentStatus.Terminated &&
+            detail.employmentStatus !== EmploymentStatus.Resigned && (
+              <Button type="button" variant="secondary" onClick={() => onExit(detail)}>
+                {t("employees.dialog.exitButton")}
+              </Button>
+            )}
+          {onEdit && detail && (
+            <Button type="button" variant="secondary" onClick={() => onEdit(detail)}>
+              {t("employees.dialog.editButton")}
+            </Button>
+          )}
+          <Button type="button" onClick={onClose}>
+            {t("common.actions.close")}
           </Button>
-        )}
-        <Button type="button" onClick={onClose}>
-          {t("common.actions.close")}
-        </Button>
+        </div>
       </div>
     </Dialog>
   );

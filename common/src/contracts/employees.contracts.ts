@@ -78,6 +78,9 @@ export interface UpdateEmployeeRequest {
   employmentType?: EmploymentType | null;
   employmentStatus?: EmploymentStatus | null;
   dateOfJoined?: string | null;
+  // Story 1.5 -- set by the "Mark as Exited" flow (together with an exited
+  // employmentStatus), not rendered on the general edit form.
+  dateOfExit?: string | null;
   primaryLocation?: string | null;
   baseCountry?: string | null;
   clearanceLevel?: ClearanceLevel | null;
@@ -116,6 +119,8 @@ export interface EmployeeDetailResponse {
   employmentType: EmploymentType | null;
   employmentStatus: EmploymentStatus | null;
   dateOfJoined: string | null;
+  // Story 1.5 -- present once an employee has been marked as exited.
+  dateOfExit: string | null;
   primaryLocation: string | null;
   baseCountry: string | null;
   clearanceLevel: ClearanceLevel | null;

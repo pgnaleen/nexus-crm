@@ -36,11 +36,36 @@
     },
     "notSet": "Not set",
     "addButton": "Add Employee",
+    "statusFilter": {
+      "all": "All statuses"
+    },
+    "exitDialog": {
+      "title": "Mark as Exited",
+      "message": "Mark {name} as having left the organization. Their record and history stay visible in the directory — this is not a deletion.",
+      "statusLabel": "Exit status",
+      "dateLabel": "Exit date *",
+      "confirmButton": "Mark as Exited",
+      "errors": {
+        "dateRequired": "Exit date is required",
+        "saveFailed": "Failed to mark employee as exited"
+      }
+    },
+    "deleteConfirm": {
+      "title": "Delete Employee Record",
+      "message": "Permanently remove {name} from the directory? This is for records created by mistake — if this person is leaving the organization, use \"Mark as Exited\" instead so their history is preserved.",
+      "confirmLabel": "Delete",
+      "deleting": "Deleting...",
+      "errors": {
+        "deleteFailed": "Failed to delete employee"
+      }
+    },
     "dialog": {
       "addTitle": "Add Employee",
       "editTitle": "Edit Employee",
       "viewTitle": "Employee Details",
       "editButton": "Edit",
+      "exitButton": "Mark as Exited",
+      "deleteButton": "Delete",
       "saveButton": "Create Employee",
       "updateButton": "Save Changes",
       "tabs": {
@@ -70,6 +95,7 @@
         "employmentType": "Employment type",
         "employmentStatus": "Employment status",
         "dateOfJoined": "Date joined",
+        "dateOfExit": "Date of exit",
         "primaryLocation": "Primary location",
         "baseCountry": "Base country",
         "clearanceLevel": "Clearance level",

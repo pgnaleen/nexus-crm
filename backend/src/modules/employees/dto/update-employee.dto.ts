@@ -81,6 +81,12 @@ export class UpdateEmployeeDto implements UpdateEmployeeRequest {
   @IsDateString()
   dateOfJoined?: string | null;
 
+  // Story 1.5 -- set by the "Mark as Exited" flow alongside an exited
+  // employmentStatus; not rendered on the general edit form.
+  @IsOptional()
+  @IsDateString()
+  dateOfExit?: string | null;
+
   @IsOptional()
   @IsString()
   primaryLocation?: string | null;

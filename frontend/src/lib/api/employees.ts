@@ -23,3 +23,7 @@ export function updateEmployee(id: string, payload: UpdateEmployeeRequest): Prom
 export function getEmployee(id: string): Promise<EmployeeDetailResponse> {
   return apiFetch<EmployeeDetailResponse>(`/employees/${id}`);
 }
+
+export function deleteEmployee(id: string): Promise<{ success: true }> {
+  return apiFetch<{ success: true }>(`/employees/${id}`, { method: "DELETE" });
+}

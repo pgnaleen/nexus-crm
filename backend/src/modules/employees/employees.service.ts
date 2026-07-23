@@ -206,4 +206,31 @@ export class EmployeesService {
       throw err;
     }
   }
+
+  // Story 1.5 -- soft delete (deletedAt/deletedBy), same posture as
+  // Users/Teams/Departments: recoverable at the DB level, gone from the UI.
+  // Distinct from "Mark as Exited" (a plain update of employmentStatus +
+  // dateOfExit via update() above), which keeps the record fully visible for
+  // compliance/history. Bare load for the mutation target -- same
+  // relations-save rule as update().
+  async remove(id: string, userId: string): Promise<void> {
+    this.logger.debug(`remove called for employee ${id} by ${userId}`);
+    try {
+      const employee = await this.findOneBareOrFail(id);
+      await this.employeesRepo.softRemoveScoped(employee, userId);
+      this.logger.debug(`remove succeeded for employee ${id}`);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: id,
+        action: "delete",
+        actorId: userId,
+        changes: { fullName: employee.fullName, employeeCode: employee.employeeCode ?? null },
+      });
+    } catch (err) {
+      if (!(err instanceof NotFoundException)) {
+        this.logger.error(`remove failed for employee ${id}: ${(err as Error).message}`, (err as Error).stack);
+      }
+      throw err;
+    }
+  }
 }

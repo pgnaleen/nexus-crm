@@ -1,13 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { PERMISSIONS } from "@orelia/common";
+import { EmploymentStatus, PERMISSIONS } from "@orelia/common";
 import type { DepartmentPickerResponse, EmployeeDetailResponse, EmployeeListItemResponse } from "@orelia/common";
+import { deleteEmployee } from "@/lib/api/employees";
+import { ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { CustomSelect } from "@/components/ui/CustomSelect";
 import { SearchIcon } from "@/components/ui/icons";
 import { t } from "@/lib/i18n";
 import { EmployeeDetailDialog } from "./EmployeeDetailDialog";
+import { EmployeeExitDialog } from "./EmployeeExitDialog";
 import { EmployeeFormDialog } from "./EmployeeFormDialog";
+import { EMPLOYMENT_STATUS_LABELS } from "./employeeLabels";
 
 interface EmployeesWidgetProps {
   employees: EmployeeListItemResponse[];
@@ -30,18 +36,53 @@ export function EmployeesWidget({ employees: initialEmployees, permissions, depa
   // Story 1.4 -- detail loaded via the view dialog, handed to the form
   // dialog as edit-mode pre-fill.
   const [editingDetail, setEditingDetail] = useState<EmployeeDetailResponse | null>(null);
+  // Story 1.5 -- exit ("Mark as Exited") and delete flows, both launched
+  // from the detail dialog with its already-loaded record.
+  const [exitingDetail, setExitingDetail] = useState<EmployeeDetailResponse | null>(null);
+  const [deletingDetail, setDeletingDetail] = useState<EmployeeDetailResponse | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Story 1.5 -- status filter so exited employees stay findable rather
+  // than silently vanishing among the actives ("" = all statuses).
+  const [statusFilter, setStatusFilter] = useState<EmploymentStatus | "">("");
 
   const canView = permissions.includes(PERMISSIONS.EMPLOYEES_VIEW);
   const canCreate = permissions.includes(PERMISSIONS.EMPLOYEES_CREATE);
   const canUpdate = permissions.includes(PERMISSIONS.EMPLOYEES_UPDATE);
+  const canDelete = permissions.includes(PERMISSIONS.EMPLOYEES_DELETE);
   const canViewSensitive = permissions.includes(PERMISSIONS.EMPLOYEES_VIEW_SENSITIVE);
 
   const filteredEmployees = employees.filter(
-    (employee) => !search || employee.fullName.toLowerCase().includes(search.toLowerCase()),
+    (employee) =>
+      (!search || employee.fullName.toLowerCase().includes(search.toLowerCase())) &&
+      (!statusFilter || employee.employmentStatus === statusFilter),
   );
+
+  const statusFilterOptions = [
+    { value: "", label: t("employees.statusFilter.all") },
+    ...Object.values(EmploymentStatus).map((value) => ({ value, label: EMPLOYMENT_STATUS_LABELS[value] })),
+  ];
 
   function handleSaved(employee: EmployeeListItemResponse) {
     setEmployees((current) => [...current, employee].sort((a, b) => a.fullName.localeCompare(b.fullName)));
+  }
+
+  // Story 1.5 -- soft delete; the row disappears from the directory (the
+  // record stays recoverable at the DB level).
+  async function handleDeleteConfirmed() {
+    if (!deletingDetail) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteEmployee(deletingDetail.id);
+      setEmployees((current) => current.filter((employee) => employee.id !== deletingDetail.id));
+      setDeletingDetail(null);
+      setViewingEmployeeId(null);
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : t("employees.deleteConfirm.errors.deleteFailed"));
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   // Story 1.4 -- replace the edited row in place (AC: name/title/department/
@@ -89,6 +130,15 @@ export function EmployeesWidget({ employees: initialEmployees, permissions, depa
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-lg border border-[var(--color-border)] bg-white py-2 pl-8 pr-3 font-[inherit] text-[13px] transition-colors duration-150 focus:border-crm-primary focus:outline-none"
+            />
+          </div>
+          <div className="w-[180px]">
+            <CustomSelect
+              fullWidth
+              label=""
+              value={statusFilter}
+              onChange={(val) => setStatusFilter(val as EmploymentStatus | "")}
+              options={statusFilterOptions}
             />
           </div>
         </div>
@@ -190,7 +240,32 @@ export function EmployeesWidget({ employees: initialEmployees, permissions, depa
         />
       )}
 
-      {viewingEmployeeId && !editingDetail && (
+      {exitingDetail && (
+        <EmployeeExitDialog
+          employee={exitingDetail}
+          onClose={() => setExitingDetail(null)}
+          onExited={handleUpdated}
+        />
+      )}
+
+      <ConfirmDialog
+        open={Boolean(deletingDetail)}
+        title={t("employees.deleteConfirm.title")}
+        message={
+          (deleteError ? `${deleteError} — ` : "") +
+          t("employees.deleteConfirm.message").replace("{name}", deletingDetail?.fullName ?? "")
+        }
+        confirmLabel={isDeleting ? t("employees.deleteConfirm.deleting") : t("employees.deleteConfirm.confirmLabel")}
+        cancelLabel={t("common.actions.cancel")}
+        isDestructive
+        onConfirm={handleDeleteConfirmed}
+        onCancel={() => {
+          setDeletingDetail(null);
+          setDeleteError(null);
+        }}
+      />
+
+      {viewingEmployeeId && !editingDetail && !exitingDetail && (
         <EmployeeDetailDialog
           employeeId={viewingEmployeeId}
           canViewSensitive={canViewSensitive}
@@ -203,6 +278,15 @@ export function EmployeesWidget({ employees: initialEmployees, permissions, depa
                 }
               : undefined
           }
+          onExit={
+            canUpdate
+              ? (detail) => {
+                  setViewingEmployeeId(null);
+                  setExitingDetail(detail);
+                }
+              : undefined
+          }
+          onDelete={canDelete ? (detail) => setDeletingDetail(detail) : undefined}
         />
       )}
     </div>

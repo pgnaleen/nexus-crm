@@ -1,5 +1,5 @@
 import { EmployeeDetailResponse, EmployeeListItemResponse, PERMISSIONS } from "@orelia/common";
-import { Body, Controller, Get, Logger, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Logger, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
@@ -117,6 +117,27 @@ export class EmployeesController {
     }
   }
 
+  // Story 1.5 -- soft delete, deliberately separate from "Mark as Exited"
+  // (which is a PATCH of employmentStatus + dateOfExit and keeps the record
+  // visible). Same {success} response shape as Departments/Teams/Users.
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.EMPLOYEES_DELETE])
+  @Delete(":id")
+  async remove(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ success: true }> {
+    this.logger.debug(`DELETE /employees/${id} called by ${user.sub}`);
+    try {
+      await this.employeesService.remove(id, user.sub);
+      this.logger.debug(`DELETE /employees/${id} succeeded`);
+      return { success: true };
+    } catch (err) {
+      this.logger.error(`DELETE /employees/${id} failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
   private async hasSensitiveAccess(userId: string): Promise<boolean> {
     const permissions = await this.rbacService.getPermissionsForUser(userId);
     return permissions.includes(PERMISSIONS.EMPLOYEES_VIEW_SENSITIVE);
@@ -150,6 +171,7 @@ export class EmployeesController {
       employmentType: employee.employmentType ?? null,
       employmentStatus: employee.employmentStatus ?? null,
       dateOfJoined: employee.dateOfJoined ?? null,
+      dateOfExit: employee.dateOfExit ?? null,
       primaryLocation: employee.primaryLocation ?? null,
       baseCountry: employee.baseCountry ?? null,
       clearanceLevel: employee.clearanceLevel ?? null,
