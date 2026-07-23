@@ -30,9 +30,10 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import { CustomSelect } from "@/components/ui/CustomSelect";
+import { CountrySelect } from "@/components/ui/CountrySelect";
 import { Spinner } from "@/components/ui/Spinner";
 import { PlusIcon, TrashIcon, UploadCloudIcon } from "@/components/ui/icons";
-import { email as emailValidator, minLength, required, validate } from "@/lib/validation";
+import { email as emailValidator, min, minLength, required, validate } from "@/lib/validation";
 
 const ACCOUNT_TIER_LABELS: Record<AccountTier, string> = {
   [AccountTier.Strategic]: "Strategic",
@@ -299,9 +300,15 @@ export function CompanyFormDialog({
     const nextErrors: Partial<Record<keyof FormState, string>> = {};
     const nameError = validate(values.name, [required(), minLength(1)]);
     if (nameError) nextErrors.name = nameError;
+    const annualSpendError = validate(values.annualSpend, [min(0, "Annual spend can't be negative")]);
+    if (annualSpendError) nextErrors.annualSpend = annualSpendError;
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) {
+    if (nextErrors.name) {
       setActiveTab("details");
+      return false;
+    }
+    if (nextErrors.annualSpend) {
+      setActiveTab("business");
       return false;
     }
     return true;
@@ -541,11 +548,11 @@ export function CompanyFormDialog({
             </div>
 
             <div className="grid grid-cols-2 gap-3.5">
-              <TextField
+              <CountrySelect
                 label="Country"
-                name="country"
                 value={values.country}
-                onChange={(e) => setField("country", e.target.value)}
+                onChange={(val) => setField("country", val)}
+                placeholder="Search countries..."
               />
               <TextField
                 label="HQ address"
@@ -638,6 +645,7 @@ export function CompanyFormDialog({
                 min="0"
                 step="0.01"
                 value={values.annualSpend}
+                error={errors.annualSpend}
                 onChange={(e) => setField("annualSpend", e.target.value)}
               />
             </div>
