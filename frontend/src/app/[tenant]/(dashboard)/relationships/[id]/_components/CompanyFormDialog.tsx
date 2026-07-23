@@ -8,7 +8,6 @@ import {
   FiscalYearEndMonth,
   Region,
   RevenueBand,
-  RoleBuying,
   Sector,
 } from "@orelia/common";
 import type {
@@ -31,10 +30,10 @@ import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { CountrySelect } from "@/components/ui/CountrySelect";
-import { PhoneField } from "@/components/ui/PhoneField";
 import { Spinner } from "@/components/ui/Spinner";
 import { PlusIcon, TrashIcon, UploadCloudIcon } from "@/components/ui/icons";
-import { email as emailValidator, min, minLength, required, validate } from "@/lib/validation";
+import { min, minLength, required, validate } from "@/lib/validation";
+import { ContactFields, type ContactFieldsValue } from "./ContactFields";
 
 const ACCOUNT_TIER_LABELS: Record<AccountTier, string> = {
   [AccountTier.Strategic]: "Strategic",
@@ -97,15 +96,6 @@ const CREDIT_STATUS_LABELS: Record<CreditStatus, string> = {
   [CreditStatus.Unknown]: "Unknown",
 };
 
-const ROLE_BUYING_LABELS: Record<RoleBuying, string> = {
-  [RoleBuying.EconomicBuyer]: "Economic Buyer",
-  [RoleBuying.Champion]: "Champion",
-  [RoleBuying.Influencer]: "Influencer",
-  [RoleBuying.Gatekeeper]: "Gatekeeper",
-  [RoleBuying.EndUser]: "End User",
-  [RoleBuying.Blocker]: "Blocker",
-};
-
 function withNotSet(options: { value: string; label: string }[]) {
   return [{ value: "", label: "Not set" }, ...options];
 }
@@ -131,21 +121,24 @@ const REGION_OPTIONS = withNotSet(
 const CREDIT_STATUS_OPTIONS = withNotSet(
   Object.values(CreditStatus).map((value) => ({ value, label: CREDIT_STATUS_LABELS[value] })),
 );
-const ROLE_BUYING_OPTIONS = withNotSet(
-  Object.values(RoleBuying).map((value) => ({ value, label: ROLE_BUYING_LABELS[value] })),
-);
-
-interface ContactRow {
+interface ContactRow extends ContactFieldsValue {
   key: string;
-  fullName: string;
-  title: string;
-  email: string;
-  mobileNo: string;
-  roleBuying: RoleBuying | "";
 }
 
 function newContactRow(): ContactRow {
-  return { key: crypto.randomUUID(), fullName: "", title: "", email: "", mobileNo: "", roleBuying: "" };
+  return {
+    key: crypto.randomUUID(),
+    fullName: "",
+    title: "",
+    department: "",
+    roleBuying: "",
+    email: "",
+    mobileNo: "",
+    directPhoneNo: "",
+    linkedIn: "",
+    country: "",
+    timezone: "",
+  };
 }
 
 interface FormState {
@@ -359,9 +352,14 @@ export function CompanyFormDialog({
             .map((contact) => ({
               fullName: contact.fullName.trim(),
               title: contact.title.trim() || undefined,
+              department: contact.department.trim() || undefined,
+              roleBuying: contact.roleBuying || undefined,
               email: contact.email.trim() || undefined,
               mobileNo: contact.mobileNo.trim() || undefined,
-              roleBuying: contact.roleBuying || undefined,
+              directPhoneNo: contact.directPhoneNo.trim() || undefined,
+              linkedIn: contact.linkedIn.trim() || undefined,
+              country: contact.country.trim() || undefined,
+              timezone: contact.timezone.trim() || undefined,
             })),
         });
       } else {
@@ -407,9 +405,14 @@ export function CompanyFormDialog({
             companyId: company?.id,
             fullName: contact.fullName.trim(),
             title: contact.title.trim() || undefined,
+            department: contact.department.trim() || undefined,
+            roleBuying: contact.roleBuying || undefined,
             email: contact.email.trim() || undefined,
             mobileNo: contact.mobileNo.trim() || undefined,
-            roleBuying: contact.roleBuying || undefined,
+            directPhoneNo: contact.directPhoneNo.trim() || undefined,
+            linkedIn: contact.linkedIn.trim() || undefined,
+            country: contact.country.trim() || undefined,
+            timezone: contact.timezone.trim() || undefined,
           });
           savedContactKeysRef.current.add(contact.key);
         }
@@ -759,49 +762,13 @@ export function CompanyFormDialog({
             )}
 
             {contacts.map((contact) => {
-              const emailError = contact.email ? validate(contact.email, [emailValidator()]) : undefined;
               return (
                 <div key={contact.key} className="deal-contact-row">
                   <div className="deal-contact-fields">
-                    <div className="grid grid-cols-2 gap-3.5">
-                      <TextField
-                        label="Full name"
-                        value={contact.fullName}
-                        placeholder="e.g. Jane Doe"
-                        onChange={(e) => updateContact(contact.key, "fullName", e.target.value)}
-                      />
-                      <TextField
-                        label="Title"
-                        value={contact.title}
-                        placeholder="e.g. Procurement Lead"
-                        onChange={(e) => updateContact(contact.key, "title", e.target.value)}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3.5">
-                      <TextField
-                        label="Email"
-                        type="email"
-                        value={contact.email}
-                        error={emailError}
-                        placeholder="name@company.com"
-                        onChange={(e) => updateContact(contact.key, "email", e.target.value)}
-                      />
-                      <PhoneField
-                        label="Mobile number"
-                        value={contact.mobileNo}
-                        onChange={(val) => updateContact(contact.key, "mobileNo", val)}
-                      />
-                    </div>
-                    <div className="mb-[18px]">
-                      <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Buying role</label>
-                      <CustomSelect
-                        fullWidth
-                        label=""
-                        value={contact.roleBuying}
-                        onChange={(val) => updateContact(contact.key, "roleBuying", val as RoleBuying | "")}
-                        options={ROLE_BUYING_OPTIONS}
-                      />
-                    </div>
+                    <ContactFields
+                      values={contact}
+                      onChange={(field, value) => updateContact(contact.key, field, value as never)}
+                    />
                   </div>
                   <button
                     type="button"

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { RoleBuying } from "@orelia/common";
 import type { CompanyPickerResponse, ContactResponse } from "@orelia/common";
 import {
   createRelationshipPartyContact,
@@ -10,36 +9,11 @@ import {
 import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
-import { TextField } from "@/components/ui/TextField";
-import { PhoneField } from "@/components/ui/PhoneField";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { email as emailValidator, minLength, required, validate } from "@/lib/validation";
+import { ContactFields, type ContactFieldsValue } from "./ContactFields";
 
-const ROLE_BUYING_LABELS: Record<RoleBuying, string> = {
-  [RoleBuying.EconomicBuyer]: "Economic Buyer",
-  [RoleBuying.Champion]: "Champion",
-  [RoleBuying.Influencer]: "Influencer",
-  [RoleBuying.Gatekeeper]: "Gatekeeper",
-  [RoleBuying.EndUser]: "End User",
-  [RoleBuying.Blocker]: "Blocker",
-};
-
-const ROLE_BUYING_OPTIONS = [
-  { value: "", label: "Not set" },
-  ...Object.values(RoleBuying).map((value) => ({ value, label: ROLE_BUYING_LABELS[value] })),
-];
-
-interface FormState {
-  fullName: string;
-  title: string;
-  department: string;
-  roleBuying: RoleBuying | "";
-  email: string;
-  mobileNo: string;
-  directPhoneNo: string;
-  linkedIn: string;
-  country: string;
-  timezone: string;
+interface FormState extends ContactFieldsValue {
   companyId: string;
 }
 
@@ -58,8 +32,6 @@ function toFormState(contact?: ContactResponse): FormState {
     companyId: contact?.companyId ?? "",
   };
 }
-
-type TabId = "details" | "contact";
 
 interface ContactFormDialogProps {
   mode: "create" | "edit";
@@ -82,7 +54,6 @@ export function ContactFormDialog({
   onClose,
   onSaved,
 }: ContactFormDialogProps) {
-  const [activeTab, setActiveTab] = useState<TabId>("details");
   const [values, setValues] = useState<FormState>(() => toFormState(contact));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -101,11 +72,7 @@ export function ContactFormDialog({
       if (emailError) nextErrors.email = emailError;
     }
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) {
-      setActiveTab("details");
-      return false;
-    }
-    return true;
+    return Object.keys(nextErrors).length === 0;
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -169,126 +136,25 @@ export function ContactFormDialog({
       maxWidth="560px"
     >
       <form onSubmit={handleSubmit}>
-        <div className="dialog-tabs">
-          <button
-            type="button"
-            className={`dialog-tab${activeTab === "details" ? " dialog-tab-active" : ""}`}
-            onClick={() => setActiveTab("details")}
-          >
-            Person Details
-          </button>
-          <button
-            type="button"
-            className={`dialog-tab${activeTab === "contact" ? " dialog-tab-active" : ""}`}
-            onClick={() => setActiveTab("contact")}
-          >
-            Contact Details
-          </button>
-        </div>
-
         {formError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{formError}</p>}
 
-        {/* ── Tab 1: Person Details ──────────────────────── */}
-        {activeTab === "details" && (
-          <div>
-            <TextField
-              label="Full name *"
-              name="fullName"
-              value={values.fullName}
-              error={errors.fullName}
-              placeholder="e.g. Jane Doe"
-              onChange={(e) => setField("fullName", e.target.value)}
-            />
+        <ContactFields
+          values={values}
+          fullNameError={errors.fullName}
+          fullNameRequired
+          onChange={(field, value) => setField(field, value as never)}
+        />
 
-            <div className="grid grid-cols-2 gap-3.5">
-              <TextField
-                label="Title"
-                name="title"
-                value={values.title}
-                onChange={(e) => setField("title", e.target.value)}
-              />
-              <TextField
-                label="Department"
-                name="department"
-                value={values.department}
-                onChange={(e) => setField("department", e.target.value)}
-              />
-            </div>
-
-            <div className="mb-[18px]">
-              <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Buying role</label>
-              <CustomSelect
-                fullWidth
-                label=""
-                value={values.roleBuying}
-                onChange={(val) => setField("roleBuying", val as RoleBuying | "")}
-                options={ROLE_BUYING_OPTIONS}
-              />
-            </div>
-
-            <TextField
-              label="Email"
-              name="email"
-              type="email"
-              value={values.email}
-              error={errors.email}
-              onChange={(e) => setField("email", e.target.value)}
-            />
-          </div>
-        )}
-
-        {/* ── Tab 2: Contact Details ──────────────────────── */}
-        {activeTab === "contact" && (
-          <div>
-            <div className="grid grid-cols-2 gap-3.5">
-              <PhoneField
-                label="Mobile number"
-                name="mobileNo"
-                value={values.mobileNo}
-                onChange={(val) => setField("mobileNo", val)}
-              />
-              <TextField
-                label="Direct phone number"
-                name="directPhoneNo"
-                value={values.directPhoneNo}
-                onChange={(e) => setField("directPhoneNo", e.target.value)}
-              />
-            </div>
-
-            <TextField
-              label="LinkedIn"
-              name="linkedIn"
-              value={values.linkedIn}
-              onChange={(e) => setField("linkedIn", e.target.value)}
-            />
-
-            <div className="grid grid-cols-2 gap-3.5">
-              <TextField
-                label="Country"
-                name="country"
-                value={values.country}
-                onChange={(e) => setField("country", e.target.value)}
-              />
-              <TextField
-                label="Timezone"
-                name="timezone"
-                value={values.timezone}
-                onChange={(e) => setField("timezone", e.target.value)}
-              />
-            </div>
-
-            <div className="mb-[18px]">
-              <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Company</label>
-              <CustomSelect
-                fullWidth
-                label=""
-                value={values.companyId}
-                onChange={(val) => setField("companyId", val)}
-                options={companyOptions}
-              />
-            </div>
-          </div>
-        )}
+        <div className="mb-[18px]">
+          <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Company</label>
+          <CustomSelect
+            fullWidth
+            label=""
+            value={values.companyId}
+            onChange={(val) => setField("companyId", val)}
+            options={companyOptions}
+          />
+        </div>
 
         <div className="mt-2 flex justify-end gap-2.5">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
