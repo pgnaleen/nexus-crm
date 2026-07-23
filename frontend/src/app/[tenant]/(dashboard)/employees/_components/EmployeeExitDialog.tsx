@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { EmploymentStatus } from "@orelia/common";
-import type { EmployeeDetailResponse } from "@orelia/common";
+import type { EmployeeDetailResponse, EmployeeListItemResponse } from "@orelia/common";
 import { updateEmployee } from "@/lib/api/employees";
 import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
@@ -23,7 +23,9 @@ const EXITED_STATUS_OPTIONS = [EmploymentStatus.Terminated, EmploymentStatus.Res
 }));
 
 interface EmployeeExitDialogProps {
-  employee: EmployeeDetailResponse;
+  // Launched from a directory row's action icon -- only needs the row's own
+  // id/name, the PATCH response supplies the fresh full record.
+  employee: EmployeeListItemResponse;
   onClose: () => void;
   onExited: (employee: EmployeeDetailResponse) => void;
 }
@@ -63,7 +65,7 @@ export function EmployeeExitDialog({ employee, onClose, onExited }: EmployeeExit
     <Dialog open title={t("employees.exitDialog.title")} onClose={onClose} maxWidth="480px">
       <form onSubmit={handleSubmit}>
         <p className="mb-4 text-[13.5px] text-[var(--color-text-muted)]">
-          {t("employees.exitDialog.message").replace("{name}", employee.fullName)}
+          {t("employees.exitDialog.message", { name: employee.fullName })}
         </p>
 
         {formError && <p className="mb-3 text-[12.5px] text-[var(--color-danger)]">{formError}</p>}

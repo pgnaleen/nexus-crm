@@ -469,6 +469,7 @@ export function FunnelSourceTabs({
 
             <div className="w-[190px]">
               <SearchSelect
+                compact
                 value={customerFilter}
                 onChange={setCustomerFilter}
                 options={customerOptions}
@@ -479,6 +480,7 @@ export function FunnelSourceTabs({
 
             <div className="w-[190px]">
               <SearchSelect
+                compact
                 value={partnerFilter}
                 onChange={setPartnerFilter}
                 options={partnerOptions}

@@ -87,6 +87,36 @@ before being caught and corrected to match).
 This isn't exhaustive — extend it as new patterns get established, the same way the color tokens
 above grew from a handful of documented rules into the actual palette in use.
 
+### Multi-tab dialogs: fixed panel size across tabs
+
+A dialog with tabs must not change size when the user switches tabs — every tab panel is wrapped
+in the same fixed-height scroll container, so the dialog's footprint is identical whichever tab
+is active and overflow scrolls *inside* the panel instead of stretching the dialog:
+
+```tsx
+{activeTab === "someTab" && (
+  <div className="h-[480px] overflow-y-auto pr-1">
+    ...tab content...
+  </div>
+)}
+```
+
+**Rule:** every new dialog (or component) with tabs wraps *each* tab panel in this container from
+day one. The height is per-dialog, not global: size it to the dialog's tallest tab's natural
+content, capped at `620px` (the Add Deal dialog's standard) — past the cap, that tab just
+scrolls internally, which is also what absorbs tabs whose content grows at runtime (contact
+lists, documents, notes). Shorter tabs simply leave blank space below their fields — that's the
+point, not a bug to "fix" by shrinking the wrapper.
+
+If the panel itself is a CSS grid, put the sizing classes straight on it but add
+`content-start` — a fixed-height grid otherwise stretches its auto rows to fill the height
+(`align-content: stretch` default), spacing the content out weirdly on short tabs.
+
+Done: `AddDealDialog` (`h-[620px]`, the reference), `CompanyFormDialog` (`h-[620px]`),
+`EmployeeFormDialog` (`h-[480px]`), `EmployeeDetailDialog` (`h-[380px]`, grid variant, loading
+spinner given the same height so the dialog doesn't resize when data arrives). Still to retrofit
+when next touched: `ViewDealDialog`.
+
 ### Migration discipline
 
 - One phase per session/turn. Verify the result (visually, in the browser) before moving to the

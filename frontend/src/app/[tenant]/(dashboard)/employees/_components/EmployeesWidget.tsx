@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { EmploymentStatus, PERMISSIONS } from "@orelia/common";
 import type { DepartmentPickerResponse, EmployeeDetailResponse, EmployeeListItemResponse } from "@orelia/common";
-import { deleteEmployee } from "@/lib/api/employees";
+import { deleteEmployee, getEmployee } from "@/lib/api/employees";
 import { ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/Button";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CustomSelect } from "@/components/ui/CustomSelect";
-import { SearchIcon } from "@/components/ui/icons";
+import { BanIcon, EditIcon, SearchIcon, TrashIcon } from "@/components/ui/icons";
+import { useAlert, useConfirm } from "@/components/providers/DialogProvider";
 import { t } from "@/lib/i18n";
 import { EmployeeDetailDialog } from "./EmployeeDetailDialog";
 import { EmployeeExitDialog } from "./EmployeeExitDialog";
@@ -28,20 +28,25 @@ const STATUS_COLORS: Record<string, { background: string; color: string }> = {
   resigned: { background: "#f3f4f6", color: "#6b7280" },
 };
 
+function isExited(status: EmploymentStatus | null): boolean {
+  return status === EmploymentStatus.Terminated || status === EmploymentStatus.Resigned;
+}
+
 export function EmployeesWidget({ employees: initialEmployees, permissions, departments }: EmployeesWidgetProps) {
+  const confirm = useConfirm();
+  const { showError } = useAlert();
   const [employees, setEmployees] = useState(initialEmployees);
   const [search, setSearch] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [viewingEmployeeId, setViewingEmployeeId] = useState<string | null>(null);
-  // Story 1.4 -- detail loaded via the view dialog, handed to the form
-  // dialog as edit-mode pre-fill.
+  // Story 1.4 -- edit needs the full record as pre-fill, fetched on demand
+  // when the row's edit icon is clicked.
   const [editingDetail, setEditingDetail] = useState<EmployeeDetailResponse | null>(null);
-  // Story 1.5 -- exit ("Mark as Exited") and delete flows, both launched
-  // from the detail dialog with its already-loaded record.
-  const [exitingDetail, setExitingDetail] = useState<EmployeeDetailResponse | null>(null);
-  const [deletingDetail, setDeletingDetail] = useState<EmployeeDetailResponse | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [loadingEditId, setLoadingEditId] = useState<string | null>(null);
+  // Story 1.5 -- exit ("Mark as Exited") and delete flows, launched from the
+  // row's action icons like every other section's table.
+  const [exitingEmployee, setExitingEmployee] = useState<EmployeeListItemResponse | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   // Story 1.5 -- status filter so exited employees stay findable rather
   // than silently vanishing among the actives ("" = all statuses).
   const [statusFilter, setStatusFilter] = useState<EmploymentStatus | "">("");
@@ -51,6 +56,7 @@ export function EmployeesWidget({ employees: initialEmployees, permissions, depa
   const canUpdate = permissions.includes(PERMISSIONS.EMPLOYEES_UPDATE);
   const canDelete = permissions.includes(PERMISSIONS.EMPLOYEES_DELETE);
   const canViewSensitive = permissions.includes(PERMISSIONS.EMPLOYEES_VIEW_SENSITIVE);
+  const showActionsColumn = canUpdate || canDelete;
 
   const filteredEmployees = employees.filter(
     (employee) =>
@@ -65,24 +71,6 @@ export function EmployeesWidget({ employees: initialEmployees, permissions, depa
 
   function handleSaved(employee: EmployeeListItemResponse) {
     setEmployees((current) => [...current, employee].sort((a, b) => a.fullName.localeCompare(b.fullName)));
-  }
-
-  // Story 1.5 -- soft delete; the row disappears from the directory (the
-  // record stays recoverable at the DB level).
-  async function handleDeleteConfirmed() {
-    if (!deletingDetail) return;
-    setIsDeleting(true);
-    setDeleteError(null);
-    try {
-      await deleteEmployee(deletingDetail.id);
-      setEmployees((current) => current.filter((employee) => employee.id !== deletingDetail.id));
-      setDeletingDetail(null);
-      setViewingEmployeeId(null);
-    } catch (err) {
-      setDeleteError(err instanceof ApiError ? err.message : t("employees.deleteConfirm.errors.deleteFailed"));
-    } finally {
-      setIsDeleting(false);
-    }
   }
 
   // Story 1.4 -- replace the edited row in place (AC: name/title/department/
@@ -102,6 +90,41 @@ export function EmployeesWidget({ employees: initialEmployees, permissions, depa
         .map((employee) => (employee.id === listItem.id ? listItem : employee))
         .sort((a, b) => a.fullName.localeCompare(b.fullName)),
     );
+  }
+
+  async function startEdit(employee: EmployeeListItemResponse) {
+    setLoadingEditId(employee.id);
+    try {
+      const detail = await getEmployee(employee.id);
+      setEditingDetail(detail);
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : t("employees.dialog.errors.loadFailed"));
+    } finally {
+      setLoadingEditId(null);
+    }
+  }
+
+  // Story 1.5 -- soft delete; the row disappears from the directory (the
+  // record stays recoverable at the DB level). The confirm explicitly steers
+  // real departures toward "Mark as Exited" instead.
+  async function initiateDelete(employee: EmployeeListItemResponse) {
+    const ok = await confirm({
+      title: t("employees.deleteConfirm.title"),
+      message: t("employees.deleteConfirm.message", { name: employee.fullName }),
+      confirmLabel: t("employees.deleteConfirm.confirmLabel"),
+      isDestructive: true,
+    });
+    if (!ok) return;
+
+    setDeletingId(employee.id);
+    try {
+      await deleteEmployee(employee.id);
+      setEmployees((current) => current.filter((item) => item.id !== employee.id));
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : t("employees.errors.deleteFailed"));
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
@@ -175,6 +198,12 @@ export function EmployeesWidget({ employees: initialEmployees, permissions, depa
                 <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
                   {t("employees.table.status")}
                 </th>
+                {showActionsColumn && (
+                  <th
+                    className="border-b border-[var(--color-border)] px-3 py-2.5"
+                    aria-label={t("employees.table.actions")}
+                  />
+                )}
               </tr>
             </thead>
             <tbody>
@@ -212,6 +241,51 @@ export function EmployeesWidget({ employees: initialEmployees, permissions, depa
                         t("employees.notSet")
                       )}
                     </td>
+                    {showActionsColumn && (
+                      <td className="flex justify-end gap-1.5 border-b border-[var(--color-border)] p-3">
+                        {canUpdate && (
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            aria-label={t("employees.editAriaLabel", { name: employee.fullName })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void startEdit(employee);
+                            }}
+                            disabled={loadingEditId === employee.id}
+                          >
+                            <EditIcon size={15} />
+                          </button>
+                        )}
+                        {canUpdate && !isExited(employee.employmentStatus) && (
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            aria-label={t("employees.exitAriaLabel", { name: employee.fullName })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExitingEmployee(employee);
+                            }}
+                          >
+                            <BanIcon size={15} />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            className="icon-btn icon-btn-danger"
+                            aria-label={t("employees.deleteAriaLabel", { name: employee.fullName })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void initiateDelete(employee);
+                            }}
+                            disabled={deletingId === employee.id}
+                          >
+                            <TrashIcon size={15} />
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -240,53 +314,19 @@ export function EmployeesWidget({ employees: initialEmployees, permissions, depa
         />
       )}
 
-      {exitingDetail && (
+      {exitingEmployee && (
         <EmployeeExitDialog
-          employee={exitingDetail}
-          onClose={() => setExitingDetail(null)}
+          employee={exitingEmployee}
+          onClose={() => setExitingEmployee(null)}
           onExited={handleUpdated}
         />
       )}
 
-      <ConfirmDialog
-        open={Boolean(deletingDetail)}
-        title={t("employees.deleteConfirm.title")}
-        message={
-          (deleteError ? `${deleteError} — ` : "") +
-          t("employees.deleteConfirm.message").replace("{name}", deletingDetail?.fullName ?? "")
-        }
-        confirmLabel={isDeleting ? t("employees.deleteConfirm.deleting") : t("employees.deleteConfirm.confirmLabel")}
-        cancelLabel={t("common.actions.cancel")}
-        isDestructive
-        onConfirm={handleDeleteConfirmed}
-        onCancel={() => {
-          setDeletingDetail(null);
-          setDeleteError(null);
-        }}
-      />
-
-      {viewingEmployeeId && !editingDetail && !exitingDetail && (
+      {viewingEmployeeId && !editingDetail && !exitingEmployee && (
         <EmployeeDetailDialog
           employeeId={viewingEmployeeId}
           canViewSensitive={canViewSensitive}
           onClose={() => setViewingEmployeeId(null)}
-          onEdit={
-            canUpdate
-              ? (detail) => {
-                  setViewingEmployeeId(null);
-                  setEditingDetail(detail);
-                }
-              : undefined
-          }
-          onExit={
-            canUpdate
-              ? (detail) => {
-                  setViewingEmployeeId(null);
-                  setExitingDetail(detail);
-                }
-              : undefined
-          }
-          onDelete={canDelete ? (detail) => setDeletingDetail(detail) : undefined}
         />
       )}
     </div>

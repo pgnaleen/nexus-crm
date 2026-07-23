@@ -21,6 +21,9 @@ interface SearchSelectProps {
   addNewLabel?: string;
   onAddNew?: () => void;
   disabled?: boolean;
+  // Filter-bar sizing (matches the search input / CustomSelect at py-2 /
+  // 13px) -- the default stays the taller form-field size used in dialogs.
+  compact?: boolean;
 }
 
 export function SearchSelect({
@@ -34,6 +37,7 @@ export function SearchSelect({
   addNewLabel,
   onAddNew,
   disabled,
+  compact,
 }: SearchSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -76,7 +80,9 @@ export function SearchSelect({
       {label && <label className="field-label">{label}</label>}
       <button
         type="button"
-        className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-sm text-crm-text transition-colors duration-150 disabled:cursor-default disabled:opacity-60 ${
+        className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 text-crm-text transition-colors duration-150 disabled:cursor-default disabled:opacity-60 ${
+          compact ? "bg-white py-2 text-[13px]" : "py-2.5 text-sm"
+        } ${
           isOpen ? "border-crm-primary" : "border-[var(--color-border)] hover:border-crm-primary"
         }`}
         onClick={() => !disabled && setIsOpen((o) => !o)}

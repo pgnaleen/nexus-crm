@@ -336,7 +336,7 @@ export function EmployeeFormDialog({
 
         {/* ── Tab 1: Personal ────────────────────────────── */}
         {activeTab === "personal" && (
-          <div>
+          <div className="h-[480px] overflow-y-auto pr-1">
             <TextField
               label={t("employees.dialog.personal.fullName")}
               name="fullName"
@@ -431,7 +431,7 @@ export function EmployeeFormDialog({
 
         {/* ── Tab 2: Employment ──────────────────────────── */}
         {activeTab === "employment" && (
-          <div>
+          <div className="h-[480px] overflow-y-auto pr-1">
             <div className="grid grid-cols-2 gap-3.5">
               <TextField
                 label={t("employees.dialog.employment.employeeCode")}
@@ -576,7 +576,7 @@ export function EmployeeFormDialog({
 
         {/* ── Tab 3: Contact ─────────────────────────────── */}
         {activeTab === "contact" && (
-          <div>
+          <div className="h-[480px] overflow-y-auto pr-1">
             <TextField
               label={t("employees.dialog.contact.email")}
               name="employeeEmail"
@@ -601,7 +601,7 @@ export function EmployeeFormDialog({
 
         {/* ── Tab 4: Confidential (EMPLOYEES_VIEW_SENSITIVE only) ── */}
         {activeTab === "confidential" && canViewSensitive && (
-          <div>
+          <div className="h-[480px] overflow-y-auto pr-1">
             <p className="mb-3 text-xs text-[var(--color-text-muted)]">{t("employees.dialog.confidential.notice")}</p>
             <TextField
               label={t("employees.dialog.confidential.nicPassport")}

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { EmploymentStatus } from "@orelia/common";
 import type { EmployeeDetailResponse } from "@orelia/common";
 import { getEmployee } from "@/lib/api/employees";
 import { resolveUploadUrl } from "@/lib/api/uploads";
@@ -20,18 +19,13 @@ import {
 
 type TabId = "personal" | "employment" | "contact" | "confidential";
 
+// Read-only view opened by clicking a directory row. Edit / Mark-as-Exited /
+// Delete live on the row's action icons in EmployeesWidget (same pattern as
+// every other section's table), NOT in this dialog.
 interface EmployeeDetailDialogProps {
   employeeId: string;
   canViewSensitive: boolean;
   onClose: () => void;
-  // Story 1.4 -- present only when the viewer holds EMPLOYEES_UPDATE; the
-  // widget swaps this dialog for the edit form with the loaded detail.
-  onEdit?: (detail: EmployeeDetailResponse) => void;
-  // Story 1.5 -- present only when the viewer holds EMPLOYEES_UPDATE; only
-  // rendered for employees not already in an exited status.
-  onExit?: (detail: EmployeeDetailResponse) => void;
-  // Story 1.5 -- present only when the viewer holds EMPLOYEES_DELETE.
-  onDelete?: (detail: EmployeeDetailResponse) => void;
 }
 
 function DetailItem({ label, value }: { label: string; value: ReactNode }) {
@@ -43,14 +37,7 @@ function DetailItem({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-export function EmployeeDetailDialog({
-  employeeId,
-  canViewSensitive,
-  onClose,
-  onEdit,
-  onExit,
-  onDelete,
-}: EmployeeDetailDialogProps) {
+export function EmployeeDetailDialog({ employeeId, canViewSensitive, onClose }: EmployeeDetailDialogProps) {
   const [activeTab, setActiveTab] = useState<TabId>("personal");
   const [detail, setDetail] = useState<EmployeeDetailResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -115,14 +102,16 @@ export function EmployeeDetailDialog({
       {loadError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{loadError}</p>}
 
       {isLoading || !detail ? (
-        <div className="dialog-loading">
+        // Same fixed height as the tab panels below, so the dialog doesn't
+        // resize when the data arrives.
+        <div className="dialog-loading h-[380px] items-center">
           <Spinner size={28} />
         </div>
       ) : (
         <>
           {/* ── Tab 1: Personal ────────────────────────────── */}
           {activeTab === "personal" && (
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid h-[380px] grid-cols-2 content-start gap-3.5 overflow-y-auto pr-1">
               <DetailItem label={t("employees.table.name")} value={detail.fullName} />
               <DetailItem label={t("employees.dialog.personal.dateOfBirth")} value={detail.dateOfBirth} />
               <DetailItem
@@ -152,7 +141,7 @@ export function EmployeeDetailDialog({
 
           {/* ── Tab 2: Employment ──────────────────────────── */}
           {activeTab === "employment" && (
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid h-[380px] grid-cols-2 content-start gap-3.5 overflow-y-auto pr-1">
               <DetailItem label={t("employees.dialog.employment.employeeCode")} value={detail.employeeCode} />
               <DetailItem
                 label={t("employees.dialog.employment.title")}
@@ -200,7 +189,7 @@ export function EmployeeDetailDialog({
 
           {/* ── Tab 3: Contact ─────────────────────────────── */}
           {activeTab === "contact" && (
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid h-[380px] grid-cols-2 content-start gap-3.5 overflow-y-auto pr-1">
               <DetailItem label={t("employees.dialog.contact.email")} value={detail.employeeEmail} />
               <DetailItem label={t("employees.dialog.contact.mobileNo")} value={detail.mobileNo} />
               <DetailItem label={t("employees.dialog.contact.officeNo")} value={detail.officeNo} />
@@ -217,7 +206,7 @@ export function EmployeeDetailDialog({
 
           {/* ── Tab 4: Confidential (EMPLOYEES_VIEW_SENSITIVE only) ── */}
           {activeTab === "confidential" && canViewSensitive && (
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid h-[380px] grid-cols-2 content-start gap-3.5 overflow-y-auto pr-1">
               <DetailItem label={t("employees.dialog.confidential.nicPassport")} value={detail.nicPassportNumber} />
               <DetailItem
                 label={t("employees.dialog.confidential.baseSalary")}
@@ -228,41 +217,10 @@ export function EmployeeDetailDialog({
         </>
       )}
 
-      <div className="mt-2 flex items-center justify-between gap-2.5">
-        <div className="flex gap-2.5">
-          {/* Story 1.5 -- Delete is a distinct, EMPLOYEES_DELETE-gated action
-              for records created by mistake; Mark as Exited (EMPLOYEES_UPDATE)
-              is the normal leave-the-company flow and stays available to
-              editors who can't delete. */}
-          {onDelete && detail && (
-            <Button
-              type="button"
-              variant="secondary"
-              style={{ color: "#ef4444", borderColor: "#ef4444" }}
-              onClick={() => onDelete(detail)}
-            >
-              {t("employees.dialog.deleteButton")}
-            </Button>
-          )}
-        </div>
-        <div className="flex gap-2.5">
-          {onExit &&
-            detail &&
-            detail.employmentStatus !== EmploymentStatus.Terminated &&
-            detail.employmentStatus !== EmploymentStatus.Resigned && (
-              <Button type="button" variant="secondary" onClick={() => onExit(detail)}>
-                {t("employees.dialog.exitButton")}
-              </Button>
-            )}
-          {onEdit && detail && (
-            <Button type="button" variant="secondary" onClick={() => onEdit(detail)}>
-              {t("employees.dialog.editButton")}
-            </Button>
-          )}
-          <Button type="button" onClick={onClose}>
-            {t("common.actions.close")}
-          </Button>
-        </div>
+      <div className="mt-2 flex justify-end gap-2.5">
+        <Button type="button" onClick={onClose}>
+          {t("common.actions.close")}
+        </Button>
       </div>
     </Dialog>
   );

@@ -14,7 +14,14 @@
       "name": "Name",
       "title": "Title",
       "department": "Department",
-      "status": "Status"
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "editAriaLabel": "Edit {name}",
+    "exitAriaLabel": "Mark {name} as exited",
+    "deleteAriaLabel": "Delete {name}",
+    "errors": {
+      "deleteFailed": "Failed to delete employee"
     },
     "status": {
       "active": "Active",
@@ -53,19 +60,12 @@
     "deleteConfirm": {
       "title": "Delete Employee Record",
       "message": "Permanently remove {name} from the directory? This is for records created by mistake — if this person is leaving the organization, use \"Mark as Exited\" instead so their history is preserved.",
-      "confirmLabel": "Delete",
-      "deleting": "Deleting...",
-      "errors": {
-        "deleteFailed": "Failed to delete employee"
-      }
+      "confirmLabel": "Delete"
     },
     "dialog": {
       "addTitle": "Add Employee",
       "editTitle": "Edit Employee",
       "viewTitle": "Employee Details",
-      "editButton": "Edit",
-      "exitButton": "Mark as Exited",
-      "deleteButton": "Delete",
       "saveButton": "Create Employee",
       "updateButton": "Save Changes",
       "tabs": {
