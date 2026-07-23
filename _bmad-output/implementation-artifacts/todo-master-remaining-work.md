@@ -610,3 +610,20 @@ multi-session retrofit, not a today item).
 
 Ready to start on #5 whenever you say go — one step at a time, verified before moving to the next,
 same discipline as the rest of this build.
+
+---
+
+## F. Added 2026-07-23 — production build type-error suppression
+
+### 🟠 Remove `typescript.ignoreBuildErrors` from `frontend/next.config.js`
+**Where:** `frontend/next.config.js`; the errors themselves live in
+`AddDealDialog.tsx` (2× TS2532), `UserFormDialog.tsx` (TS2532 + TS2322 null-vs-undefined
+`description`), `RoleCardPicker.tsx` (TS2532 ×4), `TenantFormDialog.tsx` (TS2532),
+`RolePermissionsDialog.tsx` (TS2345 ×2).
+
+**What/why:** the production deploy's `next build` only passes because `ignoreBuildErrors: true`
+skips type validation — originally an uncommitted hand-edit on the prod server, committed to the
+repo 2026-07-23 so deploys are reproducible. It means real type errors (including any NEW ones
+introduced later) can no longer fail a production build, which is a safety net with a hole in it.
+Fix the ~10 pre-existing errors above (all in already-built admin/funnel dialogs, none in the
+HR epic), then delete the `typescript` block from `next.config.js` so builds enforce types again.
