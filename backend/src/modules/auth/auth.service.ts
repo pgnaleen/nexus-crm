@@ -29,6 +29,8 @@ interface TokenPair {
 
 const LOGIN_LOCKOUT_THRESHOLD = 5;
 const LOGIN_LOCKOUT_DURATION_MS = 15 * 60 * 1000;
+// Fix A grace window -- see plan-auth-cross-tab-session-sync.md.
+const REFRESH_GRACE_WINDOW_MS = 10 * 1000;
 
 @Injectable()
 export class AuthService {
@@ -128,9 +130,37 @@ export class AuthService {
     try {
       const tokenHash = hashToken(rawRefreshToken);
       const existing = await this.refreshTokenRepo.findOneBy({ tokenHash });
-      if (!existing || existing.revokedAt || existing.expiresAt < new Date()) {
+
+      if (!existing) {
+        this.logger.debug("refresh blocked: token not found");
+        throw new UnauthorizedException("Refresh token is invalid or expired");
+      }
+
+      // Grace-window reuse: two callers raced for the same (now-rotated)
+      // token -- typically two open tabs, or the proactive middleware
+      // refresh landing close to a reactive client/server-side one. Return
+      // the identical new pair rather than 401ing the loser of a race that
+      // just happened to hit a live session. See plan-auth-cross-tab-session-sync.md.
+      if (
+        existing.revokedAt &&
+        existing.graceToken &&
+        existing.graceExpiresAt &&
+        existing.graceExpiresAt > new Date()
+      ) {
         this.logger.debug(
-          `refresh blocked: token ${!existing ? "not found" : existing.revokedAt ? "already revoked" : "expired"}`,
+          `refresh: grace-window reuse (rotated ${Date.now() - existing.revokedAt.getTime()}ms ago) for user ${existing.userId} -- returning cached pair`,
+        );
+        const [user, tenant] = await Promise.all([
+          this.userRepo.findOneByOrFail({ id: existing.userId }),
+          this.tenantRepo.findOneByOrFail({ id: existing.tenantId }),
+        ]);
+        const { accessToken, session } = await this.signAccessToken(user, tenant);
+        return { session, accessToken, refreshToken: existing.graceToken };
+      }
+
+      if (existing.revokedAt || existing.expiresAt < new Date()) {
+        this.logger.debug(
+          `refresh blocked: token ${existing.revokedAt ? "already revoked (outside grace window)" : "expired"}`,
         );
         throw new UnauthorizedException("Refresh token is invalid or expired");
       }
@@ -144,7 +174,15 @@ export class AuthService {
       ]);
 
       this.logger.debug(`refresh succeeded for user ${user.id}, rotating refresh token`);
-      return await this.issueSession(user, tenant);
+      const result = await this.issueSession(user, tenant);
+
+      // Cache the new raw token on the now-revoked row for
+      // REFRESH_GRACE_WINDOW_MS -- see the grace-window check above.
+      existing.graceToken = result.refreshToken;
+      existing.graceExpiresAt = new Date(existing.revokedAt.getTime() + REFRESH_GRACE_WINDOW_MS);
+      await this.refreshTokenRepo.save(existing);
+
+      return result;
     } catch (err) {
       if (err instanceof UnauthorizedException) {
         throw err;
@@ -256,7 +294,13 @@ export class AuthService {
     return { id: tenant.id, name: tenant.name, slug: tenant.slug };
   }
 
-  private async issueSession(user: User, tenant: Tenant): Promise<{ session: AuthSessionResponse } & TokenPair> {
+  // Shared by issueSession() and refresh()'s grace-window reuse path (which
+  // needs a fresh access token + session but must NOT mint another refresh
+  // token -- it returns the already-cached graceToken verbatim instead).
+  private async signAccessToken(
+    user: User,
+    tenant: Tenant,
+  ): Promise<{ accessToken: string; session: AuthSessionResponse }> {
     const [roles, permissions] = await Promise.all([
       this.rbacService.getRoleNamesForUser(user.id),
       this.rbacService.getPermissionsForUser(user.id),
@@ -267,6 +311,14 @@ export class AuthService {
       secret: this.config.get<string>("JWT_ACCESS_SECRET"),
       expiresIn: this.config.get<string>("JWT_ACCESS_EXPIRES_IN"),
     });
+
+    // Login/refresh always issue a session for the caller's real tenant --
+    // act-as-tenant is a separate cookie established afterward, never active here.
+    return { accessToken, session: this.toSession(user, tenant, roles, permissions, null) };
+  }
+
+  private async issueSession(user: User, tenant: Tenant): Promise<{ session: AuthSessionResponse } & TokenPair> {
+    const { accessToken, session } = await this.signAccessToken(user, tenant);
 
     const refreshToken = randomBytes(48).toString("hex");
     const refreshExpiresIn = this.config.get<string>("JWT_REFRESH_EXPIRES_IN")!;
@@ -281,9 +333,7 @@ export class AuthService {
     // Never log accessToken/refreshToken themselves.
     this.logger.debug(`issueSession: minted a new access+refresh token pair for user ${user.id}`);
 
-    // Login/refresh always issue a session for the caller's real tenant --
-    // act-as-tenant is a separate cookie established afterward, never active here.
-    return { session: this.toSession(user, tenant, roles, permissions, null), accessToken, refreshToken };
+    return { session, accessToken, refreshToken };
   }
 
   private toSession(

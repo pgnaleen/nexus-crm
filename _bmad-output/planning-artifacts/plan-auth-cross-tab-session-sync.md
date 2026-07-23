@@ -1,7 +1,9 @@
 # Cross-Tab Session Sync — Refresh Race + Identity Switch Fix
 
 **Author:** Winston (System Architect)
-**Status:** Draft — awaiting sign-off before Fix A implementation begins
+**Status:** Fix A implemented 2026-07-23 (backend grace window), pending live verification (no
+running DB/server in the dev environment this was built in -- typecheck-verified only, see
+Section 6). Fix B (frontend cross-tab broadcast) not started.
 **Context:** Follow-on from `f3c2cc4` (expired-session logout 401 fix). While reviewing the full
 15-minute access-token / 7-day refresh-token lifecycle, two related but distinct multi-tab bugs
 were identified. Neither is fixed yet — this document is the plan, not a changelog.
@@ -81,6 +83,16 @@ real audit/security bar (see CLAUDE.md) and this is the one place this plan devi
 - `backend/src/modules/auth/auth.service.ts` — `refresh()` method: grace-window check before the
   existing revoked/expired rejection; write `graceToken`/`graceExpiresAt` onto the old row instead
   of only setting `revokedAt`.
+
+**Implementation notes (2026-07-23):** built exactly as scoped above, plus one internal refactor
+not called out in the original plan -- extracted a private `signAccessToken(user, tenant)` helper
+(roles/permissions fetch + JWT sign + `toSession()`) out of `issueSession()`, since the
+grace-window reuse path needs the same "fresh access token + session" logic but must *not* mint a
+second refresh token. `issueSession()` now calls it too, so there's no duplicated logic between
+the normal-issue and grace-reuse paths. Migration `1784700000008-AddRefreshTokenGraceWindow.ts`.
+Backend typechecks clean. **Not live-verified** — no Postgres/Nest server running in this
+environment; the three checks in Section 6 (concurrent-race, post-window-401, single-caller-
+unaffected) still need a real run before this is considered done, not just typechecked.
 
 ## 4. Fix B — cross-tab identity broadcast (frontend, fixes 2b)
 

@@ -37,6 +37,18 @@ export class RefreshToken {
   @Column({ type: "timestamptz", nullable: true })
   revokedAt?: Date;
 
+  // Grace-window reuse (see plan-auth-cross-tab-session-sync.md, Fix A):
+  // graceToken caches the *new* raw refresh token on this row at the moment
+  // it's rotated out, so a second caller presenting this same old token
+  // within graceExpiresAt gets the identical new pair instead of a 401.
+  // Deliberately plaintext (every other token here is stored hashed) --
+  // bounded to a ~10s window, explicitly signed off in the plan doc.
+  @Column({ nullable: true })
+  graceToken?: string;
+
+  @Column({ type: "timestamptz", nullable: true })
+  graceExpiresAt?: Date;
+
   @CreateDateColumn()
   createdAt!: Date;
 }
