@@ -94,6 +94,18 @@ export interface UpdateEmployeeRequest {
   baseSalary?: number | null;
 }
 
+// Story 1.6 (Grant Login Access) -- options for User Management's "link to
+// Employee" picker: employees in the caller's tenant not yet linked to any
+// User account (plus, when editing an existing user, the employee currently
+// linked to that user so the selection can be displayed/kept). employeeEmail
+// rides along so Add User can pre-fill Display Name + Login Email from the
+// HR record.
+export interface EmployeeLinkPickerResponse {
+  id: string;
+  fullName: string;
+  employeeEmail: string | null;
+}
+
 // Story 1.3 (View Employee Details) -- full read-only record, same tab
 // grouping as CreateEmployeeRequest (Personal/Employment/Contact/
 // Confidential) plus which login account this employee is linked to

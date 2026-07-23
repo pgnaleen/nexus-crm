@@ -2,6 +2,7 @@ import {
   CompanyPickerResponse,
   ContactPickerResponse,
   DepartmentPickerResponse,
+  EmployeeLinkPickerResponse,
   EmployeePickerResponse,
   IndustryResponse,
   PERMISSIONS,
@@ -115,12 +116,12 @@ export class PickersController {
     }
   }
 
-  // Also consumed by the Add Employee form's department dropdown (Story 1.2)
-  // -- an EMPLOYEES_CREATE holder with no Deals access would otherwise 403
-  // here, same class of gap already fixed for companies/contacts/employees
-  // above. Add EMPLOYEES_UPDATE too once Update Employee (Story 1.4) exists.
+  // Also consumed by the Add/Edit Employee forms' department dropdown
+  // (Stories 1.2/1.4) -- an EMPLOYEES_CREATE or EMPLOYEES_UPDATE holder with
+  // no Deals access would otherwise 403 here, same class of gap already
+  // fixed for companies/contacts/employees above.
   @UseGuards(PermissionsGuard)
-  @RequirePermission([PERMISSIONS.DEALS_VIEW, PERMISSIONS.EMPLOYEES_CREATE])
+  @RequirePermission([PERMISSIONS.DEALS_VIEW, PERMISSIONS.EMPLOYEES_CREATE, PERMISSIONS.EMPLOYEES_UPDATE])
   @Get("departments")
   async findDepartments(): Promise<DepartmentPickerResponse[]> {
     this.logger.debug("GET /pickers/departments called");
@@ -185,6 +186,29 @@ export class PickersController {
       }));
     } catch (err) {
       this.logger.error(`GET /pickers/contacts failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Story 1.6 -- options for User Management's "link to Employee" picker:
+  // unlinked employees only, plus (when editing, via forUserId) the employee
+  // currently linked to that user. Gated on the *consumer's* permissions
+  // (Add/Edit User), per CLAUDE.md's picker rule.
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.USERS_CREATE, PERMISSIONS.USERS_UPDATE])
+  @Get("employees/linkable")
+  async findLinkableEmployees(@Query("forUserId") forUserId?: string): Promise<EmployeeLinkPickerResponse[]> {
+    this.logger.debug(`GET /pickers/employees/linkable called (forUserId=${forUserId ?? "none"})`);
+    try {
+      const employees = await this.employeesService.findLinkable(forUserId);
+      this.logger.debug(`GET /pickers/employees/linkable returning ${employees.length} row(s)`);
+      return employees.map((employee) => ({
+        id: employee.id,
+        fullName: employee.fullName,
+        employeeEmail: employee.employeeEmail ?? null,
+      }));
+    } catch (err) {
+      this.logger.error(`GET /pickers/employees/linkable failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }

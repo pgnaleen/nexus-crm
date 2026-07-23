@@ -17,6 +17,10 @@ export interface UserResponse extends UserSummaryResponse {
   lockedUntil: string | null;
   mustChangePassword: boolean;
   extras: string | null;
+  // Story 1.6 -- which Employee (HR record) this login account is tied to.
+  // The link lives on employees.user_id and is only ever created/changed
+  // from User Management; Employee Management shows it read-only.
+  linkedEmployee: { id: string; fullName: string } | null;
 }
 
 export interface CreateUserRequest {
@@ -28,6 +32,9 @@ export interface CreateUserRequest {
   mustChangePassword?: boolean;
   extras?: string;
   roleIds?: string[];
+  // Story 1.6 -- optionally link this new account to an existing Employee.
+  // Rejected with 409 if that employee is already linked to another account.
+  employeeId?: string;
 }
 
 export interface UpdateUserRequest {
@@ -37,6 +44,9 @@ export interface UpdateUserRequest {
   mustChangePassword?: boolean;
   extras?: string;
   roleIds?: string[];
+  // Story 1.6 -- tri-state: absent = leave the link unchanged, null = unlink,
+  // uuid = link to that employee (409 if linked to a different account).
+  employeeId?: string | null;
 }
 
 export interface ResetPasswordRequest {

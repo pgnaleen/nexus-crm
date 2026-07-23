@@ -2,8 +2,9 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { UserStatus } from "@orelia/common";
-import type { RbacRoleResponse, UserResponse, UserSummaryResponse } from "@orelia/common";
+import type { EmployeeLinkPickerResponse, RbacRoleResponse, UserResponse, UserSummaryResponse } from "@orelia/common";
 import { createUser, getUser, getUserRoleIds, updateUser } from "@/lib/api/users";
+import { listLinkableEmployees } from "@/lib/api/employees";
 import { listRoles } from "@/lib/api/roles";
 import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
@@ -15,7 +16,9 @@ import { PasswordField } from "@/components/ui/PasswordField";
 import { PasswordStrengthHint } from "@/components/ui/PasswordStrengthHint";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { RoleCardPicker } from "@/components/ui/RoleCardPicker";
+import { SearchSelect } from "@/components/ui/SearchSelect";
 import { email, minLength, pattern, required, strongPassword, validate } from "@/lib/validation";
+import { t } from "@/lib/i18n";
 
 const USERNAME_REGEX = /^[a-z0-9._-]+$/;
 
@@ -34,6 +37,8 @@ interface FormState {
   mustChangePassword: boolean;
   extras: string;
   roleIds: string[];
+  // Story 1.6 -- linked Employee HR record ("" = not linked).
+  employeeId: string;
 }
 
 function toFormState(user?: UserSummaryResponse): FormState {
@@ -47,6 +52,7 @@ function toFormState(user?: UserSummaryResponse): FormState {
     mustChangePassword: true,
     extras: "",
     roleIds: [],
+    employeeId: "",
   };
 }
 
@@ -66,6 +72,25 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
   const [availableRoles, setAvailableRoles] = useState<RbacRoleResponse[]>([]);
   const [isLoadingRoles, setIsLoadingRoles] = useState(true);
   const [isLoadingDetail, setIsLoadingDetail] = useState(mode === "edit");
+  // Story 1.6 -- unlinked employees (plus, in edit mode, the one already
+  // linked to this user) for the "link to Employee" picker.
+  const [linkableEmployees, setLinkableEmployees] = useState<EmployeeLinkPickerResponse[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    listLinkableEmployees(mode === "edit" ? user?.id : undefined)
+      .then((employees) => {
+        if (!cancelled) setLinkableEmployees(employees);
+      })
+      .catch(() => {
+        // Non-fatal -- the picker just shows no options; the rest of the
+        // form works normally.
+        if (!cancelled) setLinkableEmployees([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, user?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +125,7 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
           mustChangePassword: detail.mustChangePassword,
           extras: detail.extras ?? "",
           roleIds,
+          employeeId: detail.linkedEmployee?.id ?? "",
         }));
       })
       .catch(() => {
@@ -115,6 +141,19 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
 
   function setField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setValues((current) => ({ ...current, [field]: value }));
+  }
+
+  // Story 1.6 -- selecting an employee pre-fills Display Name and Login
+  // Email from the HR record (both stay editable); clearing the selection
+  // leaves whatever's typed untouched.
+  function handleEmployeeSelected(employeeId: string) {
+    const employee = linkableEmployees.find((item) => item.id === employeeId);
+    setValues((current) => ({
+      ...current,
+      employeeId,
+      displayName: employee ? employee.fullName : current.displayName,
+      loggingEmail: employee?.employeeEmail ? employee.employeeEmail : current.loggingEmail,
+    }));
   }
 
   function runValidation(): boolean {
@@ -164,6 +203,7 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
               mustChangePassword: values.mustChangePassword,
               extras: values.extras.trim() || undefined,
               roleIds: values.roleIds.length > 0 ? values.roleIds : undefined,
+              employeeId: values.employeeId || undefined,
             })
           : await updateUser(user!.id, {
               displayName: values.displayName.trim(),
@@ -175,6 +215,8 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
               // be treated as "field omitted, leave untouched".
               extras: values.extras.trim(),
               roleIds: values.roleIds,
+              // Same reasoning: null = explicitly unlinked, never omitted.
+              employeeId: values.employeeId || null,
             });
       onSaved(saved);
       onClose();
@@ -205,6 +247,29 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
               onChange={(e) => setField("username", e.target.value.toLowerCase())}
             />
           )}
+
+          {/* Story 1.6 -- link this account to an Employee HR record.
+              Options are unlinked employees only (backend also 409s a
+              double-link); selecting one pre-fills the two fields below. */}
+          <div className="mb-[18px]">
+            <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+              {t("users.form.linkedEmployee.label")}
+            </label>
+            <SearchSelect
+              value={values.employeeId}
+              onChange={handleEmployeeSelected}
+              options={[
+                { value: "", label: t("users.form.linkedEmployee.none") },
+                ...linkableEmployees.map((employee) => ({
+                  value: employee.id,
+                  label: employee.fullName,
+                  sublabel: employee.employeeEmail ?? undefined,
+                })),
+              ]}
+              placeholder={t("users.form.linkedEmployee.placeholder")}
+              searchPlaceholder={t("users.form.linkedEmployee.searchPlaceholder")}
+            />
+          </div>
 
           <TextField
             label="Display Name *"

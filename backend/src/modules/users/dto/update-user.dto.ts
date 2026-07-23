@@ -30,4 +30,11 @@ export class UpdateUserDto implements UpdateUserRequest {
   @ArrayUnique()
   @IsUUID(undefined, { each: true })
   roleIds?: string[];
+
+  // Story 1.6 -- tri-state: absent = leave the employee link unchanged,
+  // null = unlink, uuid = link (409 if linked to a different account).
+  // @IsOptional() skips validation for null as well as undefined.
+  @IsOptional()
+  @IsUUID()
+  employeeId?: string | null;
 }

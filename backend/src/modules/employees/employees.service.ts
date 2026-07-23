@@ -1,4 +1,5 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { IsNull } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { deleteUploadedEmployeeFile } from "../uploads/uploaded-file.util";
 import { CreateEmployeeDto } from "./dto/create-employee.dto";
@@ -203,6 +204,110 @@ export class EmployeesService {
       if (!(err instanceof NotFoundException)) {
         this.logger.error(`update failed for employee ${id}: ${(err as Error).message}`, (err as Error).stack);
       }
+      throw err;
+    }
+  }
+
+  // ── Story 1.6: User-account link (employees.user_id) ──────────────────
+  // The link is only ever created/changed from User Management -- these
+  // methods exist for UsersService to call, never for the employees
+  // controller's own routes.
+
+  async findByUserId(userId: string): Promise<Employee | null> {
+    this.logger.debug(`findByUserId called for user ${userId}`);
+    return this.employeesRepo.findOneScoped({ where: { userId } });
+  }
+
+  // Options for the "link to Employee" picker: unlinked employees, plus (when
+  // editing) the one already linked to `forUserId` so the current selection
+  // stays displayable. Two queries, not an OR-array `where` --
+  // BaseTenantRepository.scopeOptions spreads `where` as an object, so a
+  // TypeORM array-where would be silently mangled into numeric keys.
+  async findLinkable(forUserId?: string): Promise<Employee[]> {
+    this.logger.debug(`findLinkable called (forUserId=${forUserId ?? "none"})`);
+    try {
+      const unlinked = await this.employeesRepo.findScoped({
+        where: { userId: IsNull() },
+        order: { fullName: "ASC" },
+      });
+      if (!forUserId) {
+        this.logger.debug(`findLinkable returning ${unlinked.length} unlinked row(s)`);
+        return unlinked;
+      }
+      const currentlyLinked = await this.findByUserId(forUserId);
+      if (!currentlyLinked) {
+        this.logger.debug(`findLinkable: no employee linked to user ${forUserId}; returning ${unlinked.length} row(s)`);
+        return unlinked;
+      }
+      this.logger.debug(
+        `findLinkable returning ${unlinked.length} unlinked + current employee ${currentlyLinked.id} for user ${forUserId}`,
+      );
+      return [...unlinked, currentlyLinked].sort((a, b) => a.fullName.localeCompare(b.fullName));
+    } catch (err) {
+      this.logger.error(`findLinkable failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Link an employee to a user account. ConflictException if the employee is
+  // already linked to a *different* account (one employee <-> one login);
+  // linking to the same account again is a no-op.
+  async linkToUser(employeeId: string, userId: string, actorId: string): Promise<void> {
+    this.logger.debug(`linkToUser called: employee ${employeeId} -> user ${userId} by ${actorId}`);
+    try {
+      const employee = await this.findOneBareOrFail(employeeId);
+      if (employee.userId === userId) {
+        this.logger.debug(`linkToUser: employee ${employeeId} already linked to user ${userId}, no-op`);
+        return;
+      }
+      if (employee.userId) {
+        this.logger.debug(`linkToUser: employee ${employeeId} already linked to different user ${employee.userId}`);
+        throw new ConflictException("This employee is already linked to another user account");
+      }
+      const oldUserId = employee.userId ?? null;
+      employee.userId = userId;
+      employee.updatedBy = actorId;
+      await this.employeesRepo.saveScoped(employee);
+      this.logger.debug(`linkToUser succeeded: employee ${employeeId} -> user ${userId}`);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: employeeId,
+        action: "update",
+        actorId,
+        changes: { userId: { old: oldUserId, new: userId } },
+      });
+    } catch (err) {
+      if (!(err instanceof NotFoundException) && !(err instanceof ConflictException)) {
+        this.logger.error(`linkToUser failed for employee ${employeeId}: ${(err as Error).message}`, (err as Error).stack);
+      }
+      throw err;
+    }
+  }
+
+  // Clear whichever employee (if any) is linked to this user account.
+  async unlinkFromUser(userId: string, actorId: string): Promise<void> {
+    this.logger.debug(`unlinkFromUser called for user ${userId} by ${actorId}`);
+    try {
+      const employee = await this.findByUserId(userId);
+      if (!employee) {
+        this.logger.debug(`unlinkFromUser: no employee linked to user ${userId}, no-op`);
+        return;
+      }
+      // The entity types the column `string | undefined`, but clearing an FK
+      // requires an explicit null (undefined columns are skipped on save).
+      (employee as unknown as { userId: string | null }).userId = null;
+      employee.updatedBy = actorId;
+      await this.employeesRepo.saveScoped(employee);
+      this.logger.debug(`unlinkFromUser succeeded: employee ${employee.id} unlinked from user ${userId}`);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: employee.id,
+        action: "update",
+        actorId,
+        changes: { userId: { old: userId, new: null } },
+      });
+    } catch (err) {
+      this.logger.error(`unlinkFromUser failed for user ${userId}: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }

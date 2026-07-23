@@ -185,6 +185,16 @@
       }
     }
   },
+  "users": {
+    "form": {
+      "linkedEmployee": {
+        "label": "Link to Employee",
+        "none": "Not linked",
+        "placeholder": "Select an employee (optional)...",
+        "searchPlaceholder": "Search employees..."
+      }
+    }
+  },
   "relationshipTypes": {
     "dialog": {
       "systemRoleLabel": "System Role",
@@ -218,6 +228,20 @@
     "emptyState": {
       "title": "No tasks here yet",
       "message": "Tasks placed in this quadrant will show up here."
+    },
+    "newTaskButton": "New Task",
+    "addToQuadrantAriaLabel": "Add a task to {quadrant}",
+    "dialog": {
+      "title": "New Task",
+      "titleLabel": "Title *",
+      "titlePlaceholder": "e.g. Follow up with the client on pricing",
+      "notesLabel": "Notes",
+      "notesPlaceholder": "Optional details or context...",
+      "quadrantLabel": "Quadrant",
+      "createButton": "Create Task",
+      "errors": {
+        "titleRequired": "Title is required"
+      }
     }
   }
 }

@@ -4,6 +4,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import * as bcrypt from "bcrypt";
 import { Not, Repository } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
+import { EmployeesService } from "../employees/employees.service";
 import { RbacService } from "../rbac/rbac.service";
 import { ChangeOwnPasswordDto } from "./dto/change-own-password.dto";
 import { CreateUserDto } from "./dto/create-user.dto";
@@ -25,6 +26,9 @@ export class UsersService {
     @InjectRepository(RefreshToken)
     private readonly refreshTokenRepo: Repository<RefreshToken>,
     private readonly auditLogService: AuditLogService,
+    // Story 1.6 -- the User <-> Employee link lives on employees.user_id and
+    // is only ever written from here (User Management), via these methods.
+    private readonly employeesService: EmployeesService,
   ) {}
 
   findAll(): Promise<User[]> {
@@ -76,6 +80,13 @@ export class UsersService {
         await this.rbacService.assignRolesToUser(saved.id, dto.roleIds, createdBy);
       }
 
+      // Story 1.6 -- link the new account to its Employee HR record.
+      // linkToUser itself 409s if the employee is already linked elsewhere.
+      if (dto.employeeId) {
+        this.logger.debug(`create: linking new user ${saved.id} to employee ${dto.employeeId}`);
+        await this.employeesService.linkToUser(dto.employeeId, saved.id, createdBy);
+      }
+
       return saved;
     } catch (err) {
       this.logger.error(`create failed for username "${dto.username}": ${(err as Error).message}`, (err as Error).stack);
@@ -85,10 +96,11 @@ export class UsersService {
 
   async update(id: string, dto: UpdateUserDto, updatedBy: string): Promise<User> {
     this.logger.debug(`update called for user ${id} by ${updatedBy}`);
-    // roleIds isn't a User column -- Object.assign-ing it in would just
-    // create a stray, TypeORM-ignored property, so it's handled separately
-    // via RbacService rather than folded into the entity save below.
-    const { roleIds, ...fields } = dto;
+    // roleIds/employeeId aren't User columns -- Object.assign-ing them in
+    // would just create stray, TypeORM-ignored properties, so they're
+    // handled separately (RbacService / EmployeesService) rather than folded
+    // into the entity save below.
+    const { roleIds, employeeId, ...fields } = dto;
     const user = await this.findOneOrFail(id);
 
     const before: Record<string, unknown> = {};
@@ -123,6 +135,24 @@ export class UsersService {
       if (roleIds !== undefined) {
         this.logger.debug(`update: replacing roles for user ${id} (${roleIds.length} role(s))`);
         await this.rbacService.replaceRolesForUser(id, roleIds, updatedBy);
+      }
+
+      // Story 1.6 -- employee link, tri-state: undefined = untouched,
+      // null = unlink, uuid = link (switching first unlinks the current one).
+      if (employeeId !== undefined) {
+        const currentlyLinked = await this.employeesService.findByUserId(id);
+        if (employeeId === null) {
+          this.logger.debug(`update: unlinking employee from user ${id}`);
+          await this.employeesService.unlinkFromUser(id, updatedBy);
+        } else if (currentlyLinked?.id !== employeeId) {
+          this.logger.debug(`update: linking user ${id} to employee ${employeeId} (was ${currentlyLinked?.id ?? "none"})`);
+          if (currentlyLinked) {
+            await this.employeesService.unlinkFromUser(id, updatedBy);
+          }
+          await this.employeesService.linkToUser(employeeId, id, updatedBy);
+        } else {
+          this.logger.debug(`update: employee link for user ${id} unchanged (${employeeId})`);
+        }
       }
 
       // Re-fetch rather than return the in-memory object -- Object.assign

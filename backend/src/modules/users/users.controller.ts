@@ -5,6 +5,7 @@ import { REFRESH_COOKIE } from "../auth/auth.constants";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { hashToken } from "../auth/util/token-hash";
+import { EmployeesService } from "../employees/employees.service";
 import { RbacService } from "../rbac/rbac.service";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
@@ -22,6 +23,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly rbacService: RbacService,
+    private readonly employeesService: EmployeesService,
   ) {}
 
   @UseGuards(PermissionsGuard)
@@ -219,7 +221,10 @@ export class UsersController {
     };
   }
 
-  private toResponse(user: User): UserResponse {
+  // Story 1.6 -- async because linkedEmployee is resolved from
+  // employees.user_id (the link's single source of truth), not a User column.
+  private async toResponse(user: User): Promise<UserResponse> {
+    const linkedEmployee = await this.employeesService.findByUserId(user.id);
     return {
       ...this.toSummaryResponse(user),
       tenantId: user.tenantId,
@@ -227,6 +232,7 @@ export class UsersController {
       lockedUntil: user.lockedUntil ? user.lockedUntil.toISOString() : null,
       mustChangePassword: user.mustChangePassword,
       extras: user.extras ?? null,
+      linkedEmployee: linkedEmployee ? { id: linkedEmployee.id, fullName: linkedEmployee.fullName } : null,
     };
   }
 }

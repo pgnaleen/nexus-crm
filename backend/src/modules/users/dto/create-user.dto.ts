@@ -57,4 +57,10 @@ export class CreateUserDto implements CreateUserRequest {
   @ArrayUnique()
   @IsUUID(undefined, { each: true })
   roleIds?: string[];
+
+  // Story 1.6 -- optionally link this new account to an existing Employee
+  // (employees.user_id). 409 if that employee is already linked elsewhere.
+  @IsOptional()
+  @IsUUID()
+  employeeId?: string;
 }
