@@ -1,9 +1,9 @@
 # Cross-Tab Session Sync — Refresh Race + Identity Switch Fix
 
 **Author:** Winston (System Architect)
-**Status:** Fix A implemented 2026-07-23 (backend grace window), pending live verification (no
-running DB/server in the dev environment this was built in -- typecheck-verified only, see
-Section 6). Fix B (frontend cross-tab broadcast) not started.
+**Status:** Fix A and Fix B both implemented 2026-07-23. Neither is live-verified yet (no running
+DB/server in the dev environment this was built in -- typecheck-verified only). All checks in
+Section 6 still need a real run.
 **Context:** Follow-on from `f3c2cc4` (expired-session logout 401 fix). While reviewing the full
 15-minute access-token / 7-day refresh-token lifecycle, two related but distinct multi-tab bugs
 were identified. Neither is fixed yet — this document is the plan, not a changelog.
@@ -114,6 +114,30 @@ way (new user, or bounced to login if logged out).
 - `frontend/src/lib/api/auth.ts` — wire broadcast into `login`/`logout`.
 - Wherever the listener gets mounted once globally (likely the dashboard layout or a top-level
   client component — to be confirmed at implementation time).
+
+**Implementation notes (2026-07-23):** built as scoped above, plus decisions on the two things
+the plan left open:
+- **Mount point:** `frontend/src/components/providers/TabSyncListener.tsx` (new), mounted in
+  `(dashboard)/layout.tsx` alongside the existing `DialogProvider`/`ToastProvider` (same
+  "mounted once per dashboard render" pattern, which had no prior `useEffect`-based global
+  browser-event listener to follow — this is the first). **Deliberately dashboard-only, not also
+  on the login page** — an open login-page tab has no active session to misrepresent, and
+  Section 6's own verification steps only exercise an already-logged-in tab reacting to another
+  tab's login/logout. If a "logged-out tab notices someone logged in elsewhere" case turns out to
+  matter later, that's a small follow-up (mount the same listener in `[tenant]/page.tsx`'s tree),
+  not a redesign.
+- **Self-reload bug caught during implementation:** `BroadcastChannel` never delivers a message
+  back to the *object* that posted it, not the *tab* — a naive implementation using one
+  short-lived channel instance per `announceAuthChange()` call and a separate persistent instance
+  for the listener would mean the tab that just logged in/out also receives its own broadcast
+  (different object, same tab) and reloads itself, potentially interrupting its own
+  `router.push()`/`router.refresh()` redirect. Fixed by using a single module-level singleton
+  `BroadcastChannel` per tab, shared by both `announceAuthChange()` and
+  `subscribeToAuthChanges()`, so the same-tab self-exclusion actually applies.
+
+Frontend typechecks clean. **Not live-verified** — same environment limitation as Fix A; the two
+checks in Section 6 (identity switch across tabs, logout across tabs) still need a real
+two-tabs-open run.
 
 ## 5. Explicitly out of scope for this pass
 

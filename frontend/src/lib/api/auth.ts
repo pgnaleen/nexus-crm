@@ -4,21 +4,26 @@ import type {
   LoginRequest,
   VerifyPasswordResponse,
 } from "@orelia/common";
+import { announceAuthChange } from "@/lib/auth/tab-sync";
 import { apiFetch } from "./client";
 
-export function login(payload: LoginRequest): Promise<AuthSessionResponse> {
-  return apiFetch<AuthSessionResponse>("/auth/login", {
+export async function login(payload: LoginRequest): Promise<AuthSessionResponse> {
+  const session = await apiFetch<AuthSessionResponse>("/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),
   });
+  // Tells every OTHER open tab to reload -- see lib/auth/tab-sync.ts.
+  announceAuthChange();
+  return session;
 }
 
 export function me(): Promise<AuthSessionResponse> {
   return apiFetch<AuthSessionResponse>("/auth/me");
 }
 
-export function logout(): Promise<void> {
-  return apiFetch<void>("/auth/logout", { method: "POST" });
+export async function logout(): Promise<void> {
+  await apiFetch<void>("/auth/logout", { method: "POST" });
+  announceAuthChange();
 }
 
 export function actAsTenant(tenantId: string): Promise<{ tenant: ActingTenant }> {

@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { DialogProvider } from "@/components/providers/DialogProvider";
 import { ToastProvider } from "@/components/providers/ToastProvider";
+import { TabSyncListener } from "@/components/providers/TabSyncListener";
 
 // Same gradient+dot technique as the login page (frontend/src/app/[tenant]/page.module.css),
 // but anchored to --color-crm-shell (the documented navy shell token) instead of the login
@@ -37,6 +38,7 @@ export default async function DashboardLayout({
   return (
     <DialogProvider>
       <ToastProvider>
+        <TabSyncListener />
         <div className={`flex h-screen overflow-hidden pt-4 pr-4 ${SHELL_BG}`}>
           <div className="pointer-events-none absolute -top-[120px] -right-[100px] h-[420px] w-[420px] rounded-full bg-crm-shell-gradient-end/30 blur-[80px]" />
           <div className="pointer-events-none absolute -bottom-[120px] -left-[100px] h-[360px] w-[360px] rounded-full bg-crm-shell/30 blur-[80px]" />
