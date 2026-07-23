@@ -13,3 +13,4 @@ export * from "./deal-sources.contracts";
 export * from "./departments.contracts";
 export * from "./employees.contracts";
 export * from "./pickers.contracts";
+export * from "./priority-tasks.contracts";

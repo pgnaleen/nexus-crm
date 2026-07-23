@@ -16,6 +16,7 @@ import { DepartmentsModule } from "./modules/departments/departments.module";
 import { EmployeesModule } from "./modules/employees/employees.module";
 import { IndustriesModule } from "./modules/industries/industries.module";
 import { PickersModule } from "./modules/pickers/pickers.module";
+import { PriorityTasksModule } from "./modules/priority-tasks/priority-tasks.module";
 import { RbacModule } from "./modules/rbac/rbac.module";
 import { RelationshipTypesModule } from "./modules/relationship-types/relationship-types.module";
 import { TeamsModule } from "./modules/teams/teams.module";
@@ -46,6 +47,7 @@ import { UsersModule } from "./modules/users/users.module";
     EmployeesModule,
     IndustriesModule,
     PickersModule,
+    PriorityTasksModule,
     UploadsModule,
     DbBackupModule,
     AuthModule,

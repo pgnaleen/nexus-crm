@@ -27,3 +27,5 @@ export * from "./reminder-repeat-type.enum";
 export * from "./reminder-status.enum";
 export * from "./deal-source-category.enum";
 export * from "./system-role.enum";
+export * from "./priority-task-quadrant.enum";
+export * from "./priority-task-status.enum";
