@@ -15,6 +15,11 @@ import { SnakeNamingStrategy } from "typeorm-naming-strategies";
         username: config.get<string>("DB_USER"),
         password: config.get<string>("DB_PASSWORD"),
         database: config.get<string>("DB_NAME"),
+        // See DB_SSL in env.validation.ts -- RDS rejects unencrypted
+        // connections; rejectUnauthorized: false skips CA validation rather
+        // than pinning the AWS RDS CA bundle, a pragmatic tradeoff worth
+        // revisiting once this is running for real.
+        ssl: config.get<boolean>("DB_SSL") ? { rejectUnauthorized: false } : false,
         synchronize: false,
         namingStrategy: new SnakeNamingStrategy(),
         autoLoadEntities: true,

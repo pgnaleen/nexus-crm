@@ -13,6 +13,10 @@ export const envValidationSchema = Joi.object({
   // specific query, not the default terminal experience. The [HTTP] request
   // logger (RequestLoggerMiddleware) covers day-to-day route/data visibility.
   DB_LOGGING: Joi.boolean().default(false),
+  // RDS (and most managed Postgres) rejects unencrypted connections by
+  // default -- off for the local docker-compose Postgres container, which
+  // has no SSL configured at all.
+  DB_SSL: Joi.boolean().default(false),
 
   JWT_ACCESS_SECRET: Joi.string().required(),
   JWT_ACCESS_EXPIRES_IN: Joi.string().default("15m"),

@@ -12,6 +12,11 @@ export const dataSourceOptions: DataSourceOptions = {
   username: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
+  // See DB_SSL in env.validation.ts -- RDS rejects unencrypted connections;
+  // rejectUnauthorized: false skips CA validation rather than pinning the
+  // AWS RDS CA bundle, a pragmatic tradeoff worth revisiting once this is
+  // running for real.
+  ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : false,
   synchronize: false,
   namingStrategy: new SnakeNamingStrategy(),
   entities: [__dirname + "/../modules/**/entities/*.entity{.ts,.js}"],
