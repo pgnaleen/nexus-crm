@@ -46,6 +46,16 @@
     "statusFilter": {
       "all": "All statuses"
     },
+    "orgChart": {
+      "title": "Organization Chart",
+      "subtitle": "Who reports to whom across the organization, colored by department",
+      "companyLabel": "Company",
+      "navLabel": "Organization Chart",
+      "unplacedTitle": "Unplaced",
+      "unplacedHint": "Employees not yet placed in the reporting structure. Placement is done from the chart's edit mode.",
+      "unplacedEmpty": "Everyone is placed in the structure.",
+      "noAccess": "You don't have permission to view the organization chart."
+    },
     "exitDialog": {
       "title": "Mark as Exited",
       "message": "Mark {name} as having left the organization. Their record and history stay visible in the directory — this is not a deletion.",
@@ -240,7 +250,8 @@
       "quadrantLabel": "Quadrant",
       "createButton": "Create Task",
       "errors": {
-        "titleRequired": "Title is required"
+        "titleRequired": "Title is required",
+        "saveFailed": "Failed to create task"
       }
     }
   }

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { OreliaLogo } from "@/components/brand/OreliaLogo";
-import { ChevronDownIcon, DashboardIcon, FunnelIcon, SettingsIcon, SlidersIcon, UsersGroupIcon, UserIcon, ActivityIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, DashboardIcon, FunnelIcon, PriorityIcon, SettingsIcon, SlidersIcon, UsersGroupIcon, UserIcon, ActivityIcon } from "@/components/ui/icons";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import type { RelationshipTypeResponse, MainStageResponse } from "@orelia/common";
 
@@ -78,11 +78,17 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
   const dashboardHref = `/${tenantSlug}/dashboard`;
   const isDashboardActive = pathname === dashboardHref;
 
+  const priorityHref = `/${tenantSlug}/priority`;
+  const isPriorityActive = pathname === priorityHref;
+
   const funnelHref = `/${tenantSlug}/funnel`;
   const isFunnelActive = pathname === funnelHref;
 
   const hrHref = `/${tenantSlug}/employees`;
   const isHrActive = pathname === hrHref;
+
+  const orgChartHref = `/${tenantSlug}/employees/org-chart`;
+  const isOrgChartActive = pathname === orgChartHref;
 
   const canSeeDeals = hasAnyPermissionForPrefix(permissions, "deals");
   const canSeeEmployees = hasAnyPermissionForPrefix(permissions, "employees");
@@ -111,6 +117,18 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
         >
           <DashboardIcon size={17} />
           Dashboard
+        </Link>
+
+        {/* PRIORITY TRACKER ROOT LINK -- gated by authentication only, same
+            as Dashboard, no resource permission (every user manages their
+            own personal board). */}
+        <Link
+          href={priorityHref}
+          className={linkClasses(isPriorityActive)}
+          onClick={() => handleLinkClick(isPriorityActive)}
+        >
+          <PriorityIcon size={17} />
+          Priority Tracker
         </Link>
 
         {/* FUNNEL ROOT LINK */}
@@ -219,6 +237,13 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
                   onClick={() => handleLinkClick(isHrActive)}
                 >
                   Employees
+                </Link>
+                <Link
+                  href={orgChartHref}
+                  className={linkClasses(isOrgChartActive, true)}
+                  onClick={() => handleLinkClick(isOrgChartActive)}
+                >
+                  Organization Chart
                 </Link>
               </div>
             )}

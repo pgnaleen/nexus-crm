@@ -1,4 +1,4 @@
-import { EmployeeDetailResponse, EmployeeListItemResponse, PERMISSIONS } from "@orelia/common";
+import { EmployeeDetailResponse, EmployeeListItemResponse, OrgChartEmployeeResponse, PERMISSIONS } from "@orelia/common";
 import { Body, Controller, Delete, Get, Logger, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
@@ -58,6 +58,33 @@ export class EmployeesController {
       return this.toListItemResponse(employee);
     } catch (err) {
       this.logger.error(`POST /employees failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Story 1.7 -- Organization Chart data: every non-exited employee with
+  // the reporting edge (reportingManagerId). Declared BEFORE @Get(":id") --
+  // otherwise "org-chart" would be captured as :id and rejected by
+  // ParseUUIDPipe.
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.EMPLOYEES_VIEW])
+  @Get("org-chart")
+  async findOrgChart(): Promise<OrgChartEmployeeResponse[]> {
+    this.logger.debug("GET /employees/org-chart called");
+    try {
+      const employees = await this.employeesService.findForOrgChart();
+      this.logger.debug(`GET /employees/org-chart returning ${employees.length} row(s)`);
+      return employees.map((employee) => ({
+        id: employee.id,
+        fullName: employee.fullName,
+        currentDesignation: employee.currentDesignation ?? null,
+        departmentId: employee.departmentId ?? null,
+        departmentName: employee.department?.name ?? null,
+        profilePhotoUrl: employee.profilePhotoUrl ?? null,
+        reportingManagerId: employee.reportingManagerId ?? null,
+      }));
+    } catch (err) {
+      this.logger.error(`GET /employees/org-chart failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }

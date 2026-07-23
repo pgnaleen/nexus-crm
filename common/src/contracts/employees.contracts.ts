@@ -94,6 +94,22 @@ export interface UpdateEmployeeRequest {
   baseSalary?: number | null;
 }
 
+// Story 1.7 (View the Organization Chart) -- every non-exited employee in
+// the tenant, with just the fields the chart needs. reportingManagerId is
+// the tree edge: set = placed beneath that manager on the canvas, null =
+// listed in the "unplaced" side panel (every brand-new employee starts
+// there, since the Employee form never sets a manager -- Story 1.8's chart
+// editor is the only writer). Exited employees are excluded server-side.
+export interface OrgChartEmployeeResponse {
+  id: string;
+  fullName: string;
+  currentDesignation: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  profilePhotoUrl: string | null;
+  reportingManagerId: string | null;
+}
+
 // Story 1.6 (Grant Login Access) -- options for User Management's "link to
 // Employee" picker: employees in the caller's tenant not yet linked to any
 // User account (plus, when editing an existing user, the employee currently

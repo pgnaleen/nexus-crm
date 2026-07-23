@@ -1,3 +1,4 @@
+import { EmploymentStatus } from "@orelia/common";
 import { ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { IsNull } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
@@ -204,6 +205,31 @@ export class EmployeesService {
       if (!(err instanceof NotFoundException)) {
         this.logger.error(`update failed for employee ${id}: ${(err as Error).message}`, (err as Error).stack);
       }
+      throw err;
+    }
+  }
+
+  // Story 1.7 -- every non-exited employee with the department relation
+  // loaded, for the Organization Chart. Exited filtering happens in app code
+  // rather than a NOT IN clause: a SQL NOT IN silently drops NULL-status
+  // rows too, and BaseTenantRepository.scopeOptions can't take an OR-array
+  // where (see findLinkable's comment).
+  async findForOrgChart(): Promise<Employee[]> {
+    this.logger.debug("findForOrgChart called");
+    try {
+      const all = await this.employeesRepo.findScoped({
+        relations: ["department"],
+        order: { fullName: "ASC" },
+      });
+      const exitedStatuses: (EmploymentStatus | undefined)[] = [
+        EmploymentStatus.Terminated,
+        EmploymentStatus.Resigned,
+      ];
+      const results = all.filter((employee) => !exitedStatuses.includes(employee.employmentStatus));
+      this.logger.debug(`findForOrgChart returning ${results.length} of ${all.length} row(s) (exited excluded)`);
+      return results;
+    } catch (err) {
+      this.logger.error(`findForOrgChart failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }
