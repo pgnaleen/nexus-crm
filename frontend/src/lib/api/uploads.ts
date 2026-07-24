@@ -24,6 +24,11 @@ export async function uploadEmployeeCv(file: File): Promise<UploadResponse> {
   return uploadFile(file, "employee-cv", "Failed to upload CV");
 }
 
+// Story 1.12 -- certificate evidence for a self-reported certification.
+export async function uploadCertification(file: File): Promise<UploadResponse> {
+  return uploadFile(file, "certification", "Failed to upload certificate");
+}
+
 async function uploadFile(file: File, route: string, errorMessage: string): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append("file", file);

@@ -29,3 +29,14 @@ export const ALLOWED_EMPLOYEE_CV_MIME_TYPES = [
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
+
+// Story 1.12 -- certificate evidence an employee attaches to a self-reported
+// certification. A scanned certificate is typically a PDF or an image.
+export const CERTIFICATION_SUBDIR = "certifications";
+export const MAX_CERTIFICATION_SIZE_BYTES = 10 * 1024 * 1024;
+export const ALLOWED_CERTIFICATION_MIME_TYPES = [
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+];

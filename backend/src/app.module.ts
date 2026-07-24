@@ -6,6 +6,7 @@ import { CoreModule } from "./core/core.module";
 import { RequestLoggerMiddleware } from "./core/logging/request-logger.middleware";
 import { DatabaseModule } from "./database/database.module";
 import { AuthModule } from "./modules/auth/auth.module";
+import { CertificationsModule } from "./modules/certifications/certifications.module";
 import { CompaniesModule } from "./modules/companies/companies.module";
 import { ContactsModule } from "./modules/contacts/contacts.module";
 import { DbBackupModule } from "./modules/db-backup/db-backup.module";
@@ -45,6 +46,7 @@ import { UsersModule } from "./modules/users/users.module";
     CompaniesModule,
     ContactsModule,
     EmployeesModule,
+    CertificationsModule,
     IndustriesModule,
     PickersModule,
     PriorityTasksModule,

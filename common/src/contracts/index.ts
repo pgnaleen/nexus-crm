@@ -14,3 +14,4 @@ export * from "./departments.contracts";
 export * from "./employees.contracts";
 export * from "./pickers.contracts";
 export * from "./priority-tasks.contracts";
+export * from "./certifications.contracts";

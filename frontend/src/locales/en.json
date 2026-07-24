@@ -219,6 +219,55 @@
     "employeeRecord": {
       "title": "My Employee Record",
       "hint": "What HR has on file for you — read-only. Contact HR to correct anything here."
+    },
+    "certifications": {
+      "title": "My Certifications",
+      "hint": "Add certifications you've earned. HR reviews each one before it counts toward staffing.",
+      "addButton": "Add Certification",
+      "empty": "You haven't added any certifications yet.",
+      "issued": "Issued",
+      "expires": "Expires",
+      "viewCertificate": "View certificate",
+      "verificationLink": "Verification link",
+      "rejectedReason": "Rejected",
+      "addTitle": "Add Certification",
+      "editTitle": "Edit Certification",
+      "editAriaLabel": "Edit {name}",
+      "deleteAriaLabel": "Delete {name}",
+      "status": {
+        "pending": "Pending",
+        "verified": "Verified",
+        "rejected": "Rejected"
+      },
+      "form": {
+        "name": "Certification name *",
+        "namePlaceholder": "e.g. AWS Certified Solutions Architect",
+        "issuingOrganization": "Issuing organization *",
+        "issuingOrganizationPlaceholder": "e.g. Amazon Web Services",
+        "credentialId": "Credential ID",
+        "issueDate": "Issue date *",
+        "expiryDate": "Expiry date",
+        "evidence": "Certificate file",
+        "evidenceHint": "Optional now — but HR can only verify a claim that has a certificate file or a verification link.",
+        "uploadFile": "Upload certificate",
+        "replaceFile": "Replace file",
+        "removeFile": "Remove",
+        "verificationLink": "Verification link",
+        "verificationLinkPlaceholder": "https://...",
+        "createButton": "Add Certification",
+        "saveButton": "Save Changes"
+      },
+      "deleteConfirm": {
+        "title": "Delete Certification",
+        "message": "Remove \"{name}\" from your profile?",
+        "confirmLabel": "Delete"
+      },
+      "errors": {
+        "issueDateRequired": "Issue date is required",
+        "uploadFailed": "Failed to upload certificate",
+        "saveFailed": "Failed to save certification",
+        "deleteFailed": "Failed to delete certification"
+      }
     }
   },
   "users": {
@@ -296,6 +345,22 @@
       },
       "errors": {
         "saveFailed": "Failed to save notes"
+      },
+      "sharedLabel": "Shared With",
+      "shareButton": "Share",
+      "sharedEmpty": "Not shared with anyone yet.",
+      "removeShareAriaLabel": "Stop sharing with {name}"
+    },
+    "shareDialog": {
+      "title": "Share Task",
+      "userLabel": "Share with",
+      "userPlaceholder": "Search people...",
+      "searchPlaceholder": "Search by name...",
+      "shareButton": "Share",
+      "noneAvailable": "Everyone in the tenant already has this task shared with them.",
+      "errors": {
+        "loadFailed": "Failed to load people",
+        "userRequired": "Choose someone to share with"
       }
     }
   }

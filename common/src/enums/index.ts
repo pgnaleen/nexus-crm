@@ -29,3 +29,4 @@ export * from "./deal-source-category.enum";
 export * from "./system-role.enum";
 export * from "./priority-task-quadrant.enum";
 export * from "./priority-task-status.enum";
+export * from "./employee-certification-status.enum";

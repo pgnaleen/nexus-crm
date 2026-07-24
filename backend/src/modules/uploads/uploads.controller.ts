@@ -16,12 +16,15 @@ import { diskStorage } from "multer";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
 import {
+  ALLOWED_CERTIFICATION_MIME_TYPES,
   ALLOWED_EMPLOYEE_CV_MIME_TYPES,
   ALLOWED_EMPLOYEE_PHOTO_MIME_TYPES,
   ALLOWED_LOGO_MIME_TYPES,
+  CERTIFICATION_SUBDIR,
   EMPLOYEE_CV_SUBDIR,
   EMPLOYEE_PHOTO_SUBDIR,
   LOGO_SUBDIR,
+  MAX_CERTIFICATION_SIZE_BYTES,
   MAX_EMPLOYEE_CV_SIZE_BYTES,
   MAX_EMPLOYEE_PHOTO_SIZE_BYTES,
   MAX_LOGO_SIZE_BYTES,
@@ -38,6 +41,7 @@ const ANY_RELATIONSHIP_PERMISSION = [
 const logoDir = join(process.cwd(), UPLOAD_DIR, LOGO_SUBDIR);
 const employeePhotoDir = join(process.cwd(), UPLOAD_DIR, EMPLOYEE_PHOTO_SUBDIR);
 const employeeCvDir = join(process.cwd(), UPLOAD_DIR, EMPLOYEE_CV_SUBDIR);
+const certificationDir = join(process.cwd(), UPLOAD_DIR, CERTIFICATION_SUBDIR);
 
 function ensureDir(dir: string): void {
   if (!existsSync(dir)) {
@@ -145,5 +149,40 @@ export class UploadsController {
       throw new BadRequestException("No file uploaded");
     }
     return { url: `/uploads/${EMPLOYEE_CV_SUBDIR}/${file.filename}` };
+  }
+
+  // Story 1.12 (Self-Report a Certification) -- evidence file for a
+  // certification claim. Auth-only (no RequirePermission): any employee
+  // uploads their own evidence from My Profile, same self-service posture as
+  // the certifications routes themselves. The global JwtAuthGuard still
+  // applies -- never reachable unauthenticated.
+  @Post("certification")
+  @UseInterceptors(
+    FileInterceptor("file", {
+      storage: diskStorage({
+        destination: (_req: Request, _file: Express.Multer.File, callback: (error: Error | null, destination: string) => void) => {
+          ensureDir(certificationDir);
+          callback(null, certificationDir);
+        },
+        filename: (_req: Request, file: Express.Multer.File, callback: (error: Error | null, filename: string) => void) => {
+          const ext = file.originalname.split(".").pop();
+          callback(null, `${randomUUID()}.${ext}`);
+        },
+      }),
+      limits: { fileSize: MAX_CERTIFICATION_SIZE_BYTES },
+      fileFilter: (_req: Request, file: Express.Multer.File, callback: (error: Error | null, acceptFile: boolean) => void) => {
+        if (!ALLOWED_CERTIFICATION_MIME_TYPES.includes(file.mimetype)) {
+          callback(new BadRequestException("Certificate must be a PDF or an image (PNG, JPEG, WebP)"), false);
+          return;
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  uploadCertification(@UploadedFile() file: Express.Multer.File): UploadResponse {
+    if (!file) {
+      throw new BadRequestException("No file uploaded");
+    }
+    return { url: `/uploads/${CERTIFICATION_SUBDIR}/${file.filename}` };
   }
 }
