@@ -1,10 +1,12 @@
-import { PriorityTaskResponse } from "@orelia/common";
+import { PriorityTaskDelegationTrackerResponse, PriorityTaskResponse } from "@orelia/common";
 import { Body, Controller, Get, Logger, Param, ParseUUIDPipe, Patch, Post } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { CreatePriorityTaskDto } from "./dto/create-priority-task.dto";
+import { DelegatePriorityTaskDto } from "./dto/delegate-priority-task.dto";
 import { MovePriorityTaskDto } from "./dto/move-priority-task.dto";
 import { UpdatePriorityTaskDto } from "./dto/update-priority-task.dto";
+import { PriorityTaskDelegationTracker } from "./entities/priority-task-delegation-tracker.entity";
 import { PriorityTask } from "./entities/priority-task.entity";
 import { PriorityTasksService } from "./priority-tasks.service";
 
@@ -25,7 +27,7 @@ export class PriorityTasksController {
     try {
       const tasks = await this.priorityTasksService.findAllForUser(user.sub);
       this.logger.debug(`GET /priority-tasks returning ${tasks.length} row(s)`);
-      return tasks.map((task) => this.toResponse(task));
+      return tasks.map((task) => this.toResponse(task, user.sub));
     } catch (err) {
       this.logger.error(`GET /priority-tasks failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -41,9 +43,47 @@ export class PriorityTasksController {
     try {
       const task = await this.priorityTasksService.create(dto, user.sub);
       this.logger.debug(`POST /priority-tasks succeeded for task ${task.id}`);
-      return this.toResponse(task);
+      return this.toResponse(task, user.sub);
     } catch (err) {
       this.logger.error(`POST /priority-tasks failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Declared before ":id" so "delegated-trackers" isn't swallowed as a
+  // route param (same fix as GET /deals/partner-links earlier this
+  // project). Story 1.6 -- the delegator's own tracking cards for the
+  // DELEGATE quadrant.
+  @Get("delegated-trackers")
+  async findDelegationTrackers(@CurrentUser() user: AuthenticatedUser): Promise<PriorityTaskDelegationTrackerResponse[]> {
+    this.logger.debug(`GET /priority-tasks/delegated-trackers called by ${user.sub}`);
+    try {
+      const trackers = await this.priorityTasksService.findDelegationTrackersForUser(user.sub);
+      const responses = await Promise.all(trackers.map((tracker) => this.toTrackerResponse(tracker)));
+      this.logger.debug(`GET /priority-tasks/delegated-trackers returning ${responses.length} row(s)`);
+      return responses;
+    } catch (err) {
+      this.logger.error(
+        `GET /priority-tasks/delegated-trackers failed: ${(err as Error).message}`,
+        (err as Error).stack,
+      );
+      throw err;
+    }
+  }
+
+  @Post(":id/delegate")
+  async delegate(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: DelegatePriorityTaskDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<PriorityTaskResponse> {
+    this.logger.debug(`POST /priority-tasks/${id}/delegate called by ${user.sub} (userId=${dto.userId})`);
+    try {
+      const task = await this.priorityTasksService.delegate(id, user.sub, dto);
+      this.logger.debug(`POST /priority-tasks/${id}/delegate succeeded`);
+      return this.toResponse(task, user.sub);
+    } catch (err) {
+      this.logger.error(`POST /priority-tasks/${id}/delegate failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }
@@ -58,7 +98,7 @@ export class PriorityTasksController {
       const task = await this.priorityTasksService.findOneForUser(id, user.sub);
       const creatorName = await this.priorityTasksService.getUserDisplayName(task.createdBy);
       this.logger.debug(`GET /priority-tasks/${id} succeeded`);
-      return this.toResponse(task, creatorName);
+      return this.toResponse(task, user.sub, creatorName);
     } catch (err) {
       this.logger.error(`GET /priority-tasks/${id} failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -76,7 +116,7 @@ export class PriorityTasksController {
       const task = await this.priorityTasksService.updateNotes(id, user.sub, dto);
       const creatorName = await this.priorityTasksService.getUserDisplayName(task.createdBy);
       this.logger.debug(`PATCH /priority-tasks/${id} succeeded`);
-      return this.toResponse(task, creatorName);
+      return this.toResponse(task, user.sub, creatorName);
     } catch (err) {
       this.logger.error(`PATCH /priority-tasks/${id} failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -95,14 +135,38 @@ export class PriorityTasksController {
     try {
       const task = await this.priorityTasksService.move(id, user.sub, dto);
       this.logger.debug(`PATCH /priority-tasks/${id}/move succeeded`);
-      return this.toResponse(task);
+      return this.toResponse(task, user.sub);
     } catch (err) {
       this.logger.error(`PATCH /priority-tasks/${id}/move failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }
 
-  private toResponse(task: PriorityTask, creatorName?: string | null): PriorityTaskResponse {
+  private async toTrackerResponse(
+    tracker: PriorityTaskDelegationTracker,
+  ): Promise<PriorityTaskDelegationTrackerResponse> {
+    // `task` is eager-loaded by the service's own query (relations:
+    // ["task"]) -- a tracker with no task would mean the FK's ON DELETE
+    // CASCADE didn't fire, which should be impossible, but fail loudly
+    // rather than silently rendering a blank card if it ever happens.
+    if (!tracker.task) {
+      throw new Error(`Delegation tracker ${tracker.id} has no linked task`);
+    }
+    const delegatedToName = await this.priorityTasksService.getUserDisplayName(tracker.task.delegatedToUserId);
+    return {
+      id: tracker.id,
+      taskId: tracker.taskId,
+      taskTitle: tracker.task.title,
+      taskStatus: tracker.task.status,
+      taskProgress: tracker.task.progress,
+      delegatedToUserId: tracker.task.delegatedToUserId ?? "",
+      delegatedToName: delegatedToName ?? "",
+      rank: tracker.rank,
+      createdAt: tracker.createdAt.toISOString(),
+    };
+  }
+
+  private toResponse(task: PriorityTask, viewerId: string, creatorName?: string | null): PriorityTaskResponse {
     return {
       id: task.id,
       title: task.title,
@@ -112,7 +176,11 @@ export class PriorityTasksController {
       status: task.status,
       progress: task.progress,
       ownerId: task.ownerId,
-      ownership: task.createdBy === task.ownerId ? "owned" : "received",
+      // Relative to whoever's asking -- see the contract's own comment for
+      // why this is ownerId-vs-viewer, not createdBy-vs-ownerId (sharing
+      // never moves ownerId, so a shared recipient must still see
+      // "received" even though the task's real owner never changed).
+      ownership: task.ownerId === viewerId ? "owned" : "received",
       createdAt: task.createdAt.toISOString(),
       ...(creatorName !== undefined ? { createdByName: creatorName } : {}),
     };

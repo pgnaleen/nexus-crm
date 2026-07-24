@@ -19,6 +19,10 @@ import { UsersService } from "./users.service";
   imports: [TypeOrmModule.forFeature([User, RefreshToken, Tenant]), RbacModule, EmployeesModule],
   controllers: [UsersController],
   providers: [UsersService, UsersRepository],
-  exports: [TypeOrmModule],
+  // UsersService: needed by PickersModule for the Priority Tracker Share/
+  // Delegate user picker (findPicker). TypeOrmModule: pre-existing re-export
+  // so other modules can @InjectRepository(User) etc. without importing the
+  // whole UsersModule dependency chain.
+  exports: [TypeOrmModule, UsersService],
 })
 export class UsersModule {}

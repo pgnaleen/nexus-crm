@@ -358,26 +358,37 @@ FK) — same shape as `deal-partners.service.ts`'s own hard-delete path, no `del
 
 New module, 2026-07-23/24 — Priority Tracker epic (Eisenhower task board), Stories 1.1 (View/
 Navigate board), 1.2 (Create a Task), 1.3 (Drag-and-drop reorder), 1.4 (View/Edit Task Details &
-Notes), and 1.5 (Share a Task). Every story's frontend was built mock-first (local React state, no
-backend) and signed off in the browser before its backend piece was written, per
-`feature-development-guideline.md`. No `PermissionsGuard`/`RequirePermission` anywhere in either
-controller in this module — gated by the global `JwtAuthGuard` only, same pattern as
-`POST /users/me/change-password`, since every user manages only their own personal board (the
-epic's own explicit "gated by authentication only" decision). `ownerId` is the one domain-specific
-actor column on `priority_tasks`; `createdBy` (from `AuditedTenantEntity`) is who originally
-created it, resolved to a name for the detail view's "Created by" history entry. `ownership`
-(`"owned" | "received"`) is derived per-request as `ownerId === viewer's own id` — **not**
-`createdBy === ownerId` (fixed 2026-07-24 while building Share: sharing never moves `ownerId`, so
-a shared recipient must see "received" even though the task's real owner never changed). Delegation
-(Story 1.6+) is still blocked on a real data-model decision for per-perspective task placement (see
-the epic doc's "Open Questions for Architecture") — Sharing didn't hit that blocker since a shared
-task never gets its own quadrant/rank on the recipient's board, it's visibility-only.
+Notes), 1.5 (Share a Task), and 1.6 (Delegate a Task — send-side only, see below). Every story's
+frontend was built mock-first (local React state, no backend) and signed off in the browser before
+its backend piece was written, per `feature-development-guideline.md`. No `PermissionsGuard`/
+`RequirePermission` anywhere in any controller in this module — gated by the global
+`JwtAuthGuard` only, same pattern as `POST /users/me/change-password`, since every user manages
+only their own personal board (the epic's own explicit "gated by authentication only" decision).
+`ownerId` is the one domain-specific actor column on `priority_tasks`; `createdBy` (from
+`AuditedTenantEntity`) is who originally created it, resolved to a name for the detail view's
+"Created by" history entry. `ownership` (`"owned" | "received"`) is derived per-request as
+`ownerId === viewer's own id` — **not** `createdBy === ownerId` (fixed 2026-07-24 while building
+Share: sharing never moves `ownerId`, so a shared recipient must see "received" even though the
+task's real owner never changed).
 
 `priority_task_shares` is a bare join table (`backend/src/modules/priority-tasks/priority-task-
 shares.controller.ts`, routed under `/priority-tasks/:taskId/shares`) — same shape/rationale as
 `deal_partners_map`: no `tenant_id` of its own (scoped via the parent task), no soft-delete (a share
 is either present or hard-removed by its own "unshare" action). Every method in that controller is
 owner-only underneath, enforced in the service, not just a route-level gate.
+
+**Delegation's data-model decision (Story 1.6), resolved 2026-07-24:** rather than restructuring
+`priority_tasks` for per-perspective placement, delegation uses a lightweight **tracking-card**
+table, `priority_task_delegation_trackers` — the delegator's own read-only breadcrumb, living in
+their DELEGATE quadrant, referencing the real task by id and live-joining its title/status/progress
+(never a duplicate/frozen snapshot). The real task itself keeps its existing single-owner/single-
+quadrant shape untouched: `delegate()` sets `priority_tasks.status = 'delegated'` and
+`delegated_to_user_id` (pending pointer), and removes the task from the delegator's own board
+(`findAllForUser` now excludes any row with `delegated_to_user_id` set — the tracker represents it
+instead). **Only the send-side is built.** Accepting a delegation (transferring `ownerId` to the
+recipient, clearing `delegated_to_user_id`) is Story 1.8's job — until that exists, a delegated
+task is only ever visible via the delegator's own tracking card, with no way for the recipient to
+see or act on it yet (same "real backend, no receiving-side UI" shape Story 1.5 shipped in first).
 
 | # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -389,5 +400,7 @@ owner-only underneath, enforced in the service, not just a route-level gate.
 | 6 | GET | `/priority-tasks/:taskId/shares` | Any authenticated user (no RBAC permission) | List who a task is currently shared with (Story 1.5). | none | `PriorityTaskShareResponse[]` → `{id, userId, displayName, createdAt}[]` | `priority-task-shares.controller.ts::findAll` → `priority-task-shares.service.ts::findAll` | `lib/api/priority-tasks.ts::listPriorityTaskShares` — `TaskDetailDialog.tsx` (owner view only) | ✅ | Owner-only (via `PriorityTasksService.findOneOwnedOrFail`) — a shared recipient can read the task itself (#3) but not who else it's shared with. `displayName` comes from the real `sharedWithUser` relation (a genuine FK, unlike `createdByName` elsewhere in this module, which is a bare-uuid lookup by design). |
 | 7 | POST | `/priority-tasks/:taskId/shares` | Any authenticated user (no RBAC permission) | Share a task with another active user in the tenant (Story 1.5). | body: `{userId}` | `PriorityTaskShareResponse` | `priority-task-shares.controller.ts::create` → `priority-task-shares.service.ts::add` | `lib/api/priority-tasks.ts::createPriorityTaskShare` — `ShareTaskDialog.tsx` | ✅ | Owner-only. Validates `userId` via `UsersService.findOneOrFail` (tenant-scoped) before inserting, so an owner can't share with a uuid from outside the tenant. `409 Conflict` if already shared with that person (`UQ_priority_task_shares_task_user`). Records an `audit_logs` insert (`entityType: "priority_task_share"`). |
 | 8 | DELETE | `/priority-tasks/:taskId/shares/:shareId` | Any authenticated user (no RBAC permission) | Un-share a task (Story 1.5). | none | `{success: true}` | `priority-task-shares.controller.ts::remove` → `priority-task-shares.service.ts::remove` | `lib/api/priority-tasks.ts::removePriorityTaskShare` — `TaskDetailDialog.tsx`'s remove-share button, optimistic with rollback-on-failure | ✅ | Owner-only. Hard delete (no soft-delete column on this table at all — see the module-level note above). Records an `audit_logs` delete entry. |
+| 9 | POST | `/priority-tasks/:id/delegate` | Any authenticated user (no RBAC permission) | Delegate a task to exactly one other active user (Story 1.6, send-side). | body: `{userId}` | `PriorityTaskResponse` | `delegate` → `priority-tasks.service.ts::delegate` | `lib/api/priority-tasks.ts::delegatePriorityTask` — `PriorityBoard.tsx`'s `handleTaskDelegated`, called from `TaskDetailDialog.tsx`'s Delegate button via `DelegateTaskDialog.tsx` | ✅ | Owner-only. One DB transaction: resequences the task's old quadrant (same pattern as `move`), sets `status: 'delegated'` + `delegated_to_user_id`, creates the delegator's tracking card. `409 Conflict` if already delegated (pending), `400` for self-delegation or a non-active target. Records an `audit_logs` update (`entityType: "priority_task"`, noting the status/delegatedTo transition). |
+| 10 | GET | `/priority-tasks/delegated-trackers` | Any authenticated user (no RBAC permission) | List the caller's own delegation tracking cards, for the DELEGATE quadrant (Story 1.6). | none | `PriorityTaskDelegationTrackerResponse[]` → `{id, taskId, taskTitle, taskStatus, taskProgress, delegatedToUserId, delegatedToName, rank, createdAt}[]` | `findDelegationTrackers` → `priority-tasks.service.ts::findDelegationTrackersForUser` | `lib/priority-tasks/server.ts::listPriorityTaskDelegationTrackers` (initial load) + `lib/api/priority-tasks.ts::listPriorityTaskDelegationTrackers` (re-fetched client-side right after a successful delegate) — `PriorityBoard.tsx` | ✅ | Declared **before** `:id` in the controller so `delegated-trackers` isn't swallowed as a route param (same fix as `GET /deals/partner-links`). `taskTitle`/`taskStatus`/`taskProgress` are live-joined from the referenced task on every call, never frozen at delegation time. |
 
 *(Next section will be added once the rest of Auth is reviewed.)*

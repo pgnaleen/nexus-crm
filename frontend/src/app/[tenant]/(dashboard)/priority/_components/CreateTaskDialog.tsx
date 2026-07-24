@@ -13,7 +13,7 @@ import { t } from "@/lib/i18n";
 import { QUADRANT_ORDER } from "./types";
 
 const TEXTAREA_CLASS =
-  "w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5 text-sm text-crm-text transition-colors duration-150 focus:border-crm-primary focus:outline-none focus:shadow-[0_0_0_3px_rgba(233,28,45,0.15)]";
+  "w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5 text-sm text-crm-text transition-colors duration-150 focus:border-crm-primary focus:outline-none focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-crm-primary)_15%,transparent)]";
 
 interface FormState {
   title: string;
@@ -71,6 +71,7 @@ export function CreateTaskDialog({ defaultQuadrant, onClose, onCreated }: Create
           name="title"
           value={values.title}
           error={titleError}
+          maxLength={200}
           placeholder={t("priorityTracker.dialog.titlePlaceholder")}
           onChange={(e) => setValues((current) => ({ ...current, title: e.target.value }))}
         />
@@ -96,6 +97,7 @@ export function CreateTaskDialog({ defaultQuadrant, onClose, onCreated }: Create
             className={TEXTAREA_CLASS}
             rows={3}
             value={values.notes}
+            maxLength={4000}
             placeholder={t("priorityTracker.dialog.notesPlaceholder")}
             onChange={(e) => setValues((current) => ({ ...current, notes: e.target.value }))}
           />

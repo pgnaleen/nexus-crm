@@ -24,7 +24,7 @@ export class ContactsService {
         .andWhere(
           `contact.id IN (
              SELECT contact_id FROM relationship_company_contact_map
-             WHERE relationship_type_id = :relationshipTypeId AND contact_id IS NOT NULL AND deleted_at IS NULL
+             WHERE relationship_type_id = :relationshipTypeId AND contact_id IS NOT NULL AND deleted_at IS NULL AND is_active = true
            )`,
           { relationshipTypeId },
         )

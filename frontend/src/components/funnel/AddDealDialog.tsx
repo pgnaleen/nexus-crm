@@ -785,11 +785,39 @@ export function AddDealDialog({
   }));
 
   const employeeOptions: SearchSelectOption[] = employees.map((e) => ({ value: e.id, label: e.fullName }));
+  // The picker excludes exited (terminated/resigned) employees. When editing a
+  // deal whose Sales Person / Pre-Sales / PMO has since been made inactive, that
+  // person is no longer in `employees` -- append them from the deal's own
+  // resolved names so the field keeps showing its current value instead of
+  // going blank. (They can't be re-selected once cleared -- that's intended.)
+  if (deal) {
+    const known = new Set(employeeOptions.map((o) => o.value));
+    const currentAssignees: Array<[string | null | undefined, string | null | undefined]> = [
+      [deal.ownerId, deal.ownerName],
+      [deal.preSalesPersonId, deal.preSalesPersonName],
+      [deal.pmoId, deal.pmoName],
+    ];
+    for (const [id, name] of currentAssignees) {
+      if (id && !known.has(id)) {
+        employeeOptions.push({ value: id, label: name ?? "Unknown" });
+        known.add(id);
+      }
+    }
+  }
   const departmentOptions: SearchSelectOption[] = departments.map((d) => ({ value: d.id, label: d.name }));
   const costing = computeCosting(values.projectValue, values.internalCosts, values.externalCosts);
+  // Only active deal sources are selectable. When editing a deal whose source
+  // has since been deactivated, re-append it so the field keeps its current
+  // value (but it can't be re-picked once changed) -- same fallback pattern as
+  // the exited-employee handling above.
+  const activeDealSources = dealSources.filter((ds) => ds.isActive);
+  if (deal?.sourceId && !activeDealSources.some((ds) => ds.id === deal.sourceId)) {
+    const current = dealSources.find((ds) => ds.id === deal.sourceId);
+    if (current) activeDealSources.push(current);
+  }
   const dealSourceOptions = [
     { value: "", label: "Not set" },
-    ...dealSources.map((ds) => ({ value: ds.id, label: ds.name })),
+    ...activeDealSources.map((ds) => ({ value: ds.id, label: ds.name })),
   ];
   function openAddParty() {
     setAddPartyState(relationshipTypes.length === 1 ? { step: "kind", relationshipTypeId: relationshipTypes[0].id, relationshipTypeName: relationshipTypes[0].name } : { step: "type" });

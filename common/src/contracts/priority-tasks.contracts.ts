@@ -31,9 +31,14 @@ export interface PriorityTaskResponse {
   status: PriorityTaskStatus;
   progress: number;
   ownerId: string;
-  // Derived: createdBy === ownerId -- "received" only becomes possible once
-  // Story 1.5 (Share)/1.6 (Delegate) exist and can move ownerId away from
-  // whoever originally created the task.
+  // Derived relative to whoever is asking: ownerId === viewer's own id. On
+  // the bulk list endpoint this is always "owned" (that endpoint only ever
+  // returns the caller's own tasks), but the single-task detail endpoint
+  // can also return a task merely shared with the viewer (Story 1.5) --
+  // sharing never changes ownerId, so ownerId-vs-viewer is what "received"
+  // actually means, not createdBy-vs-ownerId (a task shared with someone
+  // else is still fully "owned" by its real owner from the owner's own
+  // point of view).
   ownership: "owned" | "received";
   createdAt: string;
   // Only resolved by GET /priority-tasks/:id (the detail view's "who created
@@ -41,4 +46,36 @@ export interface PriorityTaskResponse {
   // nothing displays a creator name from yet. Null if the creator's account
   // was later deleted (created_by is ON DELETE SET NULL).
   createdByName?: string | null;
+}
+
+// Story 1.5 (Share a Task).
+export interface CreatePriorityTaskShareRequest {
+  userId: string;
+}
+
+export interface PriorityTaskShareResponse {
+  id: string;
+  userId: string;
+  displayName: string;
+  createdAt: string;
+}
+
+// Story 1.6 (Delegate a Task) -- send-side only. `accept` (transferring
+// ownerId to the recipient) is Story 1.8's job, not built yet.
+export interface DelegatePriorityTaskRequest {
+  userId: string;
+}
+
+// The delegator's own tracking card, live-joined to the real task's
+// current title/status/progress -- never a frozen snapshot.
+export interface PriorityTaskDelegationTrackerResponse {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  taskStatus: PriorityTaskStatus;
+  taskProgress: number;
+  delegatedToUserId: string;
+  delegatedToName: string;
+  rank: number;
+  createdAt: string;
 }

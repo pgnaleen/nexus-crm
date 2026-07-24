@@ -48,7 +48,7 @@ export class CompaniesService {
         .innerJoin(
           "relationship_company_contact_map",
           "party",
-          "party.company_id = company.id AND party.relationship_type_id = :relationshipTypeId AND party.deleted_at IS NULL",
+          "party.company_id = company.id AND party.relationship_type_id = :relationshipTypeId AND party.deleted_at IS NULL AND party.is_active = true",
           { relationshipTypeId },
         )
         .orderBy("company.name", "ASC")

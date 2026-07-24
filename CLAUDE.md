@@ -212,6 +212,17 @@ never a bare entity with its own ad-hoc columns. That gives every table, automat
 always set these from the authenticated user's id — never leave them to default to null on a
 real write. (`deletedBy` follows the same rule for soft-deletes once it exists — see the todo doc.)
 
+**Exemption — pure join/link tables.** A bare many-to-many join table whose only job is to
+associate two already-audited rows (no state of its own beyond the pair + who created it) is
+exempt from extending the audited base and from soft-delete. Such a row is either *present* or
+*hard-removed* by its own explicit "unlink"/"unshare" action — it is never "updated", and it has
+no tenant column of its own (it inherits scope through its already-tenant-scoped parent). It still
+records `createdBy` and still writes an `audit_logs` row on both link and unlink, so the actor
+trail is preserved. Approved instances: `deal_partners_map`, `priority_task_shares`. Do **not**
+extend this exemption to any table that carries its own mutable state or lifecycle — those follow
+the full rule above. (Documented so this specific, deliberate pattern stops being re-flagged as a
+violation on every review.)
+
 ### Cascade deletes
 
 Soft-delete cascades (e.g. deleting a Relationship Type that has Companies/Contacts tagged under
@@ -395,6 +406,55 @@ permissions. Gate it on whatever permission the *consumers* of that dropdown/fil
 instead — exactly like the existing Departments/Companies/Contacts/Employees pickers already do.
 New pickers must follow this same split: full CRUD stays an RBAC route behind the resource's own
 permissions; the picker is a system-internal route behind the consumer's permission.
+
+## Selectable Scope: pickers hide inactive records; edit forms keep the current value
+
+A whole class of bug lives at the boundary between "a record still exists" and "a record is still
+a *valid choice*." A record can be soft-deleted (gone), but it can also be **deactivated,
+disabled, suspended, terminated, resigned, cancelled, or archived** — still in the table, but no
+longer something a user should be able to *newly pick* or *assign*. TypeORM's automatic
+`deletedAt IS NULL` filter handles the first case for free; it does **nothing** for the second,
+which is app-level and must be written explicitly. Forgetting it means deactivated deal sources,
+terminated employees, and disabled users keep showing up in dropdowns as if nothing changed —
+silently ignoring the very toggle an admin used to retire them.
+
+**Rule 1 — every picker/lookup filters its entity's inactive-state, not just soft-delete.** When
+you add or touch a picker/dropdown/selectable-list endpoint (or a client-side options list), check
+whether the entity has any "no longer a valid choice" column and exclude those rows. Known
+status shapes in this codebase (each expressed differently — there is deliberately **no** shared
+`findSelectable()` helper, because a boolean, a 4-value enum, and a status enum don't abstract
+cleanly):
+
+| Entity | Column | Exclude when |
+|---|---|---|
+| Employee | `employmentStatus` enum | `Terminated` / `Resigned` (On-Leave stays selectable) |
+| User | `status` enum | not `Active` |
+| Department | `isActive` boolean | `false` |
+| DealSource | `isActive` boolean | `false` |
+| RelationshipCompanyContactMap (deal customer/partner) | `isActive` boolean | `false` |
+| Tenant | `status` enum | `Suspended` / `Cancelled` (product decision — not yet enforced) |
+
+Reference implementations (all follow the same shape — filter after the scoped fetch, treat a
+missing status as active): `employees.service.ts` `findPicker` and `findLinkable`,
+`users.service.ts` `findPicker` (`status: Active`), `departments.service.ts` `findPicker`
+(`isActive: true`), and the `party.is_active = true` clause in `companies.service.ts` /
+`contacts.service.ts` `findPickerForRelationshipType`. For a list endpoint that is **dual-use**
+(admin list *and* picker — e.g. `GET /deal-sources`, whose full list also builds the funnel tabs),
+do **not** filter the shared endpoint; filter in the picker *consumer* instead (see
+`AddDealDialog.tsx`'s `activeDealSources`).
+
+**Rule 2 — an edit form must keep its current value even after that value became inactive.** Rule 1
+creates a trap: if a deal's Sales Person was terminated after the deal was created, the picker no
+longer lists them, so the edit form would show the field **blank** and silently null it on save.
+Every edit form must re-append the record's *own current value* to the options when the picker
+would otherwise hide it — using the resolved name the API already returns (add one to the response
+if it isn't there, as was done for `territoryOwnerName` on `CompanyResponse`). The appended entry
+displays the current value but can't be re-selected once changed. Reference implementations:
+`AddDealDialog.tsx` (Sales Person / Pre-Sales / PMO, and the deal-source fallback),
+`CompanyFormDialog.tsx` (territory owner), and `employees.service.ts` `findLinkable` (re-adds the
+already-linked employee server-side). A **filter** control is the deliberate exception — the funnel
+Sales Person *filter* derives its options from the loaded deals precisely so a terminated owner's
+historical deals stay findable; filtering is not assigning.
 
 ## Internationalization (i18n)
 

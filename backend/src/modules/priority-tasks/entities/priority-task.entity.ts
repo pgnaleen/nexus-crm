@@ -28,4 +28,11 @@ export class PriorityTask extends AuditedTenantEntity {
 
   @Column({ default: 0 })
   progress!: number;
+
+  // Story 1.6 -- set the moment this task is delegated, cleared back to
+  // undefined once Story 1.8's accept flow transfers ownerId to whoever
+  // this points at. Non-null here is the source-of-truth pending signal;
+  // `status: Delegated` is just its human-readable mirror.
+  @Column({ name: "delegated_to_user_id", type: "uuid", nullable: true })
+  delegatedToUserId?: string;
 }

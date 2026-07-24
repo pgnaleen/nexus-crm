@@ -428,6 +428,14 @@ export function CompanyFormDialog({
 
   const industryOptions = withNotSet(industries.map((i) => ({ value: i.id, label: i.name })));
   const employeeOptions = withNotSet(employees.map((e) => ({ value: e.id, label: e.fullName })));
+  // The employees picker excludes exited (terminated/resigned) staff. When
+  // editing a company whose territory owner has since exited, they're no longer
+  // in the list -- re-append them from the company's resolved name so the field
+  // keeps its current value instead of silently blanking on save. (Same pattern
+  // as AddDealDialog's Sales Person / Pre-Sales / PMO handling.)
+  if (company?.territoryOwnerId && !employeeOptions.some((o) => o.value === company.territoryOwnerId)) {
+    employeeOptions.push({ value: company.territoryOwnerId, label: company.territoryOwnerName ?? "Unknown" });
+  }
   const parentCompanyOptions = withNotSet(
     companies.filter((c) => c.id !== company?.id).map((c) => ({ value: c.id, label: c.name })),
   );

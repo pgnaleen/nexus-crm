@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/auth/session";
-import { listPriorityTasks } from "@/lib/priority-tasks/server";
+import { listPriorityTaskDelegationTrackers, listPriorityTasks } from "@/lib/priority-tasks/server";
 import { PriorityBoard } from "./_components/PriorityBoard";
 
 // Gated by authentication only, no RBAC permission check -- every user
@@ -11,7 +11,10 @@ export default async function PriorityPage({ params }: { params: { tenant: strin
     redirect(`/${params.tenant}`);
   }
 
-  const tasks = await listPriorityTasks();
+  const [tasks, delegationTrackers] = await Promise.all([
+    listPriorityTasks(),
+    listPriorityTaskDelegationTrackers(),
+  ]);
 
-  return <PriorityBoard initialTasks={tasks ?? []} />;
+  return <PriorityBoard initialTasks={tasks ?? []} initialDelegationTrackers={delegationTrackers ?? []} />;
 }

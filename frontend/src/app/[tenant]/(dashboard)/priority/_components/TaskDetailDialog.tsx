@@ -1,15 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { PriorityTaskResponse } from "@orelia/common";
+import type { PriorityTaskResponse, PriorityTaskShareResponse, UserPickerResponse } from "@orelia/common";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
-import { getPriorityTask, updatePriorityTask } from "@/lib/api/priority-tasks";
+import { TrashIcon } from "@/components/ui/icons";
+import {
+  getPriorityTask,
+  listPriorityTaskShares,
+  removePriorityTaskShare,
+  updatePriorityTask,
+} from "@/lib/api/priority-tasks";
 import { ApiError } from "@/lib/api/client";
 import { t } from "@/lib/i18n";
+import { DelegateTaskDialog } from "./DelegateTaskDialog";
+import { ShareTaskDialog } from "./ShareTaskDialog";
 
 const TEXTAREA_CLASS =
-  "w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5 text-sm text-crm-text transition-colors duration-150 focus:border-crm-primary focus:outline-none focus:shadow-[0_0_0_3px_rgba(233,28,45,0.15)]";
+  "w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5 text-sm text-crm-text transition-colors duration-150 focus:border-crm-primary focus:outline-none focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-crm-primary)_15%,transparent)]";
 
 function formatTimestamp(isoTimestamp: string): string {
   return new Date(isoTimestamp).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
@@ -35,15 +43,23 @@ interface TaskDetailDialogProps {
   // The board's own card list doesn't show notes, but keeping its cached
   // copy in sync is good hygiene for whenever a future story does.
   onSaved: (task: PriorityTaskResponse) => void;
+  // Story 1.6 (Delegate) -- the board owns quadrant placement, so
+  // delegating closes this dialog and hands off to PriorityBoard to move
+  // the task into the delegator's own Delegate quadrant.
+  onDelegated: (task: PriorityTaskResponse, delegateUser: UserPickerResponse) => void;
 }
 
-export function TaskDetailDialog({ taskId, onClose, onSaved }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated }: TaskDetailDialogProps) {
   const [task, setTask] = useState<PriorityTaskResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  const [sharedWith, setSharedWith] = useState<PriorityTaskShareResponse[]>([]);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [isDelegateDialogOpen, setIsDelegateDialogOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,18 +73,32 @@ export function TaskDetailDialog({ taskId, onClose, onSaved }: TaskDetailDialogP
       })
       .catch((err) => {
         if (cancelled) return;
-        setLoadError(err instanceof ApiError ? err.message : "Failed to load task");
+        setLoadError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.errors.loadFailed"));
       });
     return () => {
       cancelled = true;
     };
   }, [taskId]);
 
-  // Only the current owner may edit notes -- a merely-shared (not owning)
-  // recipient (Story 1.5, not built yet) gets read-only access. Every task
-  // is "owned" by its viewer today, since there's no sharing/delegation to
-  // produce a "received" task yet, but the gate is real, not a stub.
+  // Only the current owner may edit notes or manage sharing -- a merely-
+  // shared (not owning) recipient gets read-only access.
   const isOwner = task?.ownership === "owned";
+
+  useEffect(() => {
+    if (!isOwner || !task) return;
+    let cancelled = false;
+    listPriorityTaskShares(task.id)
+      .then((shares) => {
+        if (!cancelled) setSharedWith(shares);
+      })
+      .catch(() => {
+        // Non-fatal -- the rest of the detail view still works without it.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwner, task?.id]);
 
   async function handleSaveNotes() {
     if (!task) return;
@@ -87,11 +117,35 @@ export function TaskDetailDialog({ taskId, onClose, onSaved }: TaskDetailDialogP
     }
   }
 
+  function handleShared(share: PriorityTaskShareResponse) {
+    setSharedWith((current) => [...current, share]);
+  }
+
+  async function handleRemoveShare(shareId: string) {
+    if (!task) return;
+    const previous = sharedWith;
+    setSharedWith((current) => current.filter((s) => s.id !== shareId));
+    try {
+      await removePriorityTaskShare(task.id, shareId);
+    } catch (err) {
+      setSharedWith(previous);
+      setSaveError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.errors.unshareFailed"));
+    }
+  }
+
+  function handleDelegated(user: UserPickerResponse) {
+    if (!task) return;
+    onDelegated(task, user);
+    onClose();
+  }
+
   return (
-    <Dialog open title={task?.title ?? "…"} onClose={onClose} maxWidth="560px">
+    <Dialog open title={task?.title ?? t("priorityTracker.detailDialog.loadingTitle")} onClose={onClose} maxWidth="560px">
       {loadError && <p className="mt-1.5 mb-3 text-[12.5px] text-[var(--color-danger)]">{loadError}</p>}
 
-      {!task && !loadError && <p className="text-sm text-[var(--color-text-muted)]">Loading…</p>}
+      {!task && !loadError && (
+        <p className="text-sm text-[var(--color-text-muted)]">{t("priorityTracker.detailDialog.loading")}</p>
+      )}
 
       {task && (
         <>
@@ -157,6 +211,56 @@ export function TaskDetailDialog({ taskId, onClose, onSaved }: TaskDetailDialogP
             )}
           </div>
 
+          {isOwner && (
+            <div className="mb-[18px]">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-[13px] font-semibold text-[var(--color-text-muted)]">
+                  {t("priorityTracker.detailDialog.sharedLabel")}
+                </p>
+                <Button type="button" variant="secondary" onClick={() => setIsShareDialogOpen(true)}>
+                  {t("priorityTracker.detailDialog.shareButton")}
+                </Button>
+              </div>
+              {sharedWith.length === 0 ? (
+                <p className="text-[12.5px] text-[var(--color-text-muted)]">
+                  {t("priorityTracker.detailDialog.sharedEmpty")}
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {sharedWith.map((share) => (
+                    <div
+                      key={share.id}
+                      className="flex items-center gap-2.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2"
+                    >
+                      <span className="flex-1 text-[13.5px] text-crm-text">{share.displayName}</span>
+                      <button
+                        type="button"
+                        aria-label={t("priorityTracker.detailDialog.removeShareAriaLabel", {
+                          name: share.displayName,
+                        })}
+                        className="flex cursor-pointer rounded-md border-0 bg-transparent p-1.5 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#fdf0ee] hover:text-[var(--color-danger)]"
+                        onClick={() => handleRemoveShare(share.id)}
+                      >
+                        <TrashIcon size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {isOwner && (
+            <div className="mb-[18px] flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5">
+              <p className="text-[12.5px] text-[var(--color-text-muted)]">
+                {t("priorityTracker.detailDialog.delegateHint")}
+              </p>
+              <Button type="button" variant="secondary" onClick={() => setIsDelegateDialogOpen(true)}>
+                {t("priorityTracker.detailDialog.delegateButton")}
+              </Button>
+            </div>
+          )}
+
           <div className="mb-2">
             <p className="mb-2 text-[13px] font-semibold text-[var(--color-text-muted)]">
               {t("priorityTracker.detailDialog.historyLabel")}
@@ -184,6 +288,19 @@ export function TaskDetailDialog({ taskId, onClose, onSaved }: TaskDetailDialogP
           {t("common.actions.close")}
         </Button>
       </div>
+
+      {isShareDialogOpen && task && (
+        <ShareTaskDialog
+          taskId={task.id}
+          alreadySharedWithIds={sharedWith.map((s) => s.userId)}
+          onClose={() => setIsShareDialogOpen(false)}
+          onShared={handleShared}
+        />
+      )}
+
+      {isDelegateDialogOpen && task && (
+        <DelegateTaskDialog onClose={() => setIsDelegateDialogOpen(false)} onDelegated={handleDelegated} />
+      )}
     </Dialog>
   );
 }

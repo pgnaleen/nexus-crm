@@ -250,6 +250,7 @@ export class RelationshipPartiesController {
       parentCompanyName: company.parentCompanyName ?? null,
       credit: company.credit ?? null,
       territoryOwnerId: company.territoryOwnerId ?? null,
+      territoryOwnerName: company.territoryOwner?.fullName ?? null,
       territoryNotes: company.territoryNotes ?? null,
     };
   }

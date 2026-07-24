@@ -104,3 +104,55 @@
 - source: commit `9fd864f` — code review, 2026-07-20
   summary: "[LOW] RoleDetailsDialog uses a raw \"—\" character instead of the `&mdash;` entity used in the other three files fixed by this same commit's em-dash cleanup."
   evidence: "`frontend/src/components/layout/RoleDetailsDialog.tsx` L43, L47."
+
+## Deferred from: code review of Priority Tracker (commits `32fbec7^..e260c45`, Stories 1.1–1.4 + Story 1.11), 2026-07-24
+
+- source: commit range `32fbec7^..e260c45` — Priority Tracker code review, 2026-07-24
+  summary: "[LOW] Task detail-view lifecycle history is synthesized from the task row (createdAt/createdByName), not read from AuditLogService."
+  evidence: "`TaskDetailDialog.tsx` builds the single 'Created' history entry from `task.createdAt`/`task.createdByName` rather than querying the audit log. The create path DOES write an `audit_logs` row correctly; only the read side bypasses it. Deferred by the code's own comment to Story 1.9 (the real event-by-event lifecycle trail). When 1.9's events land they won't surface here without rework."
+
+- source: commit range `32fbec7^..e260c45` — Priority Tracker code review, 2026-07-24
+  summary: "[LOW] Task detail dialog does not display the task's owner, though AC 1.4 lists 'owner' among the fields it should show."
+  evidence: "`TaskDetailDialog.tsx` renders quadrant/status/progress/notes/history but no owner field. Deferred at review time because owner always equalled the viewer pre-delegation. NOTE: Story 1.6 (Delegate) has since been implemented in the working tree, so owner can now differ from viewer — revisit whether the owner should surface."
+
+- source: commit range `32fbec7^..e260c45` — Priority Tracker code review, 2026-07-24
+  summary: "[LOW] A user account linked to more than one non-deleted employee record makes GET /employees/me return an arbitrary one."
+  evidence: "`employees.service.ts` `findByUserId` uses `findOneScoped({ where: { userId } })`; if >1 employee shares a userId it returns whichever the DB yields first. No `UNIQUE(userId)` constraint enforces one-to-one at the DB. Low probability, but a unique constraint (or deterministic ordering) would make it impossible."
+
+- source: commit range `32fbec7^..e260c45` — Priority Tracker code review, 2026-07-24
+  summary: "[LOW] GET /employees/me does two DB round-trips (bare findByUserId, then findOneOrFail with relations)."
+  evidence: "`employees.controller.ts` `/me` handler. Read-only, no correctness risk; tenant scoping confirmed present (findByUserId uses findOneScoped). Could collapse to a single scoped relation-loaded query."
+
+- source: commit range `32fbec7^..e260c45` — Priority Tracker code review, 2026-07-24
+  summary: "[LOW] The board's optimistic order is never reconciled with the server's authoritative ranks after a successful move."
+  evidence: "`PriorityBoard.tsx` `handleDragEnd` awaits `movePriorityTask()` but discards its returned task. If the server's resequence ever diverges from the optimistic order, the UI silently shows a different order than the DB until a full reload. (The HIGH parallel-write bug that could cause such divergence has now been fixed.)"
+
+- source: commit range `32fbec7^..e260c45` — Priority Tracker code review, 2026-07-24
+  summary: "[LOW] Clicking a task card immediately after a drag may spuriously open the detail dialog (needs browser verification)."
+  evidence: "`PriorityBoard.tsx` `SortableTaskCard` carries both dnd-kit drag listeners and an `onClick` that opens the detail dialog on the same element. With `activationConstraint.distance: 8`, a completed drag can fire onClick on pointerup in some dnd-kit/browser combinations. Not confirmable from code alone — verify in the browser; if reproducible, suppress onClick when a drag actually occurred."
+
+## Deferred from: Priority Tracker re-review (working tree, Stories 1.5 + 1.6), 2026-07-24
+
+- source: working-tree re-review (Stories 1.5/1.6) — Priority Tracker code review, 2026-07-24
+  summary: "[NOT DONE — do not accept as complete] Story 1.6 (Delegate a Task) is a front-end-only mock: no backend persistence, no ownership handoff."
+  evidence: "There is no delegation/tracker table, migration, entity, endpoint, or service in the diff (only `priority_task_shares` was added). `DelegateTaskDialog.tsx` and `PriorityBoard.tsx` `handleTaskDelegated` mutate local React `order`/`delegatedTo` state only (self-documented as 'local-state-only'). `ownerId` is never reassigned; the auto-move into the delegator's DELEGATE quadrant and the 'Delegated to X' badge revert on page refresh; the recipient receives nothing. AC 1.6 (owner-only delegate to exactly one user, ownership handoff, recipient-visible delegated flag, auto-move persisted) is unimplementable to verify because no server path exists. Blocked on the epic's own unresolved 'Per-perspective task placement' architecture question (epics-task-management.md, Open Questions for Architecture). Decision (2026-07-24): mark not-done + track; flag/hide the Delegate UI so it is not presented as working; implement the real transactional backend once the data-model question is resolved."
+
+- source: working-tree re-review (Stories 1.5/1.6) — Priority Tracker code review, 2026-07-24
+  summary: "[LOW] Two concurrent task creates into the SAME EMPTY quadrant can still produce duplicate rank 1 (residual of the 'lock only' hardening choice)."
+  evidence: "`priority-tasks.service.ts` `create()` takes a `pessimistic_write` lock on existing quadrant rows before computing max(rank)+1, but an empty quadrant has no rows to lock, so two concurrent creates both read 0 and persist rank 1. Accepted as out of scope when the concurrency-hardening approach was chosen as 'lock only' (no unique constraint) for this personal single-user board (2026-07-24). Closeable later with a partial `UNIQUE(tenant_id, owner_id, quadrant, rank) WHERE deleted_at IS NULL` (which would force a two-phase resequence) or an advisory lock keyed on (owner, quadrant)."
+
+- source: working-tree re-review (Stories 1.5/1.6) — Priority Tracker code review, 2026-07-24
+  summary: "[LOW] move()'s lock-then-lock ordering across two quadrants is a latent deadlock surface once delegation lets two owners touch the same task's rows."
+  evidence: "`priority-tasks.service.ts` `move()` locks the from-quadrant rows, resequences, then locks the to-quadrant rows. Negligible today because every board's rows are `ownerId`-scoped to a single user, but when Story 1.6 (Delegate) is really built and a task can be touched by two owners mid-handoff, opposite-direction concurrent moves could invert lock order → Postgres deadlock. Acquire quadrant locks in a fixed global order (e.g. sorted quadrant keys) when 1.6 lands."
+
+- source: working-tree re-review (Stories 1.5/1.6) — Priority Tracker code review, 2026-07-24
+  summary: "[LOW] Shares to a since-disabled/soft-deleted user linger in the 'shared with' list."
+  evidence: "`priority-task-shares.service.ts` `findAll` joins `sharedWithUser` and resolves the name even for soft-deleted/disabled users (FK `ON DELETE CASCADE` only fires on a hard delete; users are soft-deleted). Sharing with an inactive user is now blocked at add-time (fixed 2026-07-24), but pre-existing shares to a user later disabled still show. Filter `findAll` by the target's active status, or cascade-remove shares when a user is disabled."
+
+- source: working-tree re-review (Stories 1.5/1.6) — Priority Tracker code review, 2026-07-24
+  summary: "[LOW] Hardcoded `#fdf0ee` hover background on the unshare button violates the single-source color-token rule."
+  evidence: "`TaskDetailDialog.tsx` unshare button uses `hover:bg-[#fdf0ee]` (a danger-tint) instead of a design-system token. Pre-existing shared convention (the same hover appears on other danger icon-buttons), so deferred pending a documented danger-tint token decision rather than spot-fixed here."
+
+- source: working-tree re-review (Stories 1.5/1.6) — Priority Tracker code review, 2026-07-24
+  summary: "[LOW] ShareTaskDialog can fire onShared after the dialog is dismissed if the POST is in flight when it closes."
+  evidence: "`ShareTaskDialog.tsx` — closing via ESC/backdrop while the share POST is in flight lets the resolved `.then` call `onShared`/mutate parent state for a dialog the user already dismissed. Double-submit is already guarded (Button disabled on isLoading); this is the close-mid-request window. Track a mounted/cancelled ref and skip the callback if unmounted, or block Dialog onClose while saving."

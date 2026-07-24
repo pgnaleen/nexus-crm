@@ -34,7 +34,11 @@ export class RelationshipPartiesService {
     await this.relationshipTypesService.findOneOrFail(relationshipTypeId);
     const results = await this.partiesRepo.findScoped({
       where: { relationshipTypeId },
-      relations: ["company", "contact"],
+      // company.territoryOwner is loaded read-only for display (its resolved
+      // name). The mutation path (updateCompany) re-loads the company bare, so
+      // this relation load never reaches a save() -- see the TypeORM
+      // "never save an entity loaded with relations" rule in CLAUDE.md.
+      relations: ["company", "company.territoryOwner", "contact"],
       order: { createdAt: "DESC" },
     });
     this.logger.debug(`findAllForType returning ${results.length} row(s)`);
@@ -44,7 +48,8 @@ export class RelationshipPartiesService {
   async findOneOrFail(relationshipTypeId: string, mapId: string): Promise<RelationshipCompanyContactMap> {
     const party = await this.partiesRepo.findOneScoped({
       where: { id: mapId, relationshipTypeId },
-      relations: ["company", "contact"],
+      // company.territoryOwner loaded read-only for display -- see findAllForType.
+      relations: ["company", "company.territoryOwner", "contact"],
     });
     if (!party) {
       throw new NotFoundException("Relationship party not found");

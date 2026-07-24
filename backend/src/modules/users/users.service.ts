@@ -36,6 +36,31 @@ export class UsersService {
     return this.usersRepo.findScoped({ order: { displayName: "ASC" } });
   }
 
+  // Lightweight, broadly-accessible listing for dropdowns -- e.g. Priority
+  // Tracker's Share/Delegate pickers (Stories 1.5/1.6). Active accounts
+  // only (never offer disabled/invited/locked ones), optionally excluding
+  // the caller so a user can't pick themselves.
+  async findPicker(excludeUserId?: string): Promise<User[]> {
+    this.logger.debug(`findPicker called (excludeUserId=${excludeUserId ?? "none"})`);
+    try {
+      const results = await this.usersRepo.findScoped({
+        where: excludeUserId
+          ? { status: UserStatus.Active, id: Not(excludeUserId) }
+          : { status: UserStatus.Active },
+        order: { displayName: "ASC" },
+        // Project to id/displayName at the source so this picker query can
+        // never carry passwordHash/email/etc. out of the service, regardless of
+        // what a future caller does with the result.
+        select: { id: true, displayName: true },
+      });
+      this.logger.debug(`findPicker returning ${results.length} row(s)`);
+      return results;
+    } catch (err) {
+      this.logger.error(`findPicker failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
   async findOneOrFail(id: string): Promise<User> {
     const user = await this.usersRepo.findOneScoped({ where: { id } });
     if (!user) {

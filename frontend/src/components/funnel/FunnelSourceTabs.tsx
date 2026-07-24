@@ -176,6 +176,12 @@ export function FunnelSourceTabs({
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("");
   const [country, setCountry] = useState("");
+  // "" = all, "tender" = tender deals only, "non-tender" = non-tender only.
+  // Filters against DealResponse.isTender (the deals.is_tender column).
+  const [tender, setTender] = useState("");
+  // "" = all, else an ownerId. "Sales Person" is the UI-facing name for the
+  // deal's owner (deals.owner_id), see AddDealDialog.
+  const [salesperson, setSalesperson] = useState("");
   // "kind:id" (see parsePartyValue), "" means no filter -- same value scheme
   // as AddDealDialog's Customer/Partner fields.
   const [customerFilter, setCustomerFilter] = useState("");
@@ -204,7 +210,13 @@ export function FunnelSourceTabs({
   }, []);
 
   const hasFilters =
-    search !== "" || department !== "" || country !== "" || customerFilter !== "" || partnerFilter !== "";
+    search !== "" ||
+    department !== "" ||
+    country !== "" ||
+    tender !== "" ||
+    salesperson !== "" ||
+    customerFilter !== "" ||
+    partnerFilter !== "";
 
   const columnNameById = new Map(columns.map((c) => [c.id, c.name]));
   // Only populated for the Funnel overview board (columns = Main Stages,
@@ -238,6 +250,20 @@ export function FunnelSourceTabs({
   const countryOptions = [
     { value: "", label: "All" },
     ...countries.map((c) => ({ value: c, label: c })),
+  ];
+  const tenderOptions = [
+    { value: "", label: "All" },
+    { value: "tender", label: "Tender" },
+    { value: "non-tender", label: "Non-Tender" },
+  ];
+  // Derived from the deals themselves -- only salespeople who actually own a
+  // deal appear (same approach as countryOptions). ownerId is always set;
+  // ownerName is the resolved owner.fullName from the API response.
+  const salespersonOptions = [
+    { value: "", label: "All" },
+    ...Array.from(new Map(deals.map((d) => [d.ownerId, d.ownerName ?? "Unknown"])).entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
   ];
 
   // Customer/Partner filter option lists -- companies and directly-tagged
@@ -284,6 +310,8 @@ export function FunnelSourceTabs({
     .filter((d) => activeId === "all" || d.sourceId === activeId)
     .filter((d) => !department || d.departmentId === department)
     .filter((d) => !country || d.companyCountry === country)
+    .filter((d) => !tender || (tender === "tender" ? d.isTender : !d.isTender))
+    .filter((d) => !salesperson || d.ownerId === salesperson)
     .filter((d) => {
       if (!customerFilterParty) return true;
       return customerFilterParty.kind === "company"
@@ -467,6 +495,20 @@ export function FunnelSourceTabs({
               options={countryOptions}
             />
 
+            <CustomSelect
+              label="Tender"
+              value={tender}
+              onChange={setTender}
+              options={tenderOptions}
+            />
+
+            <CustomSelect
+              label="Sales Person"
+              value={salesperson}
+              onChange={setSalesperson}
+              options={salespersonOptions}
+            />
+
             <div className="w-[190px]">
               <SearchSelect
                 compact
@@ -500,6 +542,8 @@ export function FunnelSourceTabs({
                 setSearch("");
                 setDepartment("");
                 setCountry("");
+                setTender("");
+                setSalesperson("");
                 setCustomerFilter("");
                 setPartnerFilter("");
               }}

@@ -24,8 +24,18 @@ export class EmployeesService {
     this.logger.debug("findPicker called");
     try {
       const results = await this.employeesRepo.findScoped({ order: { fullName: "ASC" } });
-      this.logger.debug(`findPicker returning ${results.length} row(s)`);
-      return results;
+      // Exclude exited employees (Terminated/Resigned) from lookup dropdowns --
+      // an ex-employee must not be newly assignable as a deal's Sales Person /
+      // Pre-Sales / PMO (or any other picker consumer). Matches the same
+      // exclusion findForOrgChart() applies; On-Leave stays selectable, and an
+      // employee with no status set is treated as active. Edit forms still show
+      // an already-assigned exited person via a client-side fallback.
+      const exitedStatuses = [EmploymentStatus.Terminated, EmploymentStatus.Resigned];
+      const active = results.filter(
+        (employee) => !employee.employmentStatus || !exitedStatuses.includes(employee.employmentStatus),
+      );
+      this.logger.debug(`findPicker returning ${active.length} active row(s) (of ${results.length} total)`);
+      return active;
     } catch (err) {
       this.logger.error(`findPicker failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -367,12 +377,20 @@ export class EmployeesService {
   async findLinkable(forUserId?: string): Promise<Employee[]> {
     this.logger.debug(`findLinkable called (forUserId=${forUserId ?? "none"})`);
     try {
-      const unlinked = await this.employeesRepo.findScoped({
+      const unlinkedRaw = await this.employeesRepo.findScoped({
         where: { userId: IsNull() },
         order: { fullName: "ASC" },
       });
+      // Exclude exited (Terminated/Resigned) employees from the selectable pool,
+      // mirroring findPicker -- an ex-employee must not be newly linkable to a
+      // login. The already-linked employee (added below) is exempt so an
+      // existing link stays displayable even if that person has since exited.
+      const exitedStatuses = [EmploymentStatus.Terminated, EmploymentStatus.Resigned];
+      const unlinked = unlinkedRaw.filter(
+        (employee) => !employee.employmentStatus || !exitedStatuses.includes(employee.employmentStatus),
+      );
       if (!forUserId) {
-        this.logger.debug(`findLinkable returning ${unlinked.length} unlinked row(s)`);
+        this.logger.debug(`findLinkable returning ${unlinked.length} selectable unlinked row(s) (of ${unlinkedRaw.length})`);
         return unlinked;
       }
       const currentlyLinked = await this.findByUserId(forUserId);

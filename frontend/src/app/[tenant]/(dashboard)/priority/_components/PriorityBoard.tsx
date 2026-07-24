@@ -15,10 +15,15 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { PriorityTaskQuadrant, type PriorityTaskResponse } from "@orelia/common";
+import {
+  PriorityTaskQuadrant,
+  type PriorityTaskDelegationTrackerResponse,
+  type PriorityTaskResponse,
+  type UserPickerResponse,
+} from "@orelia/common";
 import { t } from "@/lib/i18n";
 import { PlusIcon } from "@/components/ui/icons";
-import { movePriorityTask } from "@/lib/api/priority-tasks";
+import { delegatePriorityTask, listPriorityTaskDelegationTrackers, movePriorityTask } from "@/lib/api/priority-tasks";
 import { ApiError } from "@/lib/api/client";
 import { useAlert } from "@/components/providers/DialogProvider";
 import { CreateTaskDialog } from "./CreateTaskDialog";
@@ -90,6 +95,18 @@ function OwnershipBadge({ ownership }: { ownership: PriorityTaskResponse["owners
   );
 }
 
+function DelegatedBadge({ name }: { name: string }) {
+  return (
+    <span className="inline-flex flex-shrink-0 items-center rounded-full bg-crm-primary-tint px-2 py-[3px] text-[11px] font-semibold text-crm-primary">
+      {t("priorityTracker.badge.delegatedTo", { name })}
+    </span>
+  );
+}
+
+// A task with a pending delegation is removed from the board entirely
+// (see findAllForUser's delegatedToUserId filter) -- its delegator-side
+// representation is a TrackerCard instead, never this component, so
+// TaskCard/SortableTaskCard never need to know about delegation.
 function TaskCard({ task, rank }: { task: PriorityTaskResponse; rank: number }) {
   return (
     <div className="flex items-center gap-2.5 rounded-xl border border-[var(--color-border)] bg-white p-3 shadow-sm">
@@ -131,16 +148,31 @@ function SortableTaskCard({
   );
 }
 
+// Story 1.6 -- the delegator's own read-only breadcrumb for something
+// they've handed off. Deliberately not draggable/sortable (it isn't a real
+// task placement, just a live-joined reference) and not clickable yet --
+// accepting/re-delegating/cancelling are Story 1.8 territory.
+function TrackerCard({ tracker }: { tracker: PriorityTaskDelegationTrackerResponse }) {
+  return (
+    <div className="flex items-center gap-2.5 rounded-xl border border-dashed border-[var(--color-border)] bg-white/60 p-3">
+      <span className="min-w-0 flex-1 truncate text-sm font-medium text-crm-text">{tracker.taskTitle}</span>
+      <DelegatedBadge name={tracker.delegatedToName} />
+    </div>
+  );
+}
+
 function QuadrantPanel({
   config,
   taskIds,
   taskById,
+  trackers,
   onAddClick,
   onOpenTask,
 }: {
   config: QuadrantConfig;
   taskIds: string[];
   taskById: Record<string, PriorityTaskResponse>;
+  trackers: PriorityTaskDelegationTrackerResponse[];
   onAddClick: (quadrant: PriorityTaskQuadrant) => void;
   onOpenTask: (taskId: string) => void;
 }) {
@@ -176,29 +208,39 @@ function QuadrantPanel({
         </button>
       </div>
 
-      <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
-        <div ref={setNodeRef} className="relative z-10 flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto">
-          {tasks.length === 0 ? (
+      <div ref={setNodeRef} className="relative z-10 flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto">
+        {trackers.length > 0 && (
+          <div className="flex flex-col gap-2.5">
+            {trackers.map((tracker) => (
+              <TrackerCard key={tracker.id} tracker={tracker} />
+            ))}
+          </div>
+        )}
+        <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+          {tasks.length === 0 && trackers.length === 0 ? (
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 text-center">
               <p className="text-[13px] font-medium text-crm-text">{t("priorityTracker.emptyState.title")}</p>
               <p className="text-xs text-[var(--color-text-muted)]">{t("priorityTracker.emptyState.message")}</p>
             </div>
           ) : (
-            tasks.map((task, index) => (
-              <SortableTaskCard key={task.id} task={task} rank={index + 1} onOpen={onOpenTask} />
-            ))
+            <div className="flex flex-col gap-2.5">
+              {tasks.map((task, index) => (
+                <SortableTaskCard key={task.id} task={task} rank={index + 1} onOpen={onOpenTask} />
+              ))}
+            </div>
           )}
-        </div>
-      </SortableContext>
+        </SortableContext>
+      </div>
     </div>
   );
 }
 
 interface PriorityBoardProps {
   initialTasks: PriorityTaskResponse[];
+  initialDelegationTrackers: PriorityTaskDelegationTrackerResponse[];
 }
 
-export function PriorityBoard({ initialTasks }: PriorityBoardProps) {
+export function PriorityBoard({ initialTasks, initialDelegationTrackers }: PriorityBoardProps) {
   const [taskById, setTaskById] = useState<Record<string, PriorityTaskResponse>>(() =>
     Object.fromEntries(initialTasks.map((task) => [task.id, task])),
   );
@@ -206,6 +248,10 @@ export function PriorityBoard({ initialTasks }: PriorityBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [createDialogQuadrant, setCreateDialogQuadrant] = useState<PriorityTaskQuadrant | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  // Story 1.6 (Delegate) -- the delegator's own tracking cards for the
+  // DELEGATE quadrant, real/backed by GET /priority-tasks/delegated-trackers.
+  const [delegationTrackers, setDelegationTrackers] =
+    useState<PriorityTaskDelegationTrackerResponse[]>(initialDelegationTrackers);
   const { showError } = useAlert();
 
   // Snapshot of `order` from the moment the current drag began -- used to
@@ -258,7 +304,15 @@ export function PriorityBoard({ initialTasks }: PriorityBoardProps) {
     setActiveId(null);
     const startOrder = dragStartOrderRef.current;
     dragStartOrderRef.current = null;
-    if (!over || !startOrder) return;
+    // Dropped outside any droppable. onDragOver may have already reflowed the
+    // board optimistically (a cross-quadrant hover mutates `order`), so restore
+    // the pre-drag snapshot -- returning without it would strand the card in a
+    // quadrant it was never persisted to (AC 1.3: "snaps back").
+    if (!over) {
+      if (startOrder) setOrder(startOrder);
+      return;
+    }
+    if (!startOrder) return;
 
     const activeContainer = findContainer(active.id as string);
     if (!activeContainer) return;
@@ -289,8 +343,22 @@ export function PriorityBoard({ initialTasks }: PriorityBoardProps) {
       await movePriorityTask(active.id as string, { quadrant: activeContainer, index: finalIndex });
     } catch (err) {
       setOrder(startOrder);
-      showError(err instanceof ApiError ? err.message : "Failed to save the new position", "Move failed");
+      showError(
+        err instanceof ApiError ? err.message : t("priorityTracker.errors.moveFailed"),
+        t("priorityTracker.errors.moveFailedTitle"),
+      );
     }
+  }
+
+  // ESC / programmatic cancel mid-drag: dnd-kit fires this instead of
+  // onDragEnd. onDragOver may have already reflowed the board across quadrants,
+  // so restore the pre-drag snapshot and clear drag state -- otherwise the
+  // optimistic move stays on screen but is never persisted.
+  function handleDragCancel() {
+    const startOrder = dragStartOrderRef.current;
+    dragStartOrderRef.current = null;
+    setActiveId(null);
+    if (startOrder) setOrder(startOrder);
   }
 
   function handleTaskCreated(task: PriorityTaskResponse) {
@@ -300,6 +368,29 @@ export function PriorityBoard({ initialTasks }: PriorityBoardProps) {
 
   function handleTaskSaved(task: PriorityTaskResponse) {
     setTaskById((current) => ({ ...current, [task.id]: task }));
+  }
+
+  // Story 1.6 -- persists the delegation, then removes the task from the
+  // board entirely (it no longer comes back from findAllForUser while
+  // pending) and re-fetches the tracker list so the new card (with its
+  // real id, needed for any future cancel/re-delegate action) shows up in
+  // the DELEGATE quadrant.
+  async function handleTaskDelegated(task: PriorityTaskResponse, delegateUser: UserPickerResponse) {
+    try {
+      await delegatePriorityTask(task.id, { userId: delegateUser.id });
+      setOrder((current) => {
+        const sourceQuadrant = QUADRANT_ORDER.find((quadrant) => current[quadrant].includes(task.id));
+        if (!sourceQuadrant) return current;
+        return { ...current, [sourceQuadrant]: current[sourceQuadrant].filter((id) => id !== task.id) };
+      });
+      const trackers = await listPriorityTaskDelegationTrackers();
+      setDelegationTrackers(trackers);
+    } catch (err) {
+      showError(
+        err instanceof ApiError ? err.message : "Failed to delegate this task",
+        "Delegate failed",
+      );
+    }
   }
 
   const activeTask = activeId ? taskById[activeId] : null;
@@ -332,6 +423,7 @@ export function PriorityBoard({ initialTasks }: PriorityBoardProps) {
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
       >
         <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-4 gap-4 md:grid-cols-2 md:grid-rows-2">
           {QUADRANTS.map((config) => (
@@ -340,6 +432,7 @@ export function PriorityBoard({ initialTasks }: PriorityBoardProps) {
               config={config}
               taskIds={order[config.id]}
               taskById={taskById}
+              trackers={config.id === PriorityTaskQuadrant.Delegate ? delegationTrackers : []}
               onAddClick={setCreateDialogQuadrant}
               onOpenTask={setSelectedTaskId}
             />
@@ -358,7 +451,12 @@ export function PriorityBoard({ initialTasks }: PriorityBoardProps) {
       )}
 
       {selectedTaskId && (
-        <TaskDetailDialog taskId={selectedTaskId} onClose={() => setSelectedTaskId(null)} onSaved={handleTaskSaved} />
+        <TaskDetailDialog
+          taskId={selectedTaskId}
+          onClose={() => setSelectedTaskId(null)}
+          onSaved={handleTaskSaved}
+          onDelegated={handleTaskDelegated}
+        />
       )}
     </div>
   );

@@ -8,8 +8,11 @@ import {
   PERMISSIONS,
   RelationshipRolePickerResponse,
   SystemRole,
+  UserPickerResponse,
 } from "@orelia/common";
 import { Controller, Get, Logger, Query, UseGuards } from "@nestjs/common";
+import { CurrentUser } from "../auth/decorators/current-user.decorator";
+import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { CompaniesService } from "../companies/companies.service";
 import { ContactsService } from "../contacts/contacts.service";
 import { DepartmentsService } from "../departments/departments.service";
@@ -18,6 +21,7 @@ import { IndustriesService } from "../industries/industries.service";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
 import { RelationshipTypesService } from "../relationship-types/relationship-types.service";
+import { UsersService } from "../users/users.service";
 
 // Held by anyone who can see the Relationships section at all -- any one of
 // these four is enough, since the parties list itself decides what a given
@@ -53,6 +57,7 @@ export class PickersController {
     private readonly employeesService: EmployeesService,
     private readonly industriesService: IndustriesService,
     private readonly relationshipTypesService: RelationshipTypesService,
+    private readonly usersService: UsersService,
   ) {}
 
   // Resolves whichever type this tenant flagged for `role`, then returns the
@@ -239,6 +244,24 @@ export class PickersController {
       return industries.map((industry) => ({ id: industry.id, name: industry.name }));
     } catch (err) {
       this.logger.error(`GET /pickers/industries failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // No PermissionsGuard/RequirePermission -- gated by the global JwtAuthGuard
+  // only, matching Priority Tasks' own "authenticated user, no RBAC
+  // permission" access model (Stories 1.5 Share / 1.6 Delegate need to pick
+  // any other active user in the tenant, and the feature itself has no
+  // permission to check against).
+  @Get("users")
+  async findUsers(@CurrentUser() user: AuthenticatedUser): Promise<UserPickerResponse[]> {
+    this.logger.debug(`GET /pickers/users called by ${user.sub}`);
+    try {
+      const users = await this.usersService.findPicker(user.sub);
+      this.logger.debug(`GET /pickers/users returning ${users.length} row(s)`);
+      return users.map((u) => ({ id: u.id, displayName: u.displayName }));
+    } catch (err) {
+      this.logger.error(`GET /pickers/users failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }

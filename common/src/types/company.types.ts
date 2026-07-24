@@ -32,5 +32,6 @@ export interface ICompany {
   parentCompanyName?: string | null;
   credit?: CreditStatus | null;
   territoryOwnerId?: string | null;
+  territoryOwnerName?: string | null;
   territoryNotes?: string | null;
 }

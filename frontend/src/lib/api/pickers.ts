@@ -3,6 +3,7 @@ import type {
   ContactPickerResponse,
   EmployeePickerResponse,
   RelationshipRolePickerResponse,
+  UserPickerResponse,
 } from "@orelia/common";
 import { apiFetch } from "./client";
 
@@ -24,4 +25,8 @@ export function listDealPartnerParties(): Promise<RelationshipRolePickerResponse
 
 export function listEmployeesPicker(): Promise<EmployeePickerResponse[]> {
   return apiFetch<EmployeePickerResponse[]>("/pickers/employees");
+}
+
+export function listUsersPicker(): Promise<UserPickerResponse[]> {
+  return apiFetch<UserPickerResponse[]>("/pickers/users");
 }
