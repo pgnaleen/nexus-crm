@@ -80,7 +80,13 @@ export async function serverFetch<T>(path: string, init?: RequestInit): Promise<
     }
 
     console.log(`[serverFetch] ${method} ${path} ${res.status} ${duration}ms`);
-    return res.json() as Promise<T>;
+    // A handler that returns null/undefined (e.g. GET /employees/me for an
+    // unlinked account) or a 204 sends an empty body -- res.json() would
+    // throw "Unexpected end of JSON input". Read as text first and treat an
+    // empty body as null rather than crashing the Server Component.
+    const text = await res.text();
+    if (!text) return null;
+    return JSON.parse(text) as T;
   } catch (err) {
     const duration = Date.now() - startedAt;
     console.error(`[serverFetch] ${method} ${path} failed after ${duration}ms: ${(err as Error).message}`);
