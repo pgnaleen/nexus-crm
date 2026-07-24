@@ -14,7 +14,13 @@ cd "$(dirname "$0")"
 
 BRANCH="${1:-main}"
 COMPOSE="docker compose -f docker-compose.prod.yml"
-BASE_URL="https://sales.orelit.com"
+# Smoke tests hit localhost, NOT https://sales.orelit.com -- an EC2 instance
+# often can't reach its own public domain from inside (hairpin NAT / SG
+# loops), which made the first version of this script report a false
+# failure while the site was actually fine. localhost:3000/3001 tests the
+# containers and the app itself; nginx/TLS sit in front unchanged.
+FRONTEND_URL="http://localhost:3000"
+API_URL="http://localhost:3001"
 
 echo "==> Deploying branch: $BRANCH"
 git fetch origin
@@ -39,20 +45,20 @@ $COMPOSE exec -T backend pnpm --filter @orelia/backend seed
 echo "==> Waiting for frontend to finish building (up to 10 min)"
 frontend_ok=""
 for _ in $(seq 1 120); do
-  code=$(curl -s -o /dev/null -w "%{http_code}" -m 10 "$BASE_URL/" || true)
+  code=$(curl -s -o /dev/null -w "%{http_code}" -m 10 "$FRONTEND_URL/" || true)
   if [ "$code" = "200" ] || [ "$code" = "307" ]; then frontend_ok=1; break; fi
   sleep 5
 done
 if [ -z "$frontend_ok" ]; then
-  echo "❌ FRONTEND SMOKE TEST FAILED: $BASE_URL/ never came up. Check: $COMPOSE logs frontend"
+  echo "❌ FRONTEND SMOKE TEST FAILED: $FRONTEND_URL/ never came up. Check: $COMPOSE logs frontend"
   exit 1
 fi
 echo "    frontend up ($code)"
 
-# A fake login returning 401 proves the whole chain: nginx -> backend ->
-# database -> auth logic. Anything else (000/5xx) is a real outage.
+# A fake login returning 401 proves backend -> database -> auth logic.
+# Anything else (000/5xx) is a real outage.
 echo "==> API smoke test (expect 401 for fake credentials)"
-api_code=$(curl -s -o /dev/null -w "%{http_code}" -m 15 -X POST "$BASE_URL/api/auth/login" \
+api_code=$(curl -s -o /dev/null -w "%{http_code}" -m 15 -X POST "$API_URL/api/auth/login" \
   -H "Content-Type: application/json" \
   -d '{"tenantSlug":"smoke-probe","username":"smoke-probe","password":"smoke-probe"}' || true)
 if [ "$api_code" != "401" ]; then
