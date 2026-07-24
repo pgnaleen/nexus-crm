@@ -1,5 +1,6 @@
 import type {
   CertificationResponse,
+  CertificationReviewResponse,
   CreateCertificationRequest,
   UpdateCertificationRequest,
 } from "@orelia/common";
@@ -32,4 +33,17 @@ export function updateMyCertification(
 
 export function deleteMyCertification(id: string): Promise<void> {
   return apiFetch<void>(`/certifications/me/${id}`, { method: "DELETE" });
+}
+
+// Story 1.13 -- HR review (EMPLOYEES_VERIFY_CERTIFICATIONS).
+
+export function verifyCertification(id: string): Promise<CertificationResponse> {
+  return apiFetch<CertificationResponse>(`/certifications/${id}/verify`, { method: "PATCH" });
+}
+
+export function rejectCertification(id: string, rejectionReason: string): Promise<CertificationResponse> {
+  return apiFetch<CertificationResponse>(`/certifications/${id}/reject`, {
+    method: "PATCH",
+    body: JSON.stringify({ rejectionReason }),
+  });
 }

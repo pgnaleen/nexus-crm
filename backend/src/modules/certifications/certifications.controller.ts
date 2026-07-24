@@ -1,9 +1,12 @@
-import { CertificationResponse } from "@orelia/common";
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Logger, Param, ParseUUIDPipe, Patch, Post } from "@nestjs/common";
+import { CertificationResponse, CertificationReviewResponse, PERMISSIONS } from "@orelia/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Logger, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
+import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
+import { PermissionsGuard } from "../rbac/guards/permissions.guard";
 import { CertificationsService } from "./certifications.service";
 import { CreateCertificationDto } from "./dto/create-certification.dto";
+import { RejectCertificationDto } from "./dto/reject-certification.dto";
 import { UpdateCertificationDto } from "./dto/update-certification.dto";
 import { EmployeeCertification } from "./entities/employee-certification.entity";
 
@@ -77,6 +80,79 @@ export class CertificationsController {
       this.logger.error(`DELETE /certifications/me/${id} failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
+  }
+
+  // ── Story 1.13: HR review queue (EMPLOYEES_VERIFY_CERTIFICATIONS) ──────
+  // A distinct capability from EMPLOYEES_UPDATE -- a reviewer can verify/
+  // reject without holding general employee-edit rights. "review" is a
+  // literal segment; it never collides with the "me/:id" self-service routes.
+
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.EMPLOYEES_VERIFY_CERTIFICATIONS])
+  @Get("review")
+  async listPending(@CurrentUser() user: AuthenticatedUser): Promise<CertificationReviewResponse[]> {
+    this.logger.debug(`GET /certifications/review called by ${user.sub}`);
+    try {
+      const pending = await this.certificationsService.findPendingForReview();
+      this.logger.debug(`GET /certifications/review returning ${pending.length} pending claim(s)`);
+      return pending.map((certification) => this.toReviewResponse(certification));
+    } catch (err) {
+      this.logger.error(`GET /certifications/review failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.EMPLOYEES_VERIFY_CERTIFICATIONS])
+  @Patch(":id/verify")
+  async verify(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<CertificationResponse> {
+    this.logger.debug(`PATCH /certifications/${id}/verify called by ${user.sub}`);
+    try {
+      const verified = await this.certificationsService.verify(id, user.sub);
+      this.logger.debug(`PATCH /certifications/${id}/verify succeeded`);
+      return this.toResponse(verified);
+    } catch (err) {
+      this.logger.error(`PATCH /certifications/${id}/verify failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.EMPLOYEES_VERIFY_CERTIFICATIONS])
+  @Patch(":id/reject")
+  async reject(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: RejectCertificationDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<CertificationResponse> {
+    this.logger.debug(`PATCH /certifications/${id}/reject called by ${user.sub}`);
+    try {
+      const rejected = await this.certificationsService.reject(id, user.sub, dto.rejectionReason);
+      this.logger.debug(`PATCH /certifications/${id}/reject succeeded`);
+      return this.toResponse(rejected);
+    } catch (err) {
+      this.logger.error(`PATCH /certifications/${id}/reject failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  private toReviewResponse(certification: EmployeeCertification): CertificationReviewResponse {
+    return {
+      id: certification.id,
+      employeeId: certification.employeeId,
+      employeeName: certification.employee?.fullName ?? "",
+      name: certification.name,
+      issuingOrganization: certification.issuingOrganization,
+      credentialId: certification.credentialId ?? null,
+      issueDate: certification.issueDate,
+      expiryDate: certification.expiryDate ?? null,
+      evidenceFileUrl: certification.evidenceFileUrl ?? null,
+      evidenceLink: certification.evidenceLink ?? null,
+      createdAt: certification.createdAt.toISOString(),
+    };
   }
 
   private toResponse(certification: EmployeeCertification): CertificationResponse {

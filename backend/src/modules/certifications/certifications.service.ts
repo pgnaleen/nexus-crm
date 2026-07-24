@@ -1,5 +1,5 @@
 import { EmployeeCertificationStatus } from "@orelia/common";
-import { ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { EmployeesService } from "../employees/employees.service";
 import { CertificationsRepository } from "./certifications.repository";
@@ -134,6 +134,105 @@ export class CertificationsService {
     } catch (err) {
       if (!(err instanceof ForbiddenException) && !(err instanceof NotFoundException)) {
         this.logger.error(`updateMine failed for certification ${id}: ${(err as Error).message}`, (err as Error).stack);
+      }
+      throw err;
+    }
+  }
+
+  // ── Story 1.13: HR review (EMPLOYEES_VERIFY_CERTIFICATIONS) ────────────
+  // Not self-service -- these operate on any employee's claim in the tenant,
+  // gated at the controller by the verify permission.
+
+  // Every Pending claim in the tenant, with the submitting employee loaded
+  // so the reviewer knows whose claim it is.
+  async findPendingForReview(): Promise<EmployeeCertification[]> {
+    this.logger.debug("findPendingForReview called");
+    try {
+      const results = await this.certificationsRepo.findScoped({
+        where: { status: EmployeeCertificationStatus.Pending },
+        relations: ["employee"],
+        order: { createdAt: "ASC" },
+      });
+      this.logger.debug(`findPendingForReview returning ${results.length} pending claim(s)`);
+      return results;
+    } catch (err) {
+      this.logger.error(`findPendingForReview failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  private async findPendingOrFail(id: string): Promise<EmployeeCertification> {
+    const certification = await this.certificationsRepo.findOneScoped({ where: { id } });
+    if (!certification) {
+      throw new NotFoundException("Certification not found");
+    }
+    // Only a Pending claim is reviewable -- re-verifying/re-rejecting an
+    // already-decided one would silently overwrite the prior decision.
+    if (certification.status !== EmployeeCertificationStatus.Pending) {
+      this.logger.debug(`findPendingOrFail: certification ${id} is ${certification.status}, not pending`);
+      throw new BadRequestException("This certification has already been reviewed");
+    }
+    return certification;
+  }
+
+  async verify(id: string, reviewerId: string): Promise<EmployeeCertification> {
+    this.logger.debug(`verify called for certification ${id} by ${reviewerId}`);
+    try {
+      const certification = await this.findPendingOrFail(id);
+      // AC: a claim with no evidence (neither file nor link) cannot be
+      // verified -- an unsupported claim can only be rejected.
+      if (!certification.evidenceFileUrl && !certification.evidenceLink) {
+        this.logger.debug(`verify: certification ${id} has no evidence, refusing to verify`);
+        throw new BadRequestException("A certification with no evidence cannot be verified");
+      }
+      certification.status = EmployeeCertificationStatus.Verified;
+      certification.verifiedById = reviewerId;
+      certification.verifiedAt = new Date();
+      (certification as { rejectionReason: string | null }).rejectionReason = null;
+      certification.updatedBy = reviewerId;
+      const saved = await this.certificationsRepo.saveScoped(certification);
+      this.logger.debug(`verify succeeded for certification ${id}`);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: id,
+        action: "update",
+        actorId: reviewerId,
+        changes: { status: { old: EmployeeCertificationStatus.Pending, new: EmployeeCertificationStatus.Verified } },
+      });
+      return saved;
+    } catch (err) {
+      if (!(err instanceof BadRequestException) && !(err instanceof NotFoundException)) {
+        this.logger.error(`verify failed for certification ${id}: ${(err as Error).message}`, (err as Error).stack);
+      }
+      throw err;
+    }
+  }
+
+  async reject(id: string, reviewerId: string, rejectionReason: string): Promise<EmployeeCertification> {
+    this.logger.debug(`reject called for certification ${id} by ${reviewerId}`);
+    try {
+      const certification = await this.findPendingOrFail(id);
+      certification.status = EmployeeCertificationStatus.Rejected;
+      certification.verifiedById = reviewerId; // records who reviewed it
+      certification.verifiedAt = new Date();
+      certification.rejectionReason = rejectionReason;
+      certification.updatedBy = reviewerId;
+      const saved = await this.certificationsRepo.saveScoped(certification);
+      this.logger.debug(`reject succeeded for certification ${id}`);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: id,
+        action: "update",
+        actorId: reviewerId,
+        changes: {
+          status: { old: EmployeeCertificationStatus.Pending, new: EmployeeCertificationStatus.Rejected },
+          rejectionReason: { old: null, new: rejectionReason },
+        },
+      });
+      return saved;
+    } catch (err) {
+      if (!(err instanceof BadRequestException) && !(err instanceof NotFoundException)) {
+        this.logger.error(`reject failed for certification ${id}: ${(err as Error).message}`, (err as Error).stack);
       }
       throw err;
     }

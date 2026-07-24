@@ -84,6 +84,11 @@ export const PERMISSIONS = {
   EMPLOYEES_UPDATE: "employees:update",
   EMPLOYEES_DELETE: "employees:delete",
   EMPLOYEES_VIEW_SENSITIVE: "employees:view_sensitive",
+  // Story 1.13 -- a distinct capability from general employee-record editing:
+  // the person trusted to check certificates (e.g. an L&D coordinator) isn't
+  // necessarily the one who edits HR records, so this is gated separately
+  // from EMPLOYEES_UPDATE.
+  EMPLOYEES_VERIFY_CERTIFICATIONS: "employees:verify_certifications",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

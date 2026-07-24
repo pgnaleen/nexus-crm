@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { OreliaLogo } from "@/components/brand/OreliaLogo";
 import { ChevronDownIcon, DashboardIcon, FunnelIcon, PriorityIcon, SettingsIcon, SlidersIcon, UsersGroupIcon, UserIcon, ActivityIcon } from "@/components/ui/icons";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
+import { PERMISSIONS } from "@orelia/common";
 import type { RelationshipTypeResponse, MainStageResponse } from "@orelia/common";
 
 interface SidebarProps {
@@ -90,8 +91,12 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
   const orgChartHref = `/${tenantSlug}/employees/org-chart`;
   const isOrgChartActive = pathname === orgChartHref;
 
+  const certReviewHref = `/${tenantSlug}/employees/certifications`;
+  const isCertReviewActive = pathname === certReviewHref;
+
   const canSeeDeals = hasAnyPermissionForPrefix(permissions, "deals");
   const canSeeEmployees = hasAnyPermissionForPrefix(permissions, "employees");
+  const canReviewCertifications = permissions.includes(PERMISSIONS.EMPLOYEES_VERIFY_CERTIFICATIONS);
   const visibleAdminItems = ADMIN_ITEMS.filter(
     (item) => !item.prefix || hasAnyPermissionForPrefix(permissions, item.prefix),
   );
@@ -245,6 +250,15 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
                 >
                   Organization Chart
                 </Link>
+                {canReviewCertifications && (
+                  <Link
+                    href={certReviewHref}
+                    className={linkClasses(isCertReviewActive, true)}
+                    onClick={() => handleLinkClick(isCertReviewActive)}
+                  >
+                    Certification Review
+                  </Link>
+                )}
               </div>
             )}
           </>

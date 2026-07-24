@@ -173,6 +173,35 @@
       }
     }
   },
+  "certificationReview": {
+    "title": "Certification Review",
+    "subtitle": "Review employee-submitted certifications and verify or reject each claim",
+    "emptyTitle": "Nothing to review",
+    "emptyMessage": "There are no pending certification claims right now.",
+    "noAccess": "You don't have permission to review certifications.",
+    "submittedBy": "Submitted by",
+    "issued": "Issued",
+    "expires": "Expires",
+    "viewCertificate": "View certificate",
+    "verificationLink": "Verification link",
+    "noEvidence": "No evidence attached — can only be rejected",
+    "verifyButton": "Verify",
+    "rejectButton": "Reject",
+    "verified": "Verified \"{name}\"",
+    "rejected": "Rejected \"{name}\"",
+    "rejectDialog": {
+      "title": "Reject Certification",
+      "message": "Reject \"{name}\"? The employee will see your reason on their profile.",
+      "reasonLabel": "Reason *",
+      "reasonPlaceholder": "e.g. The certificate could not be verified with the issuing organization.",
+      "reasonRequired": "A reason is required",
+      "confirmButton": "Reject"
+    },
+    "errors": {
+      "verifyFailed": "Failed to verify certification",
+      "rejectFailed": "Failed to reject certification"
+    }
+  },
   "departments": {
     "title": "Department Management",
     "subtitle": "Configure organizational departments",
@@ -308,7 +337,8 @@
     },
     "badge": {
       "owned": "Owned",
-      "received": "Received"
+      "received": "Received",
+      "delegatedTo": "Delegated to {name}"
     },
     "emptyState": {
       "title": "No tasks here yet",
@@ -316,6 +346,10 @@
     },
     "newTaskButton": "New Task",
     "addToQuadrantAriaLabel": "Add a task to {quadrant}",
+    "errors": {
+      "moveFailed": "Failed to save the new position",
+      "moveFailedTitle": "Move failed"
+    },
     "dialog": {
       "title": "New Task",
       "titleLabel": "Title *",
@@ -330,6 +364,8 @@
       }
     },
     "detailDialog": {
+      "loading": "Loading…",
+      "loadingTitle": "…",
       "quadrantLabel": "Quadrant",
       "statusLabel": "Status",
       "progressLabel": "Progress",
@@ -344,12 +380,16 @@
         "placed": "Placed"
       },
       "errors": {
-        "saveFailed": "Failed to save notes"
+        "saveFailed": "Failed to save notes",
+        "loadFailed": "Failed to load task"
       },
       "sharedLabel": "Shared With",
       "shareButton": "Share",
       "sharedEmpty": "Not shared with anyone yet.",
-      "removeShareAriaLabel": "Stop sharing with {name}"
+      "removeShareAriaLabel": "Stop sharing with {name}",
+      "delegateButton": "Delegate",
+      "delegateHint": "Hand this task off to someone else to work on.",
+      "delegatedNotice": "Delegated to {name} — this task now sits in your Delegate quadrant. Only {name} can update its progress until they hand it back."
     },
     "shareDialog": {
       "title": "Share Task",
@@ -361,6 +401,18 @@
       "errors": {
         "loadFailed": "Failed to load people",
         "userRequired": "Choose someone to share with"
+      }
+    },
+    "delegateDialog": {
+      "title": "Delegate Task",
+      "userLabel": "Delegate to",
+      "userPlaceholder": "Search people...",
+      "searchPlaceholder": "Search by name...",
+      "delegateButton": "Delegate",
+      "warning": "Delegating hands off ownership once {name} accepts it from their Incoming panel. Until then, this task moves into your own Delegate quadrant so you can track it.",
+      "errors": {
+        "loadFailed": "Failed to load people",
+        "userRequired": "Choose someone to delegate to"
       }
     }
   }

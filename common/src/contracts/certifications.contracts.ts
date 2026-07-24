@@ -47,3 +47,27 @@ export interface UpdateCertificationRequest {
   evidenceFileUrl?: string | null;
   evidenceLink?: string | null;
 }
+
+// Story 1.13 (HR Verifies or Rejects) -- one pending claim in the HR review
+// queue, with the submitting employee's identity attached (the reviewer
+// needs to know whose claim it is) plus the full evidence to judge it.
+export interface CertificationReviewResponse {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  name: string;
+  issuingOrganization: string;
+  credentialId: string | null;
+  issueDate: string;
+  expiryDate: string | null;
+  evidenceFileUrl: string | null;
+  evidenceLink: string | null;
+  createdAt: string;
+}
+
+// Reject carries a reason the employee sees on their profile. Verify takes
+// no body -- a claim with no evidence (neither file nor link) is refused
+// with 400, so evidence can't be verified into existence.
+export interface RejectCertificationRequest {
+  rejectionReason: string;
+}
