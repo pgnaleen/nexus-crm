@@ -173,6 +173,28 @@
       }
     }
   },
+  "certifiedSearch": {
+    "title": "Certified Employees",
+    "subtitle": "Find employees who hold a specific verified certification, for project staffing",
+    "placeholder": "Search by certification name, e.g. AWS Solutions Architect",
+    "searchButton": "Search",
+    "noAccess": "You don't have permission to search certified employees.",
+    "promptTitle": "Search for a certification",
+    "promptMessage": "Type a certification name above to find employees who hold it (verified only).",
+    "noMatchTitle": "No matches",
+    "noMatchMessage": "No employee holds a verified certification matching that name.",
+    "noExpiry": "No expiry",
+    "table": {
+      "employee": "Employee",
+      "department": "Department",
+      "certification": "Certification",
+      "issuer": "Issuer",
+      "expires": "Expires"
+    },
+    "errors": {
+      "searchFailed": "Search failed"
+    }
+  },
   "certificationReview": {
     "title": "Certification Review",
     "subtitle": "Review employee-submitted certifications and verify or reject each claim",
@@ -381,7 +403,8 @@
       },
       "errors": {
         "saveFailed": "Failed to save notes",
-        "loadFailed": "Failed to load task"
+        "loadFailed": "Failed to load task",
+        "unshareFailed": "Failed to stop sharing"
       },
       "sharedLabel": "Shared With",
       "shareButton": "Share",

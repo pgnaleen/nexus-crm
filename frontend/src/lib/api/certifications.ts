@@ -1,6 +1,7 @@
 import type {
   CertificationResponse,
   CertificationReviewResponse,
+  CertifiedEmployeeResponse,
   CreateCertificationRequest,
   UpdateCertificationRequest,
 } from "@orelia/common";
@@ -46,4 +47,10 @@ export function rejectCertification(id: string, rejectionReason: string): Promis
     method: "PATCH",
     body: JSON.stringify({ rejectionReason }),
   });
+}
+
+// Story 1.14 -- certified-employee staffing search (EMPLOYEES_VIEW). Only
+// employees with a matching VERIFIED certification are returned.
+export function searchCertifiedEmployees(name: string): Promise<CertifiedEmployeeResponse[]> {
+  return apiFetch<CertifiedEmployeeResponse[]>(`/certifications/search?name=${encodeURIComponent(name)}`);
 }

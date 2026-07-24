@@ -71,3 +71,20 @@ export interface CertificationReviewResponse {
 export interface RejectCertificationRequest {
   rejectionReason: string;
 }
+
+// Story 1.14 (Find Certified Employees for Project Staffing) -- one match in
+// the certified-employee search: an employee who holds a VERIFIED
+// certification matching the searched name. Only verified claims ever
+// appear here (pending/rejected never do). expiryDate is surfaced so the
+// searcher can judge relevance themselves -- v1 does NOT auto-exclude
+// expired certifications (that smart behavior is a deferred fast-follow).
+export interface CertifiedEmployeeResponse {
+  certificationId: string;
+  employeeId: string;
+  employeeName: string;
+  departmentName: string | null;
+  name: string;
+  issuingOrganization: string;
+  issueDate: string;
+  expiryDate: string | null;
+}

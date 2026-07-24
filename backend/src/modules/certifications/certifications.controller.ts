@@ -1,5 +1,5 @@
-import { CertificationResponse, CertificationReviewResponse, PERMISSIONS } from "@orelia/common";
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Logger, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
+import { CertifiedEmployeeResponse, CertificationResponse, CertificationReviewResponse, PERMISSIONS } from "@orelia/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Logger, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
@@ -137,6 +137,46 @@ export class CertificationsController {
       this.logger.error(`PATCH /certifications/${id}/reject failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
+  }
+
+  // Story 1.14 -- certified-employee search for project staffing. Gated on
+  // EMPLOYEES_VIEW (the broad permission any HR user / manager staffing a
+  // project already holds), NOT the verify permission. "search" is a literal
+  // segment. An empty query returns [] (the UI prompts to type a name).
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.EMPLOYEES_VIEW])
+  @Get("search")
+  async searchCertified(
+    @Query("name") name: string | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<CertifiedEmployeeResponse[]> {
+    const query = (name ?? "").trim();
+    this.logger.debug(`GET /certifications/search called by ${user.sub} (name="${query}")`);
+    try {
+      if (!query) {
+        this.logger.debug("GET /certifications/search: empty query, returning []");
+        return [];
+      }
+      const matches = await this.certificationsService.searchVerifiedByName(query);
+      this.logger.debug(`GET /certifications/search returning ${matches.length} match(es)`);
+      return matches.map((certification) => this.toCertifiedEmployeeResponse(certification));
+    } catch (err) {
+      this.logger.error(`GET /certifications/search failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  private toCertifiedEmployeeResponse(certification: EmployeeCertification): CertifiedEmployeeResponse {
+    return {
+      certificationId: certification.id,
+      employeeId: certification.employeeId,
+      employeeName: certification.employee?.fullName ?? "",
+      departmentName: certification.employee?.department?.name ?? null,
+      name: certification.name,
+      issuingOrganization: certification.issuingOrganization,
+      issueDate: certification.issueDate,
+      expiryDate: certification.expiryDate ?? null,
+    };
   }
 
   private toReviewResponse(certification: EmployeeCertification): CertificationReviewResponse {

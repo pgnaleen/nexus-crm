@@ -94,9 +94,13 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
   const certReviewHref = `/${tenantSlug}/employees/certifications`;
   const isCertReviewActive = pathname === certReviewHref;
 
+  const certifiedHref = `/${tenantSlug}/employees/certified`;
+  const isCertifiedActive = pathname === certifiedHref;
+
   const canSeeDeals = hasAnyPermissionForPrefix(permissions, "deals");
   const canSeeEmployees = hasAnyPermissionForPrefix(permissions, "employees");
   const canReviewCertifications = permissions.includes(PERMISSIONS.EMPLOYEES_VERIFY_CERTIFICATIONS);
+  const canViewEmployees = permissions.includes(PERMISSIONS.EMPLOYEES_VIEW);
   const visibleAdminItems = ADMIN_ITEMS.filter(
     (item) => !item.prefix || hasAnyPermissionForPrefix(permissions, item.prefix),
   );
@@ -250,6 +254,15 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
                 >
                   Organization Chart
                 </Link>
+                {canViewEmployees && (
+                  <Link
+                    href={certifiedHref}
+                    className={linkClasses(isCertifiedActive, true)}
+                    onClick={() => handleLinkClick(isCertifiedActive)}
+                  >
+                    Certified Employees
+                  </Link>
+                )}
                 {canReviewCertifications && (
                   <Link
                     href={certReviewHref}

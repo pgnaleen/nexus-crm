@@ -1,5 +1,6 @@
-import { EmployeeCertificationStatus } from "@orelia/common";
+import { EmployeeCertificationStatus, EmploymentStatus } from "@orelia/common";
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { ILike } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { EmployeesService } from "../employees/employees.service";
 import { CertificationsRepository } from "./certifications.repository";
@@ -234,6 +235,35 @@ export class CertificationsService {
       if (!(err instanceof BadRequestException) && !(err instanceof NotFoundException)) {
         this.logger.error(`reject failed for certification ${id}: ${(err as Error).message}`, (err as Error).stack);
       }
+      throw err;
+    }
+  }
+
+  // Story 1.14 -- certified-employee search for project staffing. Only
+  // VERIFIED certifications whose name matches (case-insensitive substring);
+  // pending/rejected never appear. Exited employees are excluded -- you
+  // can't staff someone who's left -- and expired certs are NOT filtered
+  // (the expiry date is surfaced instead, per the AC's fast-follow note).
+  async searchVerifiedByName(query: string): Promise<EmployeeCertification[]> {
+    this.logger.debug(`searchVerifiedByName called (query="${query}")`);
+    try {
+      const results = await this.certificationsRepo.findScoped({
+        where: { status: EmployeeCertificationStatus.Verified, name: ILike(`%${query}%`) },
+        relations: ["employee", "employee.department"],
+        order: { name: "ASC" },
+      });
+      const staffable = results.filter(
+        (certification) =>
+          certification.employee &&
+          certification.employee.employmentStatus !== EmploymentStatus.Terminated &&
+          certification.employee.employmentStatus !== EmploymentStatus.Resigned,
+      );
+      this.logger.debug(
+        `searchVerifiedByName returning ${staffable.length} of ${results.length} verified match(es) (exited excluded)`,
+      );
+      return staffable;
+    } catch (err) {
+      this.logger.error(`searchVerifiedByName failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }
