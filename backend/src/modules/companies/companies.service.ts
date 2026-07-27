@@ -40,17 +40,22 @@ export class CompaniesService {
   // Used by the Deal Customer/Partner pickers -- only companies tagged under
   // the tenant's flagged Customer/Partner relationship type, resolved by id
   // (never by name) so renaming the flagged type never breaks this filter.
-  async findPickerForRelationshipType(relationshipTypeId: string): Promise<Company[]> {
-    this.logger.debug(`findPickerForRelationshipType called (relationshipTypeId=${relationshipTypeId})`);
+  async findPickerForRelationshipType(relationshipTypeIds: string[]): Promise<Company[]> {
+    this.logger.debug(`findPickerForRelationshipType called (relationshipTypeIds=${relationshipTypeIds.join(",")})`);
     try {
+      // .distinct() is required here: relationship_company_contact_map has
+      // no unique constraint on (company_id, relationship_type_id), so a
+      // company tagged under two of the ids in this list would otherwise
+      // join-produce two rows for the same company.
       const results = await this.companiesRepo
         .queryBuilderScoped("company")
         .innerJoin(
           "relationship_company_contact_map",
           "party",
-          "party.company_id = company.id AND party.relationship_type_id = :relationshipTypeId AND party.deleted_at IS NULL AND party.is_active = true",
-          { relationshipTypeId },
+          "party.company_id = company.id AND party.relationship_type_id IN (:...relationshipTypeIds) AND party.deleted_at IS NULL AND party.is_active = true",
+          { relationshipTypeIds },
         )
+        .distinct()
         .orderBy("company.name", "ASC")
         .getMany();
       this.logger.debug(`findPickerForRelationshipType returning ${results.length} row(s)`);

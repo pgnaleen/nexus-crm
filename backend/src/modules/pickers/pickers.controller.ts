@@ -60,19 +60,20 @@ export class PickersController {
     private readonly usersService: UsersService,
   ) {}
 
-  // Resolves whichever type this tenant flagged for `role`, then returns the
-  // companies/contacts tagged under it. `configured: false` means no type is
-  // flagged yet (distinct from `configured: true` with empty arrays, which
-  // means a type is flagged but nothing's tagged under it).
+  // Resolves every type this tenant flagged for `role` (multiple types may
+  // share a role), then returns the deduplicated union of companies/contacts
+  // tagged under any of them. `configured: false` means no type is flagged
+  // yet (distinct from `configured: true` with empty arrays, which means at
+  // least one type is flagged but nothing's tagged under it).
   private async findRolePickerParties(role: SystemRole): Promise<RelationshipRolePickerResponse> {
-    const typeId = await this.relationshipTypesService.findSystemRoleTypeId(role);
-    if (!typeId) {
+    const typeIds = await this.relationshipTypesService.findSystemRoleTypeIds(role);
+    if (typeIds.length === 0) {
       this.logger.debug(`No relationship type flagged as ${role} for this tenant`);
       return { configured: false, companies: [], contacts: [] };
     }
     const [companies, contacts] = await Promise.all([
-      this.companiesService.findPickerForRelationshipType(typeId),
-      this.contactsService.findPickerForRelationshipType(typeId),
+      this.companiesService.findPickerForRelationshipType(typeIds),
+      this.contactsService.findPickerForRelationshipType(typeIds),
     ]);
     return {
       configured: true,

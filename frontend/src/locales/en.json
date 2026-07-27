@@ -335,7 +335,7 @@
     "dialog": {
       "systemRoleLabel": "System Role",
       "systemRoleNone": "None",
-      "systemRoleHelp": "Flag this as the tenant's Customer or Partner type to make it available in the Deal's Customer/Partners pickers. Only one type per role."
+      "systemRoleHelp": "Flag this as the tenant's Customer or Partner type to make it available in the Deal's Customer/Partners pickers."
     }
   },
   "addDealDialog": {

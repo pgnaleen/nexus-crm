@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { SystemRole } from "@orelia/common";
 import { DataSource } from "typeorm";
@@ -47,37 +47,22 @@ export class RelationshipTypesService {
     return this.partiesRepo.countActiveForType(id);
   }
 
-  // Resolves which row (if any) this tenant has flagged for a given system
-  // role -- used by the Deal Customer/Partner pickers to filter by id, never
-  // by name, so renaming a flagged type never breaks the filter.
-  async findSystemRoleTypeId(role: SystemRole): Promise<string | null> {
-    this.logger.debug(`findSystemRoleTypeId called for role=${role}`);
-    const type = await this.relationshipTypesRepo.findOneScoped({ where: { systemRole: role } });
-    if (!type) {
-      this.logger.debug(`No relationship type flagged as ${role} for this tenant`);
-      return null;
-    }
-    this.logger.debug(`Resolved ${role} to relationship type ${type.id}`);
-    return type.id;
-  }
-
-  // Pre-DB-constraint check so a duplicate flag attempt is a clean 400 with
-  // a readable message, not a raw partial-unique-index 500.
-  private async assertSystemRoleAvailable(role: SystemRole, excludeId?: string): Promise<void> {
-    const existing = await this.relationshipTypesRepo.findOneScoped({ where: { systemRole: role } });
-    if (existing && existing.id !== excludeId) {
-      throw new BadRequestException(
-        `"${existing.name}" is already flagged as ${role}. Unflag it first before flagging another type.`,
-      );
-    }
+  // Resolves every row this tenant has flagged for a given system role --
+  // used by the Deal Customer/Partner pickers to filter by id, never by
+  // name, so renaming a flagged type never breaks the filter. Multiple
+  // types may share the same role (e.g. "GTC Reseller" and "Technology
+  // Partner" can both be flagged Partner), so the pickers union across all
+  // of them.
+  async findSystemRoleTypeIds(role: SystemRole): Promise<string[]> {
+    this.logger.debug(`findSystemRoleTypeIds called for role=${role}`);
+    const types = await this.relationshipTypesRepo.findScoped({ where: { systemRole: role } });
+    this.logger.debug(`Resolved ${role} to ${types.length} relationship type(s)`);
+    return types.map((type) => type.id);
   }
 
   async create(dto: CreateRelationshipTypeDto, userId: string): Promise<RelationshipType> {
     this.logger.debug(`create called by ${userId} (name="${dto.name}", systemRole=${dto.systemRole ?? "none"})`);
     try {
-      if (dto.systemRole != null) {
-        await this.assertSystemRoleAvailable(dto.systemRole);
-      }
       const type = this.relationshipTypesRepo.createScoped({ ...dto, createdBy: userId });
       const saved = await this.relationshipTypesRepo.saveScoped(type);
       this.logger.debug(`create succeeded for relationship type ${saved.id}`);
@@ -106,9 +91,6 @@ export class RelationshipTypesService {
     }
 
     try {
-      if (dto.systemRole != null) {
-        await this.assertSystemRoleAvailable(dto.systemRole, id);
-      }
       Object.assign(type, dto, { updatedBy: userId });
       await this.relationshipTypesRepo.saveScoped(type);
       // Re-fetch rather than return the in-memory object -- Object.assign copies

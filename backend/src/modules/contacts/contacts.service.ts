@@ -16,17 +16,21 @@ export class ContactsService {
   // its contacts stay selectable via the separate "Primary Contact" field
   // once that company is picked, so nothing is lost, but a company-owned
   // contact no longer also appears as its own duplicate-looking entry here).
-  async findPickerForRelationshipType(relationshipTypeId: string): Promise<Contact[]> {
-    this.logger.debug(`findPickerForRelationshipType called (relationshipTypeId=${relationshipTypeId})`);
+  async findPickerForRelationshipType(relationshipTypeIds: string[]): Promise<Contact[]> {
+    this.logger.debug(`findPickerForRelationshipType called (relationshipTypeIds=${relationshipTypeIds.join(",")})`);
     try {
+      // No .distinct() needed: this is contact.id IN (SELECT ...), a
+      // membership test against the outer contact query, not a join, so it
+      // can't produce duplicate outer rows regardless of how many subquery
+      // rows match.
       const results = await this.contactsRepo
         .queryBuilderScoped("contact")
         .andWhere(
           `contact.id IN (
              SELECT contact_id FROM relationship_company_contact_map
-             WHERE relationship_type_id = :relationshipTypeId AND contact_id IS NOT NULL AND deleted_at IS NULL AND is_active = true
+             WHERE relationship_type_id IN (:...relationshipTypeIds) AND contact_id IS NOT NULL AND deleted_at IS NULL AND is_active = true
            )`,
-          { relationshipTypeId },
+          { relationshipTypeIds },
         )
         .orderBy("contact.fullName", "ASC")
         .getMany();
