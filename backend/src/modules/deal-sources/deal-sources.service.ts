@@ -1,5 +1,8 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { InjectDataSource } from "@nestjs/typeorm";
+import { DataSource } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
+import { Deal } from "../deals/entities/deal.entity";
 import { CreateDealSourceDto } from "./dto/create-deal-source.dto";
 import { UpdateDealSourceDto } from "./dto/update-deal-source.dto";
 import { DealSource } from "./entities/deal-source.entity";
@@ -14,6 +17,7 @@ export class DealSourcesService {
   constructor(
     private readonly dealSourcesRepo: DealSourcesRepository,
     private readonly auditLogService: AuditLogService,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   async findAll(): Promise<DealSource[]> {
@@ -95,9 +99,29 @@ export class DealSourcesService {
     }
   }
 
+  // Deal.sourceId has a DB-level ON DELETE SET NULL, but that only fires on a
+  // real DELETE -- this delete is a soft-delete, so the FK action never
+  // actually runs. Without this check a deal would be left silently pointing
+  // at a now-hidden, soft-deleted Deal Source.
+  async countActiveDeals(sourceId: string): Promise<number> {
+    return this.dataSource.getRepository(Deal).count({ where: { sourceId } });
+  }
+
   async remove(id: string, userId: string): Promise<void> {
     this.logger.debug(`remove called for deal source ${id} by ${userId}`);
     const source = await this.findOneOrFail(id);
+
+    // A ConflictException here is an expected business-rule rejection, not a
+    // system failure -- thrown before the try/catch below so it isn't logged
+    // as an error, same as NotFoundException elsewhere.
+    const activeDealCount = await this.countActiveDeals(id);
+    if (activeDealCount > 0) {
+      this.logger.debug(`Blocked: ${activeDealCount} active deal(s) still use this deal source`);
+      throw new ConflictException(
+        `Cannot delete this deal source: ${activeDealCount} deal(s) are currently using it. Reassign them to a different source first.`,
+      );
+    }
+
     try {
       await this.dealSourcesRepo.softRemoveScoped(source, userId);
       this.logger.debug(`remove succeeded for deal source ${id}`);

@@ -1,5 +1,8 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { InjectDataSource } from "@nestjs/typeorm";
+import { DataSource } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
+import { Deal } from "../deals/entities/deal.entity";
 import { CreateDepartmentDto } from "./dto/create-department.dto";
 import { UpdateDepartmentDto } from "./dto/update-department.dto";
 import { Department } from "./entities/department.entity";
@@ -14,6 +17,7 @@ export class DepartmentsService {
   constructor(
     private readonly departmentsRepo: DepartmentsRepository,
     private readonly auditLogService: AuditLogService,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   async findAll(): Promise<Department[]> {
@@ -113,9 +117,29 @@ export class DepartmentsService {
     }
   }
 
+  // Deal.departmentId has a DB-level ON DELETE SET NULL, but that only fires
+  // on a real DELETE -- this delete is a soft-delete, so the FK action never
+  // actually runs. Without this check a deal would be left silently pointing
+  // at a now-hidden, soft-deleted Department.
+  async countActiveDeals(departmentId: string): Promise<number> {
+    return this.dataSource.getRepository(Deal).count({ where: { departmentId } });
+  }
+
   async remove(id: string, userId: string): Promise<void> {
     this.logger.debug(`remove called for department ${id} by ${userId}`);
     const department = await this.findOneOrFail(id);
+
+    // A ConflictException here is an expected business-rule rejection, not a
+    // system failure -- thrown before the try/catch below so it isn't logged
+    // as an error, same as NotFoundException elsewhere.
+    const activeDealCount = await this.countActiveDeals(id);
+    if (activeDealCount > 0) {
+      this.logger.debug(`Blocked: ${activeDealCount} active deal(s) still assigned to this department`);
+      throw new ConflictException(
+        `Cannot delete this department: ${activeDealCount} deal(s) are currently assigned to it. Reassign them to a different department first.`,
+      );
+    }
+
     try {
       await this.departmentsRepo.softRemoveScoped(department, userId);
       this.logger.debug(`remove succeeded for department ${id}`);
