@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class ChangeTimestampsToTimestamptz1784700000010 implements MigrationInterface {
-  name = "ChangeTimestampsToTimestamptz1784700000010";
+export class ChangeTimestampsToTimestamptz1784700000015 implements MigrationInterface {
+  name = "ChangeTimestampsToTimestamptz1784700000015";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     const tablesWithAudit = [
@@ -46,7 +46,6 @@ export class ChangeTimestampsToTimestamptz1784700000010 implements MigrationInte
       "rbac_role_user_map",
       "rbac_role_resource_map",
       "teams_employee_map",
-      "deal_contacts_map",
       "deal_partners_map",
     ];
 
@@ -104,7 +103,6 @@ export class ChangeTimestampsToTimestamptz1784700000010 implements MigrationInte
       "rbac_role_user_map",
       "rbac_role_resource_map",
       "teams_employee_map",
-      "deal_contacts_map",
       "deal_partners_map",
     ];
 
