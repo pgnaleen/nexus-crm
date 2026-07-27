@@ -189,11 +189,14 @@ function QuadrantPanel({
 
   return (
     <div
-      className={`relative flex h-full min-h-[220px] flex-col overflow-hidden rounded-2xl border p-4 ${config.panelClass}`}
+      className={`relative flex min-h-[280px] flex-col overflow-hidden rounded-2xl border p-4 ${config.panelClass}`}
     >
+      {/* Watermark sits in the reserved bottom padding (pb-16 on the list
+          below), so however many cards stack up they never cover the action
+          word -- it stays a visible translucent watermark (AC 1.1). */}
       <span
         aria-hidden="true"
-        className={`pointer-events-none absolute right-2 bottom-0 z-0 text-[64px] leading-none font-black tracking-tight select-none ${config.watermarkClass}`}
+        className={`pointer-events-none absolute right-3 bottom-1 z-0 text-[64px] leading-none font-black tracking-tight select-none ${config.watermarkClass}`}
       >
         {config.watermark}
       </span>
@@ -215,7 +218,7 @@ function QuadrantPanel({
         </button>
       </div>
 
-      <div ref={setNodeRef} className="relative z-10 flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto">
+      <div ref={setNodeRef} className="relative z-10 flex flex-1 flex-col gap-2.5 pb-16">
         {trackers.length > 0 && (
           <div className="flex flex-col gap-2.5">
             {trackers.map((tracker) => (
@@ -444,7 +447,7 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
   const activeTaskRank = activeTask ? order[activeTask.quadrant].indexOf(activeTask.id) + 1 : 1;
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex flex-col">
       <div className="mb-6 flex flex-shrink-0 items-center justify-between">
         <div className="flex flex-col">
           <h1 className="mx-0 mt-0 mb-0.5 text-[26px] font-bold text-[var(--color-text)]">
@@ -482,9 +485,10 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
         </div>
       </div>
 
-      {/* Equal-size 2x2 grid filling all remaining height -- each quadrant is
-          exactly one grid cell, together covering the full board area with
-          no leftover space, instead of sizing to its own content. */}
+      {/* 2-column grid that grows with content -- the whole page scrolls
+          (main is overflow-y-auto), never each quadrant on its own. Grid's
+          default row-stretch makes both quadrants in a row equal height, so
+          a full Do sizes its Decide neighbour to match. */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -493,7 +497,7 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
-        <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-4 gap-4 md:grid-cols-2 md:grid-rows-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {QUADRANTS.map((config) => (
             <QuadrantPanel
               key={config.id}
