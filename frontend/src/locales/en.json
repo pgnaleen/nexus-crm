@@ -368,6 +368,19 @@
     },
     "newTaskButton": "New Task",
     "addToQuadrantAriaLabel": "Add a task to {quadrant}",
+    "archive": {
+      "button": "Archive",
+      "title": "Archived Tasks",
+      "loading": "Loading...",
+      "emptyTitle": "Nothing archived",
+      "emptyMessage": "Completed tasks you archive will appear here.",
+      "finalProgress": "Final progress {value}%",
+      "restoreButton": "Restore",
+      "errors": {
+        "loadFailed": "Failed to load archived tasks",
+        "restoreFailed": "Failed to restore task"
+      }
+    },
     "incoming": {
       "button": "Incoming",
       "title": "Incoming Tasks",
@@ -420,6 +433,8 @@
       "historyEmpty": "No history yet.",
       "completeHint": "Mark this task done once the work is finished.",
       "completeButton": "Mark Complete",
+      "archiveHint": "Archive this completed task to clear it from your board.",
+      "archiveButton": "Archive",
       "history": {
         "someone": "Someone",
         "created": "Created by {actor}",
@@ -443,7 +458,8 @@
         "loadFailed": "Failed to load task",
         "unshareFailed": "Failed to stop sharing",
         "progressFailed": "Failed to update progress",
-        "completeFailed": "Failed to mark task complete"
+        "completeFailed": "Failed to mark task complete",
+        "archiveFailed": "Failed to archive task"
       },
       "sharedLabel": "Shared With",
       "shareButton": "Share",

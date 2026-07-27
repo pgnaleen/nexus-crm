@@ -31,6 +31,7 @@ import {
 } from "@/lib/api/priority-tasks";
 import { ApiError } from "@/lib/api/client";
 import { useAlert } from "@/components/providers/DialogProvider";
+import { ArchivePanelDialog } from "./ArchivePanelDialog";
 import { CreateTaskDialog } from "./CreateTaskDialog";
 import { IncomingPanelDialog } from "./IncomingPanelDialog";
 import { TaskDetailDialog } from "./TaskDetailDialog";
@@ -261,6 +262,8 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
   // Story 1.8 -- Incoming panel: count for the header badge, opened on demand.
   const [incomingCount, setIncomingCount] = useState(0);
   const [isIncomingOpen, setIsIncomingOpen] = useState(false);
+  // Story 1.10 -- Archive view.
+  const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const { showError } = useAlert();
 
   useEffect(() => {
@@ -394,6 +397,26 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
     setOrder((current) => ({ ...current, [task.quadrant]: [...current[task.quadrant], task.id] }));
   }
 
+  // Story 1.10 -- archiving removes the task from the active board.
+  function handleTaskArchived(taskId: string) {
+    setOrder((current) => {
+      const quadrant = QUADRANT_ORDER.find((q) => current[q].includes(taskId));
+      if (!quadrant) return current;
+      return { ...current, [quadrant]: current[quadrant].filter((id) => id !== taskId) };
+    });
+  }
+
+  // Story 1.10 -- restoring returns it to its old quadrant at the bottom.
+  function handleTaskRestored(task: PriorityTaskResponse) {
+    setTaskById((current) => ({ ...current, [task.id]: task }));
+    setOrder((current) => ({
+      ...current,
+      [task.quadrant]: current[task.quadrant].includes(task.id)
+        ? current[task.quadrant]
+        : [...current[task.quadrant], task.id],
+    }));
+  }
+
   // Story 1.6 -- persists the delegation, then removes the task from the
   // board entirely (it no longer comes back from findAllForUser while
   // pending) and re-fetches the tracker list so the new card (with its
@@ -441,6 +464,13 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
                 {incomingCount}
               </span>
             )}
+          </button>
+          <button
+            type="button"
+            className="cursor-pointer rounded-lg border border-[var(--color-border)] bg-white px-4 py-2.5 text-[13.5px] font-semibold text-crm-text transition-colors duration-150 hover:bg-[var(--color-bg)]"
+            onClick={() => setIsArchiveOpen(true)}
+          >
+            {t("priorityTracker.archive.button")}
           </button>
           <button
             type="button"
@@ -494,6 +524,7 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
           onClose={() => setSelectedTaskId(null)}
           onSaved={handleTaskSaved}
           onDelegated={handleTaskDelegated}
+          onArchived={handleTaskArchived}
         />
       )}
 
@@ -503,6 +534,10 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
           onAccepted={handleTaskAccepted}
           onCountChange={setIncomingCount}
         />
+      )}
+
+      {isArchiveOpen && (
+        <ArchivePanelDialog onClose={() => setIsArchiveOpen(false)} onRestored={handleTaskRestored} />
       )}
     </div>
   );

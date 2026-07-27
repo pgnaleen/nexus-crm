@@ -12,6 +12,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { TrashIcon } from "@/components/ui/icons";
 import {
+  archivePriorityTask,
   completePriorityTask,
   getPriorityTask,
   getPriorityTaskHistory,
@@ -83,9 +84,11 @@ interface TaskDetailDialogProps {
   // delegating closes this dialog and hands off to PriorityBoard to move
   // the task into the delegator's own Delegate quadrant.
   onDelegated: (task: PriorityTaskResponse, delegateUser: UserPickerResponse) => void;
+  // Story 1.10 -- archiving drops the task off the active board.
+  onArchived: (taskId: string) => void;
 }
 
-export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated, onArchived }: TaskDetailDialogProps) {
   const [task, setTask] = useState<PriorityTaskResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
@@ -195,6 +198,22 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated }: Task
       setHistory(entries);
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.errors.completeFailed"));
+    } finally {
+      setIsCompleting(false);
+    }
+  }
+
+  // Story 1.10 -- archive a completed task off the board.
+  async function handleArchive() {
+    if (!task) return;
+    setIsCompleting(true);
+    setSaveError(null);
+    try {
+      await archivePriorityTask(task.id);
+      onArchived(task.id);
+      onClose();
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.errors.archiveFailed"));
     } finally {
       setIsCompleting(false);
     }
@@ -389,6 +408,18 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated }: Task
                 </Button>
               </div>
             )}
+
+          {/* Story 1.10 -- only a Completed task can be archived. */}
+          {isOwner && task.status === PriorityTaskStatus.Completed && (
+            <div className="mb-[18px] flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5">
+              <p className="text-[12.5px] text-[var(--color-text-muted)]">
+                {t("priorityTracker.detailDialog.archiveHint")}
+              </p>
+              <Button type="button" variant="secondary" onClick={handleArchive} isLoading={isCompleting}>
+                {t("priorityTracker.detailDialog.archiveButton")}
+              </Button>
+            </div>
+          )}
 
           {/* Story 1.9 -- real lifecycle history from audit_logs, chronological. */}
           <div className="mb-2">

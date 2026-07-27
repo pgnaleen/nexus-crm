@@ -93,6 +93,54 @@ export class PriorityTasksController {
     }
   }
 
+  // Declared before ":id". Story 1.10 -- my archived tasks.
+  @Get("archived")
+  async findArchived(@CurrentUser() user: AuthenticatedUser): Promise<PriorityTaskResponse[]> {
+    this.logger.debug(`GET /priority-tasks/archived called by ${user.sub}`);
+    try {
+      const tasks = await this.priorityTasksService.findArchivedForUser(user.sub);
+      this.logger.debug(`GET /priority-tasks/archived returning ${tasks.length} row(s)`);
+      return tasks.map((task) => this.toResponse(task, user.sub));
+    } catch (err) {
+      this.logger.error(`GET /priority-tasks/archived failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Story 1.10 -- archive a completed task off my board.
+  @Patch(":id/archive")
+  async archive(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<PriorityTaskResponse> {
+    this.logger.debug(`PATCH /priority-tasks/${id}/archive called by ${user.sub}`);
+    try {
+      const task = await this.priorityTasksService.archive(id, user.sub);
+      this.logger.debug(`PATCH /priority-tasks/${id}/archive succeeded`);
+      return this.toResponse(task, user.sub);
+    } catch (err) {
+      this.logger.error(`PATCH /priority-tasks/${id}/archive failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Story 1.10 -- restore an archived task to my board.
+  @Patch(":id/restore")
+  async restore(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<PriorityTaskResponse> {
+    this.logger.debug(`PATCH /priority-tasks/${id}/restore called by ${user.sub}`);
+    try {
+      const task = await this.priorityTasksService.restore(id, user.sub);
+      this.logger.debug(`PATCH /priority-tasks/${id}/restore succeeded`);
+      return this.toResponse(task, user.sub);
+    } catch (err) {
+      this.logger.error(`PATCH /priority-tasks/${id}/restore failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
   // Story 1.8 -- accept a delegated task onto my own board (ownership
   // transfers to me).
   @Post(":id/accept")

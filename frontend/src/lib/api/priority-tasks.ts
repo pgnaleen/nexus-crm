@@ -44,6 +44,19 @@ export function completePriorityTask(id: string): Promise<PriorityTaskResponse> 
   return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}/complete`, { method: "PATCH" });
 }
 
+// Story 1.10 -- archive / restore.
+export function listArchivedPriorityTasks(): Promise<PriorityTaskResponse[]> {
+  return apiFetch<PriorityTaskResponse[]>("/priority-tasks/archived");
+}
+
+export function archivePriorityTask(id: string): Promise<PriorityTaskResponse> {
+  return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}/archive`, { method: "PATCH" });
+}
+
+export function restorePriorityTask(id: string): Promise<PriorityTaskResponse> {
+  return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}/restore`, { method: "PATCH" });
+}
+
 export function movePriorityTask(id: string, payload: MovePriorityTaskRequest): Promise<PriorityTaskResponse> {
   return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}/move`, {
     method: "PATCH",

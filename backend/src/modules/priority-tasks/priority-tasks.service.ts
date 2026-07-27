@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectDataSource, InjectRepository } from "@nestjs/typeorm";
-import { DataSource, IsNull, Repository } from "typeorm";
+import { DataSource, IsNull, Not, Repository } from "typeorm";
 import {
   IncomingTaskResponse,
   PriorityTaskHistoryEntry,
@@ -49,8 +49,10 @@ export class PriorityTasksService {
   async findAllForUser(userId: string): Promise<PriorityTask[]> {
     this.logger.debug(`findAllForUser called (userId=${userId})`);
     try {
+      // Story 1.10 -- archived tasks drop off the active board (they live in
+      // the Archive view instead).
       const results = await this.priorityTasksRepo.findScoped({
-        where: { ownerId: userId, delegatedToUserId: IsNull() },
+        where: { ownerId: userId, delegatedToUserId: IsNull(), status: Not(PriorityTaskStatus.Archived) },
         order: { rank: "ASC" },
       });
       this.logger.debug(`findAllForUser returning ${results.length} row(s)`);
@@ -199,6 +201,100 @@ export class PriorityTasksService {
       return { kind: "progress", detail: String(progressChange.new) };
     }
     return null;
+  }
+
+  // Story 1.10 -- the owner's archived tasks, for the Archive view. Off the
+  // active board (findAllForUser excludes Archived), but fully intact.
+  async findArchivedForUser(userId: string): Promise<PriorityTask[]> {
+    this.logger.debug(`findArchivedForUser called (userId=${userId})`);
+    try {
+      const results = await this.priorityTasksRepo.findScoped({
+        where: { ownerId: userId, status: PriorityTaskStatus.Archived },
+        order: { updatedAt: "DESC" },
+      });
+      this.logger.debug(`findArchivedForUser returning ${results.length} row(s)`);
+      return results;
+    } catch (err) {
+      this.logger.error(`findArchivedForUser failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Story 1.10 -- archive a Completed task off my active board. Owner-only;
+  // only a Completed task may be archived (the Archive button is hidden
+  // otherwise, and this is the server-side guard). Archiving is scoped to my
+  // own copy -- it never touches anyone the task was shared/delegated with.
+  async archive(taskId: string, userId: string): Promise<PriorityTask> {
+    this.logger.debug(`archive called for task ${taskId} by ${userId}`);
+    try {
+      const task = await this.findOneOwnedOrFail(taskId, userId);
+      if (task.status !== PriorityTaskStatus.Completed) {
+        this.logger.debug(`Blocked: task ${taskId} is ${task.status}, only a completed task can be archived`);
+        throw new BadRequestException("Only a completed task can be archived");
+      }
+      task.status = PriorityTaskStatus.Archived;
+      task.updatedBy = userId;
+      const saved = await this.priorityTasksRepo.saveScoped(task);
+      this.logger.debug(`archive succeeded for task ${taskId}`);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: taskId,
+        action: "update",
+        actorId: userId,
+        changes: { status: { old: PriorityTaskStatus.Completed, new: PriorityTaskStatus.Archived } },
+      });
+      return saved;
+    } catch (err) {
+      if (!(err instanceof NotFoundException) && !(err instanceof BadRequestException)) {
+        this.logger.error(`archive failed for task ${taskId}: ${(err as Error).message}`, (err as Error).stack);
+      }
+      throw err;
+    }
+  }
+
+  // Story 1.10 -- restore an archived task to the active board, back into the
+  // quadrant it was last in (its quadrant column was never changed on
+  // archive) at the next free rank there, status back to Placed. Owner-only.
+  async restore(taskId: string, userId: string): Promise<PriorityTask> {
+    this.logger.debug(`restore called for task ${taskId} by ${userId}`);
+    const tenantId = this.tenantContext.getTenantId();
+    try {
+      const saved = await this.dataSource.transaction(async (manager) => {
+        const repo = manager.getRepository(PriorityTask);
+        const lock = { mode: "pessimistic_write" as const };
+        const task = await repo.findOne({ where: { id: taskId, tenantId, ownerId: userId }, lock });
+        if (!task) {
+          throw new NotFoundException("Task not found");
+        }
+        if (task.status !== PriorityTaskStatus.Archived) {
+          throw new BadRequestException("Only an archived task can be restored");
+        }
+        const [last] = await repo.find({
+          where: { tenantId, ownerId: userId, quadrant: task.quadrant, status: Not(PriorityTaskStatus.Archived) },
+          order: { rank: "DESC" },
+          take: 1,
+          lock,
+        });
+        task.status = PriorityTaskStatus.Placed;
+        task.rank = (last?.rank ?? 0) + 1;
+        task.updatedBy = userId;
+        return repo.save(task);
+      });
+      this.logger.debug(`restore succeeded for task ${taskId}`);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: taskId,
+        action: "update",
+        actorId: userId,
+        changes: { status: { old: PriorityTaskStatus.Archived, new: PriorityTaskStatus.Placed } },
+      });
+      return saved;
+    } catch (err) {
+      if (!(err instanceof NotFoundException) && !(err instanceof BadRequestException)) {
+        this.logger.error(`restore failed for task ${taskId}: ${(err as Error).message}`, (err as Error).stack);
+      }
+      throw err;
+    }
   }
 
   // Story 1.9 -- the owner marks the work done. A Completed task is the one
