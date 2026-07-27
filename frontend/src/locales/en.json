@@ -391,6 +391,8 @@
       "quadrantLabel": "Quadrant",
       "statusLabel": "Status",
       "progressLabel": "Progress",
+      "updateProgressLabel": "Update progress",
+      "readyToClose": "Ready to close",
       "notesLabel": "Notes",
       "notesPlaceholder": "Optional details or context...",
       "notesReadOnlyHint": "Only the current owner can edit notes.",
@@ -404,7 +406,8 @@
       "errors": {
         "saveFailed": "Failed to save notes",
         "loadFailed": "Failed to load task",
-        "unshareFailed": "Failed to stop sharing"
+        "unshareFailed": "Failed to stop sharing",
+        "progressFailed": "Failed to update progress"
       },
       "sharedLabel": "Shared With",
       "shareButton": "Share",

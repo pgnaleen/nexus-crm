@@ -6,6 +6,7 @@ import { CreatePriorityTaskDto } from "./dto/create-priority-task.dto";
 import { DelegatePriorityTaskDto } from "./dto/delegate-priority-task.dto";
 import { MovePriorityTaskDto } from "./dto/move-priority-task.dto";
 import { UpdatePriorityTaskDto } from "./dto/update-priority-task.dto";
+import { UpdatePriorityTaskProgressDto } from "./dto/update-priority-task-progress.dto";
 import { PriorityTaskDelegationTracker } from "./entities/priority-task-delegation-tracker.entity";
 import { PriorityTask } from "./entities/priority-task.entity";
 import { PriorityTasksService } from "./priority-tasks.service";
@@ -119,6 +120,23 @@ export class PriorityTasksController {
       return this.toResponse(task, user.sub, creatorName);
     } catch (err) {
       this.logger.error(`PATCH /priority-tasks/${id} failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  @Patch(":id/progress")
+  async updateProgress(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: UpdatePriorityTaskProgressDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<PriorityTaskResponse> {
+    this.logger.debug(`PATCH /priority-tasks/${id}/progress called by ${user.sub} (progress=${dto.progress})`);
+    try {
+      const task = await this.priorityTasksService.updateProgress(id, user.sub, dto);
+      this.logger.debug(`PATCH /priority-tasks/${id}/progress succeeded`);
+      return this.toResponse(task, user.sub);
+    } catch (err) {
+      this.logger.error(`PATCH /priority-tasks/${id}/progress failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }

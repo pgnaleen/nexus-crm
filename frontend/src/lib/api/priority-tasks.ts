@@ -6,6 +6,7 @@ import type {
   PriorityTaskDelegationTrackerResponse,
   PriorityTaskResponse,
   PriorityTaskShareResponse,
+  UpdatePriorityTaskProgressRequest,
   UpdatePriorityTaskRequest,
 } from "@orelia/common";
 import { apiFetch } from "./client";
@@ -20,6 +21,16 @@ export function getPriorityTask(id: string): Promise<PriorityTaskResponse> {
 
 export function updatePriorityTask(id: string, payload: UpdatePriorityTaskRequest): Promise<PriorityTaskResponse> {
   return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+}
+
+export function updatePriorityTaskProgress(
+  id: string,
+  payload: UpdatePriorityTaskProgressRequest,
+): Promise<PriorityTaskResponse> {
+  return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}/progress`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function movePriorityTask(id: string, payload: MovePriorityTaskRequest): Promise<PriorityTaskResponse> {

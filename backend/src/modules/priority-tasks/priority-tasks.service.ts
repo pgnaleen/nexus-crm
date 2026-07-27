@@ -10,6 +10,7 @@ import { CreatePriorityTaskDto } from "./dto/create-priority-task.dto";
 import { DelegatePriorityTaskDto } from "./dto/delegate-priority-task.dto";
 import { MovePriorityTaskDto } from "./dto/move-priority-task.dto";
 import { UpdatePriorityTaskDto } from "./dto/update-priority-task.dto";
+import { UpdatePriorityTaskProgressDto } from "./dto/update-priority-task-progress.dto";
 import { PriorityTaskDelegationTracker } from "./entities/priority-task-delegation-tracker.entity";
 import { PriorityTaskShare } from "./entities/priority-task-share.entity";
 import { PriorityTask } from "./entities/priority-task.entity";
@@ -139,6 +140,41 @@ export class PriorityTasksService {
       return saved;
     } catch (err) {
       this.logger.error(`updateNotes failed for task ${taskId}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Story 1.7 -- the current owner moves progress in 10% steps (0..100).
+  // Owner-only (findOneOwnedOrFail); the DTO already rejects non-multiples
+  // of 10. The delegator sees the new value the next time they load their
+  // own tracking card -- PriorityTaskDelegationTracker live-joins the real
+  // task's progress, so nothing extra is written on the delegator side.
+  // progress === 100 is the "ready to close" signal (Story 1.10 archive).
+  async updateProgress(taskId: string, userId: string, dto: UpdatePriorityTaskProgressDto): Promise<PriorityTask> {
+    this.logger.debug(`updateProgress called for task ${taskId} by ${userId} (progress=${dto.progress})`);
+    try {
+      const task = await this.findOneOwnedOrFail(taskId, userId);
+      const previousProgress = task.progress;
+      if (previousProgress === dto.progress) {
+        this.logger.debug(`updateProgress: task ${taskId} already at ${dto.progress}%, no change`);
+        return task;
+      }
+      task.progress = dto.progress;
+      task.updatedBy = userId;
+      const saved = await this.priorityTasksRepo.saveScoped(task);
+      this.logger.debug(`updateProgress succeeded for task ${taskId} (${previousProgress}% -> ${dto.progress}%)`);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: taskId,
+        action: "update",
+        actorId: userId,
+        changes: { progress: { old: previousProgress, new: dto.progress } },
+      });
+      return saved;
+    } catch (err) {
+      if (!(err instanceof NotFoundException)) {
+        this.logger.error(`updateProgress failed for task ${taskId}: ${(err as Error).message}`, (err as Error).stack);
+      }
       throw err;
     }
   }

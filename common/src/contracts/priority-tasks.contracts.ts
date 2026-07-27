@@ -22,6 +22,14 @@ export interface UpdatePriorityTaskRequest {
   notes?: string;
 }
 
+// Story 1.7 (Track delegation progress). Only 0/10/20/.../100 are valid --
+// the backend rejects anything else (e.g. a direct API call bypassing the
+// UI's 10%-step control). progress === 100 is the "ready to close" signal
+// that sets up the archive flow (Story 1.10).
+export interface UpdatePriorityTaskProgressRequest {
+  progress: number;
+}
+
 export interface PriorityTaskResponse {
   id: string;
   title: string;

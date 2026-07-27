@@ -10,6 +10,7 @@ import {
   listPriorityTaskShares,
   removePriorityTaskShare,
   updatePriorityTask,
+  updatePriorityTaskProgress,
 } from "@/lib/api/priority-tasks";
 import { ApiError } from "@/lib/api/client";
 import { t } from "@/lib/i18n";
@@ -60,6 +61,7 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated }: Task
   const [sharedWith, setSharedWith] = useState<PriorityTaskShareResponse[]>([]);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isDelegateDialogOpen, setIsDelegateDialogOpen] = useState(false);
+  const [isSavingProgress, setIsSavingProgress] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,6 +116,24 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated }: Task
       setSaveError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.errors.saveFailed"));
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  // Story 1.7 -- owner moves progress in 10% steps. Optimistic-free: await
+  // the server (which validates the 10%-step rule) then adopt its response,
+  // so the bar and the "ready to close" indicator always reflect the truth.
+  async function handleSetProgress(progress: number) {
+    if (!task || progress === task.progress) return;
+    setIsSavingProgress(true);
+    setSaveError(null);
+    try {
+      const updated = await updatePriorityTaskProgress(task.id, { progress });
+      setTask(updated);
+      onSaved(updated);
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.errors.progressFailed"));
+    } finally {
+      setIsSavingProgress(false);
     }
   }
 
@@ -173,6 +193,37 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated }: Task
               <ProgressBar progress={task.progress} />
             </div>
           </div>
+
+          {/* Story 1.7 -- owner-editable progress in 10% steps. A merely-
+              shared or delegator viewer keeps the read-only bar in the grid
+              above; only the current owner sees this control. */}
+          {isOwner && (
+            <div className="mb-[18px]">
+              <div className="mb-1.5 flex items-center justify-between">
+                <label className="text-[13px] font-semibold text-[var(--color-text-muted)]">
+                  {t("priorityTracker.detailDialog.updateProgressLabel")}
+                </label>
+                {task.progress === 100 && (
+                  <span className="inline-block rounded-full bg-[#e6f7ee] px-2.5 py-[2px] text-[11px] font-semibold text-[#1a9c5f]">
+                    {t("priorityTracker.detailDialog.readyToClose")}
+                  </span>
+                )}
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={10}
+                value={task.progress}
+                disabled={isSavingProgress}
+                onChange={(e) => handleSetProgress(Number(e.target.value))}
+                className="w-full accent-crm-primary"
+                aria-label={t("priorityTracker.detailDialog.updateProgressLabel")}
+              />
+              <p className="mt-1 text-right text-[11.5px] font-semibold text-crm-text">{task.progress}%</p>
+              {saveError && <p className="mt-1 text-[12.5px] text-[var(--color-danger)]">{saveError}</p>}
+            </div>
+          )}
 
           <div className="mb-[18px]">
             <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
