@@ -63,15 +63,19 @@ export function DealStageHistoryRoadmap({ dealId }: DealStageHistoryRoadmapProps
       {chronological.map((entry, index) => {
         const isCurrent = index === chronological.length - 1;
         const isMainStage = entry.kind === "main_stage";
+        // toStageName is only ever null for a "sub_stage" entry recording a
+        // move that left the deal with no Sub Stage (a Main-Stage-only
+        // position) -- a real, meaningful state, not a missing value.
+        const toLabel = entry.toStageName ?? "No sub stage";
         const transition = entry.fromStageName ? (
           <>
             <span className="text-[var(--color-text-muted)]">{entry.fromStageName}</span>
             <span className="mx-1.5 text-[var(--color-text-muted)]">→</span>
-            <span>{entry.toStageName}</span>
+            <span>{toLabel}</span>
           </>
         ) : (
           <>
-            <span className="text-[var(--color-text-muted)]">Set to</span> <span>{entry.toStageName}</span>
+            <span className="text-[var(--color-text-muted)]">Set to</span> <span>{toLabel}</span>
           </>
         );
 

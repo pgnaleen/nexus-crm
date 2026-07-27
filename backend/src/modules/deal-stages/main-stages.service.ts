@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
-import { DataSource, In } from "typeorm";
+import { DataSource, In, IsNull } from "typeorm";
 import { Deal } from "../deals/entities/deal.entity";
 import { CreateMainStageDto } from "./dto/create-main-stage.dto";
 import { UpdateMainStageDto } from "./dto/update-main-stage.dto";
@@ -78,8 +78,9 @@ export class MainStagesService {
   // than relying on the raw DB-level ON DELETE CASCADE on sub_stages
   // (which only fires on a hard DELETE and would never run for our
   // soft-deletes). Blocked entirely if any Deal is currently sitting in one
-  // of those Sub Stages -- Deal.currentStageId is required with no onDelete
-  // action, so cascading past it would leave a dangling reference.
+  // of those Sub Stages, or directly in this Main Stage with no Sub Stage at
+  // all -- Deal.mainStageId is required with no onDelete action, so
+  // cascading past either would leave a dangling reference.
   async remove(id: string, userId: string): Promise<void> {
     const stage = await this.findOneOrFail(id);
     this.logger.debug(`remove called for main stage ${id}`);
@@ -98,6 +99,16 @@ export class MainStagesService {
           `Cannot delete this main stage: ${activeDealCount} deal(s) are currently in one of its sub-stages. Move them to a different stage first.`,
         );
       }
+    }
+
+    const stagelessDealCount = await this.dataSource.getRepository(Deal).count({
+      where: { mainStageId: id, currentStageId: IsNull() },
+    });
+    this.logger.debug(`Active deals sitting directly in this main stage (no sub-stage): ${stagelessDealCount}`);
+    if (stagelessDealCount > 0) {
+      throw new ConflictException(
+        `Cannot delete this main stage: ${stagelessDealCount} deal(s) are currently in it directly. Move them to a different stage first.`,
+      );
     }
 
     try {

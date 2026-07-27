@@ -23,6 +23,8 @@ export interface IMainStage {
   tenantId: string;
   name: string;
   position: number;
+  isWon: boolean;
+  isLost: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -55,8 +57,8 @@ export interface IDeal {
   ownerId: string;
   preSalesPersonId?: string | null;
   pmoId?: string | null;
-  mainStageId?: string | null;
-  currentStageId: string;
+  mainStageId: string;
+  currentStageId?: string | null;
   status: DealStatus;
   departmentId?: string | null;
   dealCountry?: string | null;
@@ -75,7 +77,7 @@ export interface ISubStageHistory {
   id: string;
   dealId: string;
   fromStageId?: string | null;
-  toStageId: string;
+  toStageId?: string | null;
   movedById?: string | null;
   movedAt: string;
   note?: string | null;

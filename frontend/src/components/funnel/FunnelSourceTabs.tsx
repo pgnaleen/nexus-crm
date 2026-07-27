@@ -83,6 +83,10 @@ function dealToFunnelLead(deal: DealResponse, stageIdField: StageIdField): Funne
   };
 }
 
+// A drop resolves to exactly one of these -- a real Sub Stage, or a Main
+// Stage with no Sub Stage involved at all (see resolveTarget below).
+type MoveTarget = { kind: "subStage"; id: string } | { kind: "mainStage"; id: string };
+
 interface PendingMove {
   toastId: string;
   // Snapshot of the deal's stage fields *before* any optimistic change in
@@ -94,17 +98,18 @@ interface PendingMove {
 interface FunnelSourceTabsProps {
   dealSources: DealSourceResponse[];
   columns: FunnelColumn[];
-  // Sub Stage options for the Add Deal dialog, when they differ from the
-  // board's own `columns` (e.g. the Funnel overview groups its board by Main
-  // Stage, but a deal's currentStageId must be a real Sub Stage). Defaults to
-  // `columns` when the board is already Sub-Stage-shaped. Also used to
-  // resolve which Sub Stage a Main-Stage-grouped board should move a deal
-  // into when it's dropped on a Main Stage column (see resolveTarget below).
-  stageOptions?: FunnelColumn[];
   // Which deal field to use when matching a deal card into a board column:
   //   "mainStageName"    → funnel overview (Main Stage columns, default)
   //   "currentStageName" → per-main-stage board (Sub Stage columns)
   stageField?: StageField;
+  // Every Main Stage/Sub Stage in the tenant, for AddDealDialog's Stage
+  // picker -- always the full tenant-wide lists, regardless of how this
+  // board's own `columns` happen to be scoped.
+  mainStages: { id: string; name: string }[];
+  subStages: { id: string; name: string; mainStageId: string }[];
+  // Pre-selects AddDealDialog's Main Stage field when this page is scoped to
+  // one specific Main Stage (the per-Main-Stage board) -- still changeable.
+  defaultMainStageId?: string;
   companies: CompanyPickerResponse[];
   employees: EmployeePickerResponse[];
   contacts: ContactPickerResponse[];
@@ -139,8 +144,10 @@ interface FunnelSourceTabsProps {
 export function FunnelSourceTabs({
   dealSources,
   columns,
-  stageOptions,
   stageField = "mainStageName",
+  mainStages,
+  subStages,
+  defaultMainStageId,
   companies,
   employees,
   contacts,
@@ -322,19 +329,17 @@ export function FunnelSourceTabs({
   const activeLeads = activeDeals.map((deal) => dealToFunnelLead(deal, stageIdField));
   const activeCfg = getTabColor(activeId);
 
-  // Dropping on a board column always needs a real Sub Stage id to persist
-  // (that's what the backend + history rows track). Per-Main-Stage boards
-  // already have Sub Stage columns, so the dropped column *is* the target.
-  // The tenant-wide overview groups by Main Stage instead, so dropping there
-  // is ambiguous as to which Sub Stage -- land in that Main Stage's first
-  // Sub Stage in sequence, the same default used when creating a new deal.
-  function resolveTarget(droppedColumnId: string): { subStageId: string; mainStageId?: string } | null {
+  // Per-Main-Stage boards already have Sub Stage columns, so the dropped
+  // column *is* the target Sub Stage. The tenant-wide overview groups by
+  // Main Stage instead -- dropping there moves the deal directly into that
+  // Main Stage, with no Sub Stage at all. That's a fully supported position,
+  // not a fallback: a deal can move through Main Stages with no Sub Stage
+  // involved.
+  function resolveTarget(droppedColumnId: string): MoveTarget {
     if (stageField !== "mainStageName") {
-      return { subStageId: droppedColumnId };
+      return { kind: "subStage", id: droppedColumnId };
     }
-    const firstSubStage = (stageOptions ?? []).find((s) => s.mainStageId === droppedColumnId);
-    if (!firstSubStage) return null;
-    return { subStageId: firstSubStage.id, mainStageId: droppedColumnId };
+    return { kind: "mainStage", id: droppedColumnId };
   }
 
   async function handleMove(dealId: string, droppedColumnId: string) {
@@ -344,10 +349,6 @@ export function FunnelSourceTabs({
     if (currentColumnId === droppedColumnId) return; // dropped back on its own column
 
     const target = resolveTarget(droppedColumnId);
-    if (!target) {
-      showError("This stage doesn't have any sub stages configured yet.", "Can't move deal");
-      return;
-    }
 
     // Only the Funnel overview board (Main Stage columns) can skip stages --
     // the per-Main-Stage boards only ever show that stage's own Sub Stages,
@@ -364,7 +365,7 @@ export function FunnelSourceTabs({
           confirmLabel: "Move anyway",
         });
         if (!confirmed) return;
-        void persistMove(dealId, target.subStageId);
+        void persistMove(dealId, target);
         return;
       }
     }
@@ -388,7 +389,7 @@ export function FunnelSourceTabs({
       actionLabel: "Undo",
       durationMs: UNDO_GRACE_PERIOD_MS,
       onAction: () => handleUndo(dealId),
-      onExpire: () => void persistMove(dealId, target.subStageId),
+      onExpire: () => void persistMove(dealId, target),
     });
 
     pendingMovesRef.current.set(dealId, { toastId, original });
@@ -396,14 +397,20 @@ export function FunnelSourceTabs({
     setDeals((prev) =>
       prev.map((d) => {
         if (d.id !== dealId) return d;
-        const next: DealResponse = { ...d, currentStageId: target.subStageId };
-        if (target.mainStageId) {
-          next.mainStageId = target.mainStageId;
-          next.mainStageName = columnNameById.get(target.mainStageId) ?? d.mainStageName;
-        } else {
-          next.currentStageName = columnNameById.get(target.subStageId) ?? d.currentStageName;
+        if (target.kind === "mainStage") {
+          return {
+            ...d,
+            mainStageId: target.id,
+            mainStageName: columnNameById.get(target.id) ?? d.mainStageName,
+            currentStageId: null,
+            currentStageName: undefined,
+          };
         }
-        return next;
+        return {
+          ...d,
+          currentStageId: target.id,
+          currentStageName: columnNameById.get(target.id) ?? d.currentStageName,
+        };
       }),
     );
   }
@@ -415,11 +422,14 @@ export function FunnelSourceTabs({
     setDeals((prev) => prev.map((d) => (d.id === dealId ? { ...d, ...pending.original } : d)));
   }
 
-  async function persistMove(dealId: string, subStageId: string) {
+  async function persistMove(dealId: string, target: MoveTarget) {
     const pending = pendingMovesRef.current.get(dealId);
     pendingMovesRef.current.delete(dealId);
     try {
-      const updated = await moveDeal(dealId, { toStageId: subStageId });
+      const updated = await moveDeal(
+        dealId,
+        target.kind === "subStage" ? { toStageId: target.id } : { toMainStageId: target.id },
+      );
       if (mountedRef.current) {
         setDeals((prev) => prev.map((d) => (d.id === dealId ? updated : d)));
       }
@@ -601,8 +611,9 @@ export function FunnelSourceTabs({
       {isAddDealOpen && (
         <AddDealDialog
           dealSources={dealSources}
-          columns={columns}
-          stageOptions={stageOptions}
+          mainStages={mainStages}
+          subStages={subStages}
+          defaultMainStageId={defaultMainStageId}
           companies={companies}
           employees={employees}
           contacts={contacts}
@@ -643,8 +654,8 @@ export function FunnelSourceTabs({
           mode="edit"
           deal={editDeal}
           dealSources={dealSources}
-          columns={columns}
-          stageOptions={stageOptions}
+          mainStages={mainStages}
+          subStages={subStages}
           companies={companies}
           employees={employees}
           contacts={contacts}

@@ -67,6 +67,8 @@ export class MainStagesController {
       tenantId: stage.tenantId,
       name: stage.name,
       position: stage.position,
+      isWon: stage.isWon,
+      isLost: stage.isLost,
       dependentCount,
       createdAt: stage.createdAt.toISOString(),
       updatedAt: stage.updatedAt.toISOString(),

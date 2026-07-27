@@ -22,10 +22,13 @@ export class SubStageHistory {
   @JoinColumn({ name: "from_stage_id" })
   fromStage?: SubStage;
 
-  @Column({ type: "uuid" })
-  toStageId!: string;
+  // Nullable -- a move that leaves the deal with no Sub Stage (dropped to a
+  // Main-Stage-only position) still deserves a history row, just with no
+  // "to" Sub Stage to point at.
+  @Column({ type: "uuid", nullable: true })
+  toStageId?: string;
 
-  @ManyToOne(() => SubStage)
+  @ManyToOne(() => SubStage, { nullable: true, onDelete: "SET NULL" })
   @JoinColumn({ name: "to_stage_id" })
   toStage?: SubStage;
 

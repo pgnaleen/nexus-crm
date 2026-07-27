@@ -18,8 +18,12 @@ export interface CreateDealRequest {
   ownerId: string;
   preSalesPersonId?: string;
   pmoId?: string;
-  mainStageId?: string;
-  currentStageId: string;
+  // Every deal always belongs to a Main Stage. currentStageId (a Sub Stage)
+  // is optional -- a deal can sit directly "in" a Main Stage that has no Sub
+  // Stages configured yet, or that the tenant has chosen never to break down
+  // further.
+  mainStageId: string;
+  currentStageId?: string;
   departmentId?: string;
   dealCountry?: string;
   customerPainPoint?: string;
@@ -35,8 +39,13 @@ export interface CreateDealRequest {
 
 export type UpdateDealRequest = Partial<Omit<CreateDealRequest, "companyId">>;
 
+// Exactly one of toStageId (a real Sub Stage) or toMainStageId (a Main Stage
+// with no Sub Stage breakdown) must be provided -- enforced by MoveDealDto,
+// not expressible as a TS union here without complicating every DTO/service
+// call site, same tradeoff as CreateDealRequest's companyId/contactId pair.
 export interface MoveDealStageRequest {
-  toStageId: string;
+  toStageId?: string;
+  toMainStageId?: string;
   note?: string;
 }
 
@@ -105,8 +114,11 @@ export interface DealStageHistoryResponse {
   kind: "main_stage" | "sub_stage";
   fromStageId: string | null;
   fromStageName: string | null;
-  toStageId: string;
-  toStageName: string;
+  // Null on a "sub_stage" entry when the move left the deal with no Sub
+  // Stage (moved to a Main-Stage-only position). Always present on a
+  // "main_stage" entry -- a Main Stage move always has a real target.
+  toStageId: string | null;
+  toStageName: string | null;
   movedById: string | null;
   movedByName: string | null;
   movedAt: string;

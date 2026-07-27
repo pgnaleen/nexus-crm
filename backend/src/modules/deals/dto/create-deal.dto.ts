@@ -52,12 +52,12 @@ export class CreateDealDto implements CreateDealRequest {
   @IsUUID()
   pmoId?: string;
 
+  @IsUUID()
+  mainStageId!: string;
+
   @IsOptional()
   @IsUUID()
-  mainStageId?: string;
-
-  @IsUUID()
-  currentStageId!: string;
+  currentStageId?: string;
 
   @IsOptional()
   @IsUUID()

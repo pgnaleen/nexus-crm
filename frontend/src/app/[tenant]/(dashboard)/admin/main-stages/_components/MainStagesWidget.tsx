@@ -185,6 +185,9 @@ export function MainStagesWidget({
                 <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
                   Created
                 </th>
+                <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  Outcome
+                </th>
                 {showActionsColumn && (
                   <th className="border-b border-[var(--color-border)] px-3 py-2.5" aria-label="Actions" />
                 )}
@@ -201,18 +204,30 @@ export function MainStagesWidget({
                   </td>
                   <td className="border-b border-[var(--color-border)] p-3 font-medium text-crm-text">
                     {stage.name}
-                    {stage.dependentCount === 0 && (
-                      <span
-                        className="ml-2 inline-block rounded-full px-2.5 py-[3px] text-[11.5px] font-semibold"
-                        style={{ background: "#fff7e6", color: "#b8860b" }}
-                        title="Deals can't move into this stage until it has at least one sub stage"
-                      >
-                        No sub stages
-                      </span>
-                    )}
                   </td>
                   <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
                     {formatDate(stage.createdAt)}
+                  </td>
+                  <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
+                    {stage.isWon && (
+                      <span
+                        className="inline-block rounded-full px-2.5 py-[3px] text-[11.5px] font-semibold"
+                        style={{ background: "#e6f7ee", color: "#1a9c5f" }}
+                      >
+                        Won
+                      </span>
+                    )}
+                    {stage.isLost && (
+                      <span
+                        className="ml-1.5 inline-block rounded-full px-2.5 py-[3px] text-[11.5px] font-semibold"
+                        style={{ background: "#fdf0ee", color: "#c0392b" }}
+                      >
+                        Lost
+                      </span>
+                    )}
+                    {!stage.isWon && !stage.isLost && (
+                      <span className="text-[var(--color-text-muted)]">—</span>
+                    )}
                   </td>
                   {showActionsColumn && (
                     <td className="flex justify-end gap-1.5 border-b border-[var(--color-border)] p-3">

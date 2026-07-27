@@ -73,6 +73,13 @@ export default async function MainStageDealsPage({
       dealSources={dealSources ?? []}
       columns={columns}
       stageField="currentStageName"
+      mainStages={(mainStages ?? []).map((stage) => ({ id: stage.id, name: stage.name }))}
+      subStages={(subStages ?? []).map((stage) => ({
+        id: stage.id,
+        name: stage.name,
+        mainStageId: stage.mainStageId,
+      }))}
+      defaultMainStageId={params.id}
       companies={companies ?? []}
       employees={employees ?? []}
       contacts={contacts ?? []}

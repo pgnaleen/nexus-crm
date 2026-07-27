@@ -3,6 +3,8 @@ import { IDealStage, IMainStage } from "../types";
 export interface CreateMainStageRequest {
   name: string;
   position: number;
+  isWon?: boolean;
+  isLost?: boolean;
 }
 
 export type UpdateMainStageRequest = Partial<CreateMainStageRequest>;

@@ -1,5 +1,5 @@
 import { CreateMainStageRequest } from "@orelia/common";
-import { IsInt, IsString, MaxLength, Min, MinLength } from "class-validator";
+import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from "class-validator";
 
 export class CreateMainStageDto implements CreateMainStageRequest {
   @IsString()
@@ -10,4 +10,12 @@ export class CreateMainStageDto implements CreateMainStageRequest {
   @IsInt()
   @Min(0)
   position!: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isWon?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isLost?: boolean;
 }

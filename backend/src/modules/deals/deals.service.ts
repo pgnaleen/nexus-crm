@@ -6,6 +6,7 @@ import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { CompaniesRepository } from "../companies/companies.repository";
 import { ContactsRepository } from "../contacts/contacts.repository";
 import { DealSourcesRepository } from "../deal-sources/deal-sources.repository";
+import { MainStagesService } from "../deal-stages/main-stages.service";
 import { SubStagesService } from "../deal-stages/sub-stages.service";
 import { DepartmentsRepository } from "../departments/departments.repository";
 import { EmployeesRepository } from "../employees/employees.repository";
@@ -28,6 +29,7 @@ export class DealsService {
   constructor(
     private readonly dealsRepo: DealsRepository,
     private readonly subStagesService: SubStagesService,
+    private readonly mainStagesService: MainStagesService,
     private readonly stageHistoryService: DealStageHistoryService,
     private readonly auditLogService: AuditLogService,
     private readonly companiesRepo: CompaniesRepository,
@@ -50,6 +52,8 @@ export class DealsService {
     dto: Partial<CreateDealDto> | Partial<UpdateDealDto>,
   ): Promise<void> {
     const checks: Array<[string, string | undefined, () => Promise<unknown>]> = [
+      ["mainStageId", dto.mainStageId, () =>
+        this.mainStagesService.findOneOrFail(dto.mainStageId as string).catch(() => null)],
       ["companyId", (dto as CreateDealDto).companyId, () =>
         this.companiesRepo.findOneScoped({ where: { id: (dto as CreateDealDto).companyId } })],
       ["contactId", dto.contactId, () =>
@@ -288,53 +292,92 @@ export class DealsService {
   }
 
   async moveStage(id: string, dto: MoveDealDto, userId: string): Promise<Deal> {
-    this.logger.debug(`moveStage called for deal ${id} by ${userId} (toStageId=${dto.toStageId})`);
+    this.logger.debug(
+      `moveStage called for deal ${id} by ${userId} (toStageId=${dto.toStageId ?? "none"}, toMainStageId=${dto.toMainStageId ?? "none"})`,
+    );
     try {
+      if (!dto.toStageId && !dto.toMainStageId) {
+        this.logger.debug("Blocked: neither toStageId nor toMainStageId provided");
+        throw new BadRequestException("Move requires a target: a toStageId or a toMainStageId");
+      }
+      if (dto.toStageId && dto.toMainStageId) {
+        this.logger.debug("Blocked: both toStageId and toMainStageId provided");
+        throw new BadRequestException("Move requires exactly one target, not both toStageId and toMainStageId");
+      }
+
       // Bare load for the actual mutation -- same reasoning as update() above.
       const deal = await this.findOneBareOrFail(id);
-      // Validates toStageId is a real Sub Stage belonging to the current
-      // tenant, not just any UUID that happens to exist in sub_stages.
-      const targetStage = await this.subStagesService.findOneOrFail(dto.toStageId);
 
       const fromStatus = deal.status;
       const fromStageId = deal.currentStageId;
       const fromMainStageId = deal.mainStageId;
 
-      deal.currentStageId = targetStage.id;
-      deal.mainStageId = targetStage.mainStageId;
-      // A deal moved into a Won/Lost sub stage is recorded as such; moved back
-      // out of one (into a stage with neither flag), it reverts to Open rather
-      // than staying stuck.
-      if (targetStage.isWon) {
-        this.logger.debug(`Target stage ${targetStage.id} is a Won stage -- setting status to won`);
+      let newMainStageId: string;
+      let newCurrentStageId: string | undefined;
+      let isWon: boolean;
+      let isLost: boolean;
+
+      if (dto.toStageId) {
+        // Validates toStageId is a real Sub Stage belonging to the current
+        // tenant, not just any UUID that happens to exist in sub_stages.
+        const targetStage = await this.subStagesService.findOneOrFail(dto.toStageId);
+        newMainStageId = targetStage.mainStageId;
+        newCurrentStageId = targetStage.id;
+        isWon = targetStage.isWon;
+        isLost = targetStage.isLost;
+      } else {
+        // Validates toMainStageId the same way, for the Main-Stage-only move
+        // (no Sub Stage involved at all).
+        const targetMainStage = await this.mainStagesService.findOneOrFail(dto.toMainStageId as string);
+        newMainStageId = targetMainStage.id;
+        newCurrentStageId = undefined;
+        isWon = targetMainStage.isWon;
+        isLost = targetMainStage.isLost;
+      }
+
+      deal.currentStageId = newCurrentStageId;
+      deal.mainStageId = newMainStageId;
+      // A deal moved into a Won/Lost stage (Sub or Main) is recorded as such;
+      // moved back out of one (into a stage with neither flag), it reverts to
+      // Open rather than staying stuck.
+      if (isWon) {
+        this.logger.debug(`Target stage is a Won stage -- setting status to won`);
         deal.status = DealStatus.Won;
-      } else if (targetStage.isLost) {
-        this.logger.debug(`Target stage ${targetStage.id} is a Lost stage -- setting status to lost`);
+      } else if (isLost) {
+        this.logger.debug(`Target stage is a Lost stage -- setting status to lost`);
         deal.status = DealStatus.Lost;
       } else {
-        this.logger.debug(`Target stage ${targetStage.id} is neither Won nor Lost -- status is open`);
+        this.logger.debug(`Target stage is neither Won nor Lost -- status is open`);
         deal.status = DealStatus.Open;
       }
       deal.updatedBy = userId;
       await this.dealsRepo.saveScoped(deal);
 
-      await this.stageHistoryService.recordSubStageMove({
-        dealId: deal.id,
-        fromStageId,
-        toStageId: targetStage.id,
-        movedById: userId,
-        note: dto.note,
-      });
+      // Only write a Sub Stage history row when a Sub Stage was actually
+      // involved on either side -- a pure Main-Stage-to-Main-Stage move where
+      // the deal was already (and stays) stage-less has no Sub Stage change
+      // to record.
+      if (fromStageId || newCurrentStageId) {
+        await this.stageHistoryService.recordSubStageMove({
+          dealId: deal.id,
+          fromStageId,
+          toStageId: newCurrentStageId,
+          movedById: userId,
+          note: dto.note,
+        });
+      } else {
+        this.logger.debug("No Sub Stage involved on either side of this move, skipping Sub Stage history");
+      }
 
       // Only log a Main Stage transition when the move actually crossed into
       // a different Main Stage -- most moves are within the same funnel stage.
-      const crossedMainStage = fromMainStageId !== targetStage.mainStageId;
+      const crossedMainStage = fromMainStageId !== newMainStageId;
       if (crossedMainStage) {
-        this.logger.debug(`Move crossed from Main Stage ${fromMainStageId} to ${targetStage.mainStageId}`);
+        this.logger.debug(`Move crossed from Main Stage ${fromMainStageId} to ${newMainStageId}`);
         await this.stageHistoryService.recordMainStageMove({
           dealId: deal.id,
           fromStageId: fromMainStageId,
-          toStageId: targetStage.mainStageId,
+          toStageId: newMainStageId,
           movedById: userId,
           note: dto.note,
         });

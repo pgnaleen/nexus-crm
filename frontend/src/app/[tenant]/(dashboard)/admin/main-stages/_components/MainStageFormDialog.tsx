@@ -12,12 +12,16 @@ import { minLength, required, validate } from "@/lib/validation";
 interface FormState {
   name: string;
   position: string;
+  isWon: boolean;
+  isLost: boolean;
 }
 
 function toFormState(stage?: MainStageResponse): FormState {
   return {
     name: stage?.name ?? "",
     position: stage?.position?.toString() ?? "0",
+    isWon: stage?.isWon ?? false,
+    isLost: stage?.isLost ?? false,
   };
 }
 
@@ -78,6 +82,8 @@ export function MainStageFormDialog({
     const payload = {
       name: values.name.trim(),
       position: parseInt(values.position, 10) || 0,
+      isWon: values.isWon,
+      isLost: values.isLost,
     };
 
     setIsSaving(true);
@@ -128,6 +134,29 @@ export function MainStageFormDialog({
         <p className="-mt-2.5 mb-[18px] text-[13px] text-[var(--color-text-muted)]">
           Used to order stages in the pipeline. Lower numbers appear first.
         </p>
+
+        {/* A deal can sit directly in this Main Stage with no Sub Stage at
+            all -- these give that path somewhere to derive Won/Lost status
+            from, same as a Sub Stage's own isWon/isLost. */}
+        <label className="mb-[18px] flex cursor-pointer items-center gap-2.5 text-[13.5px] text-crm-text">
+          <input
+            type="checkbox"
+            checked={values.isWon}
+            disabled={isViewOnly}
+            onChange={(e) => setField("isWon", e.target.checked)}
+          />
+          <span>Won — this stage represents a closed-won outcome</span>
+        </label>
+
+        <label className="mb-[18px] flex cursor-pointer items-center gap-2.5 text-[13.5px] text-crm-text">
+          <input
+            type="checkbox"
+            checked={values.isLost}
+            disabled={isViewOnly}
+            onChange={(e) => setField("isLost", e.target.checked)}
+          />
+          <span>Lost — this stage represents a closed-lost outcome</span>
+        </label>
 
         <div className="mt-2 flex justify-end gap-2.5">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>

@@ -8,7 +8,9 @@ import { SubStageHistory } from "./entities/sub-stage-history.entity";
 interface RecordMoveInput {
   dealId: string;
   fromStageId?: string;
-  toStageId: string;
+  // Undefined on a Sub Stage move that leaves the deal with no Sub Stage
+  // (Main-Stage-only position) -- always a real id for a Main Stage move.
+  toStageId?: string;
   movedById: string;
   note?: string;
 }
@@ -74,8 +76,8 @@ export class DealStageHistoryService {
         kind: "sub_stage" as const,
         fromStageId: entry.fromStageId ?? null,
         fromStageName: entry.fromStage?.name ?? null,
-        toStageId: entry.toStageId,
-        toStageName: entry.toStage?.name ?? "",
+        toStageId: entry.toStageId ?? null,
+        toStageName: entry.toStage?.name ?? null,
         movedById: entry.movedById ?? null,
         movedByName: entry.movedByUser?.displayName ?? null,
         movedAt: entry.movedAt.toISOString(),

@@ -18,7 +18,6 @@ import {
   type RelationshipRolePickerResponse,
   type RelationshipTypeResponse,
 } from "@orelia/common";
-import { type FunnelColumn } from "@/components/funnel/FunnelBoard";
 import {
   addDealPartnerCompany,
   addDealPartnerContact,
@@ -120,9 +119,10 @@ interface DetailsFormState {
   isTender: boolean;
   sourceId: string;
   primaryContactId: string;
-  // Silently defaulted (stages[0]), same treatment as dealType below -- the
-  // backend still requires a stage on create, but the client's tab spec has
-  // no place for picking one, so there's no visible field for it anymore.
+  // Every deal belongs to a Main Stage; currentStageId (a Sub Stage) is
+  // optional -- "" means the deal sits directly in mainStageId with no
+  // further breakdown, a fully supported position, not a placeholder state.
+  mainStageId: string;
   currentStageId: string;
   // Deal Information tab
   dealCountry: string;
@@ -229,12 +229,18 @@ interface AddDealDialogProps {
   // itself.
   deal?: DealResponse;
   dealSources: DealSourceResponse[];
-  // Sub Stage options for the picker -- distinct from the board's own
-  // `columns` prop on pages where the board is grouped by something other
-  // than Sub Stage (e.g. the tenant-wide Funnel overview groups by Main
-  // Stage). Defaults to `columns` when the board is already Sub-Stage-shaped.
-  stageOptions?: FunnelColumn[];
-  columns: FunnelColumn[];
+  // Every Main Stage in the tenant, for the Stage field -- always required,
+  // regardless of which board this dialog was opened from.
+  mainStages: { id: string; name: string }[];
+  // Every Sub Stage in the tenant, tagged with its owning Main Stage --
+  // filtered down to the chosen Main Stage's own Sub Stages for the second,
+  // optional picker underneath. A Main Stage with none simply shows no
+  // second picker at all -- that's a fully supported position, not an error.
+  subStages: { id: string; name: string; mainStageId: string }[];
+  // Pre-selects the Main Stage field when opened from that stage's own page
+  // -- still changeable, just a default, same treatment as
+  // defaultDealSourceId below.
+  defaultMainStageId?: string;
   companies: CompanyPickerResponse[];
   employees: EmployeePickerResponse[];
   contacts: ContactPickerResponse[];
@@ -257,8 +263,9 @@ export function AddDealDialog({
   mode = "create",
   deal,
   dealSources,
-  stageOptions,
-  columns,
+  mainStages,
+  subStages,
+  defaultMainStageId,
   companies: initialCompanies,
   employees,
   contacts: initialContacts,
@@ -273,7 +280,6 @@ export function AddDealDialog({
   onUpdated,
 }: AddDealDialogProps) {
   const isEdit = mode === "edit";
-  const stages = stageOptions ?? columns;
   const [activeTab, setActiveTab] = useState<TabId>("dealInfo");
   const [companies, setCompanies] = useState(initialCompanies);
   const [contacts, setContacts] = useState(initialContacts);
@@ -285,7 +291,12 @@ export function AddDealDialog({
     sourceId:
       deal?.sourceId ?? (dealSources.some((s) => s.id === defaultDealSourceId) ? (defaultDealSourceId ?? "") : ""),
     primaryContactId: deal?.primaryContactId ?? "",
-    currentStageId: deal?.currentStageId ?? stages[0]?.id ?? "",
+    mainStageId: deal?.mainStageId ?? defaultMainStageId ?? mainStages[0]?.id ?? "",
+    // "" means no Sub Stage -- the deal sits directly in the Main Stage
+    // above. Deliberately not defaulted to that Main Stage's first Sub
+    // Stage: the client's stated requirement is that a deal can move
+    // through Main Stages with no Sub Stage involved at all.
+    currentStageId: deal?.currentStageId ?? "",
     dealCountry: deal?.dealCountry ?? "",
     customerPainPoint: deal?.customerPainPoint ?? "",
     departmentId: deal?.departmentId ?? "",
@@ -436,13 +447,8 @@ export function AddDealDialog({
     // nothing to validate here in edit mode -- it's always already set.
     if (!isEdit && !otherParty) nextErrors.otherParty = "Select the other party for this deal";
     if (!values.salesPersonId) nextErrors.salesPersonId = "Sales Person is required";
-    // currentStageId has no visible field -- it's silently defaulted to
-    // stages[0]?.id (see DetailsFormState above) -- but the backend still
-    // requires a real Sub Stage on create. When there are none configured
-    // yet, that default resolves to "" and would otherwise hit a generic,
-    // unexplained backend 400 with no way for the user to fix it here.
-    if (!isEdit && !values.currentStageId) {
-      nextErrors.currentStageId = "No stages are available to create a deal in yet — add a Sub Stage first";
+    if (!isEdit && !values.mainStageId) {
+      nextErrors.mainStageId = "Select a stage to create this deal in — add a Main Stage first";
     }
     // Skip the past-date check when editing a deal whose deadline was
     // already in the past before this session -- otherwise saving an
@@ -464,7 +470,7 @@ export function AddDealDialog({
     setErrors(nextErrors);
 
     // Jump to whichever tab actually holds the first invalid field.
-    if (nextErrors.name || nextErrors.otherParty || nextErrors.currentStageId || nextErrors.expectedCloseDate) {
+    if (nextErrors.name || nextErrors.otherParty || nextErrors.mainStageId || nextErrors.expectedCloseDate) {
       setActiveTab("dealInfo");
     } else if (nextErrors.tenderReference || nextErrors.issuingBody) {
       setActiveTab("tender");
@@ -692,8 +698,8 @@ export function AddDealDialog({
         ownerId: values.salesPersonId,
         preSalesPersonId: values.preSalesPersonId || undefined,
         pmoId: values.pmoId || undefined,
-        mainStageId: stages.find((s) => s.id === values.currentStageId)?.mainStageId,
-        currentStageId: values.currentStageId,
+        mainStageId: values.mainStageId,
+        currentStageId: values.currentStageId || undefined,
         departmentId: values.departmentId || undefined,
         dealCountry: values.dealCountry || undefined,
         customerPainPoint: values.customerPainPoint || undefined,
@@ -747,6 +753,7 @@ export function AddDealDialog({
   // Customer-tagged set (e.g. viewing an existing deal's already-picked
   // customer, or looking up a partner's contacts).
   const companyNameById = new Map(companies.map((c) => [c.id, c.name]));
+  const subStagesForMainStage = subStages.filter((s) => s.mainStageId === values.mainStageId);
 
   function toPartyOptions(parties: RelationshipRolePickerResponse): SearchSelectOption[] {
     return [
@@ -888,10 +895,50 @@ export function AddDealDialog({
               <span>This is a Tender deal</span>
             </label>
 
-            {errors.currentStageId && (
-              <p className="mb-[18px] mt-[-8px] text-[12.5px] text-[var(--color-danger)]">
-                {errors.currentStageId}
-              </p>
+            <div className="mb-[18px]">
+              <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                Stage {!isEdit && "*"}
+              </label>
+              {isEdit ? (
+                <div className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-[13.5px] text-[var(--color-text-muted)]">
+                  {deal?.mainStageName ?? "—"}
+                  {deal?.currentStageName ? ` › ${deal.currentStageName}` : ""}
+                </div>
+              ) : (
+                <CustomSelect
+                  fullWidth
+                  label=""
+                  value={values.mainStageId}
+                  onChange={(val) => {
+                    setField("mainStageId", val);
+                    // Changing Main Stage invalidates whichever Sub Stage was
+                    // picked, if any -- it belonged to the previous Main Stage.
+                    setField("currentStageId", "");
+                  }}
+                  options={mainStages.map((s) => ({ value: s.id, label: s.name }))}
+                />
+              )}
+              {errors.mainStageId && (
+                <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{errors.mainStageId}</p>
+              )}
+            </div>
+
+            {!isEdit && subStagesForMainStage.length > 0 && (
+              <div className="mb-[18px]">
+                <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                  Sub Stage
+                </label>
+                <CustomSelect
+                  fullWidth
+                  label=""
+                  value={values.currentStageId}
+                  onChange={(val) => setField("currentStageId", val)}
+                  options={[
+                    { value: "", label: "No sub stage yet" },
+                    ...subStagesForMainStage.map((s) => ({ value: s.id, label: s.name })),
+                  ]}
+                />
+              </div>
             )}
 
             <div className="mb-[18px]">
