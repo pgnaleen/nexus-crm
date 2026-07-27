@@ -1,15 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { PriorityTaskResponse, PriorityTaskShareResponse, UserPickerResponse } from "@orelia/common";
+import { PriorityTaskStatus } from "@orelia/common";
+import type {
+  PriorityTaskHistoryEntry,
+  PriorityTaskResponse,
+  PriorityTaskShareResponse,
+  UserPickerResponse,
+} from "@orelia/common";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { TrashIcon } from "@/components/ui/icons";
 import {
+  archivePriorityTask,
+  completePriorityTask,
   getPriorityTask,
+  getPriorityTaskHistory,
   listPriorityTaskShares,
   removePriorityTaskShare,
   updatePriorityTask,
+  updatePriorityTaskProgress,
 } from "@/lib/api/priority-tasks";
 import { ApiError } from "@/lib/api/client";
 import { t } from "@/lib/i18n";
@@ -21,6 +31,33 @@ const TEXTAREA_CLASS =
 
 function formatTimestamp(isoTimestamp: string): string {
   return new Date(isoTimestamp).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+// Story 1.9 -- render a structured history entry via i18n (the backend
+// returns a `kind` + `detail`, never a pre-formatted string).
+function historyLabel(entry: PriorityTaskHistoryEntry): string {
+  const actor = entry.actorName ?? t("priorityTracker.detailDialog.history.someone");
+  const name = entry.detail ?? "";
+  switch (entry.kind) {
+    case "created":
+      return t("priorityTracker.detailDialog.history.created", { actor });
+    case "delegated":
+      return t("priorityTracker.detailDialog.history.delegated", { actor, name });
+    case "redelegated":
+      return t("priorityTracker.detailDialog.history.redelegated", { actor, name });
+    case "accepted":
+      return t("priorityTracker.detailDialog.history.accepted", { actor });
+    case "progress":
+      return t("priorityTracker.detailDialog.history.progress", { actor, value: name });
+    case "completed":
+      return t("priorityTracker.detailDialog.history.completed", { actor });
+    case "archived":
+      return t("priorityTracker.detailDialog.history.archived", { actor });
+    case "restored":
+      return t("priorityTracker.detailDialog.history.restored", { actor });
+    default:
+      return actor;
+  }
 }
 
 function ProgressBar({ progress }: { progress: number }) {
@@ -47,9 +84,11 @@ interface TaskDetailDialogProps {
   // delegating closes this dialog and hands off to PriorityBoard to move
   // the task into the delegator's own Delegate quadrant.
   onDelegated: (task: PriorityTaskResponse, delegateUser: UserPickerResponse) => void;
+  // Story 1.10 -- archiving drops the task off the active board.
+  onArchived: (taskId: string) => void;
 }
 
-export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated, onArchived }: TaskDetailDialogProps) {
   const [task, setTask] = useState<PriorityTaskResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
@@ -60,6 +99,9 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated }: Task
   const [sharedWith, setSharedWith] = useState<PriorityTaskShareResponse[]>([]);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isDelegateDialogOpen, setIsDelegateDialogOpen] = useState(false);
+  const [isSavingProgress, setIsSavingProgress] = useState(false);
+  const [history, setHistory] = useState<PriorityTaskHistoryEntry[]>([]);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +116,14 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated }: Task
       .catch((err) => {
         if (cancelled) return;
         setLoadError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.errors.loadFailed"));
+      });
+    // Story 1.9 -- the real lifecycle history from audit_logs.
+    getPriorityTaskHistory(taskId)
+      .then((entries) => {
+        if (!cancelled) setHistory(entries);
+      })
+      .catch(() => {
+        // Non-fatal -- the rest of the detail view still works without it.
       });
     return () => {
       cancelled = true;
@@ -114,6 +164,58 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated }: Task
       setSaveError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.errors.saveFailed"));
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  // Story 1.7 -- owner moves progress in 10% steps. Optimistic-free: await
+  // the server (which validates the 10%-step rule) then adopt its response,
+  // so the bar and the "ready to close" indicator always reflect the truth.
+  async function handleSetProgress(progress: number) {
+    if (!task || progress === task.progress) return;
+    setIsSavingProgress(true);
+    setSaveError(null);
+    try {
+      const updated = await updatePriorityTaskProgress(task.id, { progress });
+      setTask(updated);
+      onSaved(updated);
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.errors.progressFailed"));
+    } finally {
+      setIsSavingProgress(false);
+    }
+  }
+
+  // Story 1.9 -- owner marks the work done (prerequisite for archive).
+  async function handleComplete() {
+    if (!task) return;
+    setIsCompleting(true);
+    setSaveError(null);
+    try {
+      const updated = await completePriorityTask(task.id);
+      setTask(updated);
+      onSaved(updated);
+      const entries = await getPriorityTaskHistory(task.id);
+      setHistory(entries);
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.errors.completeFailed"));
+    } finally {
+      setIsCompleting(false);
+    }
+  }
+
+  // Story 1.10 -- archive a completed task off the board.
+  async function handleArchive() {
+    if (!task) return;
+    setIsCompleting(true);
+    setSaveError(null);
+    try {
+      await archivePriorityTask(task.id);
+      onArchived(task.id);
+      onClose();
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.errors.archiveFailed"));
+    } finally {
+      setIsCompleting(false);
     }
   }
 
@@ -173,6 +275,37 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated }: Task
               <ProgressBar progress={task.progress} />
             </div>
           </div>
+
+          {/* Story 1.7 -- owner-editable progress in 10% steps. A merely-
+              shared or delegator viewer keeps the read-only bar in the grid
+              above; only the current owner sees this control. */}
+          {isOwner && (
+            <div className="mb-[18px]">
+              <div className="mb-1.5 flex items-center justify-between">
+                <label className="text-[13px] font-semibold text-[var(--color-text-muted)]">
+                  {t("priorityTracker.detailDialog.updateProgressLabel")}
+                </label>
+                {task.progress === 100 && (
+                  <span className="inline-block rounded-full bg-[#e6f7ee] px-2.5 py-[2px] text-[11px] font-semibold text-[#1a9c5f]">
+                    {t("priorityTracker.detailDialog.readyToClose")}
+                  </span>
+                )}
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={10}
+                value={task.progress}
+                disabled={isSavingProgress}
+                onChange={(e) => handleSetProgress(Number(e.target.value))}
+                className="w-full accent-crm-primary"
+                aria-label={t("priorityTracker.detailDialog.updateProgressLabel")}
+              />
+              <p className="mt-1 text-right text-[11.5px] font-semibold text-crm-text">{task.progress}%</p>
+              {saveError && <p className="mt-1 text-[12.5px] text-[var(--color-danger)]">{saveError}</p>}
+            </div>
+          )}
 
           <div className="mb-[18px]">
             <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
@@ -261,23 +394,57 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated }: Task
             </div>
           )}
 
+          {/* Story 1.9 -- owner marks the work done; enables archive (1.10).
+              Hidden once already completed/archived. */}
+          {isOwner &&
+            task.status !== PriorityTaskStatus.Completed &&
+            task.status !== PriorityTaskStatus.Archived && (
+              <div className="mb-[18px] flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5">
+                <p className="text-[12.5px] text-[var(--color-text-muted)]">
+                  {t("priorityTracker.detailDialog.completeHint")}
+                </p>
+                <Button type="button" onClick={handleComplete} isLoading={isCompleting}>
+                  {t("priorityTracker.detailDialog.completeButton")}
+                </Button>
+              </div>
+            )}
+
+          {/* Story 1.10 -- only a Completed task can be archived. */}
+          {isOwner && task.status === PriorityTaskStatus.Completed && (
+            <div className="mb-[18px] flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5">
+              <p className="text-[12.5px] text-[var(--color-text-muted)]">
+                {t("priorityTracker.detailDialog.archiveHint")}
+              </p>
+              <Button type="button" variant="secondary" onClick={handleArchive} isLoading={isCompleting}>
+                {t("priorityTracker.detailDialog.archiveButton")}
+              </Button>
+            </div>
+          )}
+
+          {/* Story 1.9 -- real lifecycle history from audit_logs, chronological. */}
           <div className="mb-2">
             <p className="mb-2 text-[13px] font-semibold text-[var(--color-text-muted)]">
               {t("priorityTracker.detailDialog.historyLabel")}
             </p>
-            {/* Story 1.9 owns the real event-by-event lifecycle trail
-                (Shared, Delegated, Progress updated, etc.) recorded via
-                AuditLogService -- this is a minimal stand-in showing just
-                the one event every task already has for real: its own
-                creation, with who and when. */}
-            <div className="flex items-center gap-2.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5">
-              <span className="h-2 w-2 flex-shrink-0 rounded-full bg-crm-primary" />
-              <span className="flex-1 text-[13px] text-crm-text">
-                {task.createdByName
-                  ? t("priorityTracker.detailDialog.historyCreatedByEntry", { actor: task.createdByName })
-                  : t("priorityTracker.detailDialog.historyCreatedEntry")}
-              </span>
-              <span className="text-[11.5px] text-[var(--color-text-muted)]">{formatTimestamp(task.createdAt)}</span>
+            <div className="flex flex-col gap-2">
+              {history.length === 0 ? (
+                <p className="text-[12.5px] text-[var(--color-text-muted)]">
+                  {t("priorityTracker.detailDialog.historyEmpty")}
+                </p>
+              ) : (
+                history.map((entry, index) => (
+                  <div
+                    key={`${entry.kind}-${entry.timestamp}-${index}`}
+                    className="flex items-center gap-2.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5"
+                  >
+                    <span className="h-2 w-2 flex-shrink-0 rounded-full bg-crm-primary" />
+                    <span className="flex-1 text-[13px] text-crm-text">{historyLabel(entry)}</span>
+                    <span className="text-[11.5px] text-[var(--color-text-muted)]">
+                      {formatTimestamp(entry.timestamp)}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </>

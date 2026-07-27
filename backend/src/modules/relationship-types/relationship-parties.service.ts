@@ -1,14 +1,15 @@
+import { DocumentOwnerType } from "@orelia/common";
 import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
-import { S3Service } from "../../core/storage/s3.service";
-import { assertKeyBelongsToTenant, LOGO_PREFIX } from "../../core/storage/storage.constants";
+import { assertKeyBelongsToTenant, LOGO_SEGMENT } from "../../core/storage/storage.constants";
 import { TenantContextService } from "../../core/tenant";
 import { CompaniesRepository } from "../companies/companies.repository";
 import { Company } from "../companies/entities/company.entity";
 import { ContactsRepository } from "../contacts/contacts.repository";
 import { Contact } from "../contacts/entities/contact.entity";
+import { DocumentsService } from "../documents/documents.service";
 import { CreateRelationshipPartyCompanyDto } from "./dto/create-relationship-party-company.dto";
 import { CreateRelationshipPartyContactDto } from "./dto/create-relationship-party-contact.dto";
 import { UpdateRelationshipPartyCompanyDto } from "./dto/update-relationship-party-company.dto";
@@ -28,7 +29,7 @@ export class RelationshipPartiesService {
     private readonly relationshipTypesService: RelationshipTypesService,
     private readonly tenantContext: TenantContextService,
     private readonly auditLogService: AuditLogService,
-    private readonly s3: S3Service,
+    private readonly documentsService: DocumentsService,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
@@ -68,9 +69,9 @@ export class RelationshipPartiesService {
     this.logger.debug(`addCompany called for relationship type ${relationshipTypeId} by ${userId} (name="${dto.name}")`);
     await this.relationshipTypesService.findOneOrFail(relationshipTypeId);
     const tenantId = this.tenantContext.getTenantId();
-    const { contacts, ...companyFields } = dto;
-    if (companyFields.logo) {
-      assertKeyBelongsToTenant(companyFields.logo, LOGO_PREFIX, tenantId);
+    const { contacts, logo, ...companyFields } = dto;
+    if (logo) {
+      assertKeyBelongsToTenant(logo, LOGO_SEGMENT, this.tenantContext.getTenantSlug());
     }
 
     try {
@@ -121,12 +122,16 @@ export class RelationshipPartiesService {
       });
       this.logger.debug(`addCompany succeeded, company ${savedCompanyId} with ${savedContactIds.length} contact(s)`);
 
+      if (logo) {
+        await this.documentsService.replaceSingle(DocumentOwnerType.CompanyLogo, savedCompanyId, logo, userId);
+      }
+
       await this.auditLogService.record({
         entityType: "company",
         entityId: savedCompanyId,
         action: "insert",
         actorId: userId,
-        changes: { relationshipTypeId, ...companyFields },
+        changes: { relationshipTypeId, ...companyFields, logo },
       });
       for (const contactId of savedContactIds) {
         await this.auditLogService.record({
@@ -306,8 +311,9 @@ export class RelationshipPartiesService {
     userId: string,
   ): Promise<RelationshipCompanyContactMap> {
     this.logger.debug(`updateCompany called for party ${mapId} on relationship type ${relationshipTypeId} by ${userId}`);
-    if (dto.logo) {
-      assertKeyBelongsToTenant(dto.logo, LOGO_PREFIX, this.tenantContext.getTenantId());
+    const { logo, ...companyDto } = dto;
+    if (logo) {
+      assertKeyBelongsToTenant(logo, LOGO_SEGMENT, this.tenantContext.getTenantSlug());
     }
     const party = await this.findOneOrFail(relationshipTypeId, mapId);
     if (!party.companyId) {
@@ -321,31 +327,38 @@ export class RelationshipPartiesService {
 
     const before: Record<string, unknown> = {};
     const companyAsRecord = company as unknown as Record<string, unknown>;
-    for (const key of Object.keys(dto)) {
+    for (const key of Object.keys(companyDto)) {
       before[key] = companyAsRecord[key];
     }
-    const oldLogo = company.logo;
+    const oldLogoDoc = "logo" in dto
+      ? await this.documentsService.findCurrentScoped(DocumentOwnerType.CompanyLogo, company.id)
+      : null;
 
     try {
-      Object.assign(company, dto, { updatedBy: userId });
+      Object.assign(company, companyDto, { updatedBy: userId });
       await this.companiesRepo.saveScoped(company);
       this.logger.debug(`updateCompany succeeded for company ${company.id}`);
 
-      // Old file cleanup (replace, don't orphan) -- best-effort, after the
-      // save has definitely succeeded; a failed S3 delete never fails the
-      // update, it just orphans one object for later cleanup.
-      if ("logo" in dto && oldLogo && dto.logo !== oldLogo) {
-        this.logger.debug(`updateCompany: logo replaced, removing old object ${oldLogo}`);
-        await this.s3.deleteObjectBestEffort(oldLogo);
+      // Logo replace/clear -- hard-retires the old one (no history), per the
+      // client's "pictures can just replace" call.
+      if ("logo" in dto) {
+        if (logo) {
+          await this.documentsService.replaceSingle(DocumentOwnerType.CompanyLogo, company.id, logo, userId);
+        } else {
+          await this.documentsService.clearSingle(DocumentOwnerType.CompanyLogo, company.id);
+        }
       }
 
       const changes: Record<string, { old: unknown; new: unknown }> = {};
       const companyAfterAsRecord = company as unknown as Record<string, unknown>;
-      for (const key of Object.keys(dto)) {
+      for (const key of Object.keys(companyDto)) {
         const newValue = companyAfterAsRecord[key];
         if (before[key] !== newValue) {
           changes[key] = { old: before[key], new: newValue };
         }
+      }
+      if ("logo" in dto && (oldLogoDoc?.s3Key ?? null) !== (logo ?? null)) {
+        changes.logo = { old: oldLogoDoc?.s3Key ?? null, new: logo ?? null };
       }
       if (Object.keys(changes).length > 0) {
         await this.auditLogService.record({

@@ -1,11 +1,15 @@
 import type {
+  AcceptPriorityTaskRequest,
   CreatePriorityTaskRequest,
   CreatePriorityTaskShareRequest,
   DelegatePriorityTaskRequest,
+  IncomingTaskResponse,
   MovePriorityTaskRequest,
+  PriorityTaskHistoryEntry,
   PriorityTaskDelegationTrackerResponse,
   PriorityTaskResponse,
   PriorityTaskShareResponse,
+  UpdatePriorityTaskProgressRequest,
   UpdatePriorityTaskRequest,
 } from "@orelia/common";
 import { apiFetch } from "./client";
@@ -20,6 +24,37 @@ export function getPriorityTask(id: string): Promise<PriorityTaskResponse> {
 
 export function updatePriorityTask(id: string, payload: UpdatePriorityTaskRequest): Promise<PriorityTaskResponse> {
   return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+}
+
+export function updatePriorityTaskProgress(
+  id: string,
+  payload: UpdatePriorityTaskProgressRequest,
+): Promise<PriorityTaskResponse> {
+  return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}/progress`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getPriorityTaskHistory(id: string): Promise<PriorityTaskHistoryEntry[]> {
+  return apiFetch<PriorityTaskHistoryEntry[]>(`/priority-tasks/${id}/history`);
+}
+
+export function completePriorityTask(id: string): Promise<PriorityTaskResponse> {
+  return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}/complete`, { method: "PATCH" });
+}
+
+// Story 1.10 -- archive / restore.
+export function listArchivedPriorityTasks(): Promise<PriorityTaskResponse[]> {
+  return apiFetch<PriorityTaskResponse[]>("/priority-tasks/archived");
+}
+
+export function archivePriorityTask(id: string): Promise<PriorityTaskResponse> {
+  return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}/archive`, { method: "PATCH" });
+}
+
+export function restorePriorityTask(id: string): Promise<PriorityTaskResponse> {
+  return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}/restore`, { method: "PATCH" });
 }
 
 export function movePriorityTask(id: string, payload: MovePriorityTaskRequest): Promise<PriorityTaskResponse> {
@@ -56,4 +91,23 @@ export function delegatePriorityTask(id: string, payload: DelegatePriorityTaskRe
 
 export function listPriorityTaskDelegationTrackers(): Promise<PriorityTaskDelegationTrackerResponse[]> {
   return apiFetch<PriorityTaskDelegationTrackerResponse[]>("/priority-tasks/delegated-trackers");
+}
+
+// Story 1.8 -- Incoming panel: everything shared with or delegated to me.
+export function listIncomingPriorityTasks(): Promise<IncomingTaskResponse[]> {
+  return apiFetch<IncomingTaskResponse[]>("/priority-tasks/incoming");
+}
+
+export function acceptPriorityTask(id: string, payload: AcceptPriorityTaskRequest): Promise<PriorityTaskResponse> {
+  return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}/accept`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function redelegatePriorityTask(id: string, payload: DelegatePriorityTaskRequest): Promise<PriorityTaskResponse> {
+  return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}/redelegate`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }

@@ -1,18 +1,23 @@
 import { BadRequestException } from "@nestjs/common";
 
-// Shared app bucket also holds the nightly DB-backup dumps under
-// "db-backups/orelia/" (see db-backup.service.ts) -- this prefix keeps every
-// user-uploaded file in its own distinct namespace so an age-based retention
-// prune (or any other bucket-wide job) can never mistake one feature's
-// objects for another's, the exact mistake that once deleted a different
-// project's backups sharing this same bucket.
-export const UPLOADS_PREFIX = "uploads/";
-
-export const LOGO_PREFIX = `${UPLOADS_PREFIX}logos/`;
-export const EMPLOYEE_PHOTO_PREFIX = `${UPLOADS_PREFIX}employee-photos/`;
-export const EMPLOYEE_CV_PREFIX = `${UPLOADS_PREFIX}employee-cvs/`;
-export const CERTIFICATION_PREFIX = `${UPLOADS_PREFIX}certifications/`;
-export const DEAL_DOCUMENTS_PREFIX = `${UPLOADS_PREFIX}deal-documents/`;
+// Bucket layout: every tenant gets its own top-level folder named after its
+// slug (readable in the S3 console, unlike a bare uuid), with these
+// sub-folders inside it holding each file type. The nightly DB-backup dumps
+// (see db-backup.service.ts) live under their own top-level "backups/orelia/"
+// folder, a sibling of every tenant folder, never nested inside one -- e.g.:
+//   {bucket}/acme-corp/logos/{uuid}.png
+//   {bucket}/acme-corp/deal-documents/{dealId}/{uuid}.pdf
+//   {bucket}/backups/orelia/orelia-{timestamp}.dump
+// The "orelia/" segment under backups keeps this app's dumps in their own
+// namespace even if the bucket is ever shared with another project's own
+// top-level folder -- this bucket once shared a bare "db-backups/" prefix
+// with a predecessor project, and an age-based retention prune swept up and
+// permanently deleted that project's dumps because the prefixes collided.
+export const LOGO_SEGMENT = "logos/";
+export const EMPLOYEE_PHOTO_SEGMENT = "employee-photos/";
+export const EMPLOYEE_CV_SEGMENT = "employee-cvs/";
+export const CERTIFICATION_SEGMENT = "certifications/";
+export const DEAL_DOCUMENTS_SEGMENT = "deal-documents/";
 
 // How long a signed GET URL stays valid. Objects are private (no public-read
 // bucket policy) -- every response that surfaces a file link generates one of
@@ -20,11 +25,11 @@ export const DEAL_DOCUMENTS_PREFIX = `${UPLOADS_PREFIX}deal-documents/`;
 // there's nothing long-lived to leak via browser history/logs/copy-paste.
 export const SIGNED_URL_EXPIRES_IN_SECONDS = 300;
 
-// Every key under one of the five type prefixes above is further namespaced
-// by tenant id -- e.g. "uploads/logos/{tenantId}/{uuid}.png" -- so a key
-// path can never collide with (or be mistaken for) another tenant's file.
-export function tenantKeyPrefix(typePrefix: string, tenantId: string): string {
-  return `${typePrefix}${tenantId}/`;
+// e.g. tenantKeyPrefix("acme-corp", LOGO_SEGMENT) -> "acme-corp/logos/" --
+// tenantSlug is validated at tenant-creation time (lowercase alphanumeric +
+// hyphens only, see CreateTenantDto), so it's always a safe path segment.
+export function tenantKeyPrefix(tenantSlug: string, typeSegment: string): string {
+  return `${tenantSlug}/${typeSegment}`;
 }
 
 // Guards every client-supplied key (Company.logo, Employee.profilePhotoUrl/
@@ -37,8 +42,8 @@ export function tenantKeyPrefix(typePrefix: string, tenantId: string): string {
 // it ever leaked outside the app) and getting a valid signed URL for it --
 // every other table in this app enforces tenant isolation at the data layer
 // (tenant_id + TenantContextService); this is that same guarantee for keys.
-export function assertKeyBelongsToTenant(key: string, typePrefix: string, tenantId: string): void {
-  if (!key.startsWith(tenantKeyPrefix(typePrefix, tenantId))) {
+export function assertKeyBelongsToTenant(key: string, typeSegment: string, tenantSlug: string): void {
+  if (!key.startsWith(tenantKeyPrefix(tenantSlug, typeSegment))) {
     throw new BadRequestException("This file does not belong to the current tenant");
   }
 }

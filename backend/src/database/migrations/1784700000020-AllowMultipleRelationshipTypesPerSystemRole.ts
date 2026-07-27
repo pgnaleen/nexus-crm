@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class AllowMultipleRelationshipTypesPerSystemRole1784700000017 implements MigrationInterface {
-  name = "AllowMultipleRelationshipTypesPerSystemRole1784700000017";
+export class AllowMultipleRelationshipTypesPerSystemRole1784700000020 implements MigrationInterface {
+  name = "AllowMultipleRelationshipTypesPerSystemRole1784700000020";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP INDEX "UQ_relationship_types_tenant_system_role"`);

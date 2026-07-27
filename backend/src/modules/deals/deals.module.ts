@@ -9,11 +9,11 @@ import { DealSourcesRepository } from "../deal-sources/deal-sources.repository";
 import { DealSource } from "../deal-sources/entities/deal-source.entity";
 import { DepartmentsRepository } from "../departments/departments.repository";
 import { Department } from "../departments/entities/department.entity";
+import { DocumentsModule } from "../documents/documents.module";
 import { EmployeesRepository } from "../employees/employees.repository";
 import { Employee } from "../employees/entities/employee.entity";
 import { RbacModule } from "../rbac/rbac.module";
 import { DealPartnersMap } from "./entities/deal-partners-map.entity";
-import { DealDocument } from "./entities/deal-document.entity";
 import { DealNote } from "./entities/deal-note.entity";
 import { DealTenderDetails } from "./entities/deal-tender-details.entity";
 import { Deal } from "./entities/deal.entity";
@@ -38,7 +38,6 @@ import { DealsService } from "./deals.service";
   imports: [
     TypeOrmModule.forFeature([
       Deal,
-      DealDocument,
       DealNote,
       DealPartnersMap,
       DealTenderDetails,
@@ -52,6 +51,7 @@ import { DealsService } from "./deals.service";
     ]),
     RbacModule,
     MainStagesModule,
+    DocumentsModule,
   ],
   controllers: [
     DealsController,

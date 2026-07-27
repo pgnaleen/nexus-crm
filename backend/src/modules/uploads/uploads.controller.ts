@@ -14,10 +14,10 @@ import type { Request } from "express";
 import { memoryStorage } from "multer";
 import { S3Service } from "../../core/storage/s3.service";
 import {
-  CERTIFICATION_PREFIX,
-  EMPLOYEE_CV_PREFIX,
-  EMPLOYEE_PHOTO_PREFIX,
-  LOGO_PREFIX,
+  CERTIFICATION_SEGMENT,
+  EMPLOYEE_CV_SEGMENT,
+  EMPLOYEE_PHOTO_SEGMENT,
+  LOGO_SEGMENT,
   tenantKeyPrefix,
 } from "../../core/storage/storage.constants";
 import { TenantContextService } from "../../core/tenant";
@@ -54,9 +54,9 @@ export class UploadsController {
     private readonly tenantContext: TenantContextService,
   ) {}
 
-  private async uploadAndRespond(file: Express.Multer.File, prefix: string): Promise<UploadResponse> {
-    const tenantId = this.tenantContext.getTenantId();
-    const key = `${tenantKeyPrefix(prefix, tenantId)}${randomUUID()}.${fileExt(file.originalname)}`;
+  private async uploadAndRespond(file: Express.Multer.File, typeSegment: string): Promise<UploadResponse> {
+    const tenantSlug = this.tenantContext.getTenantSlug();
+    const key = `${tenantKeyPrefix(tenantSlug, typeSegment)}${randomUUID()}.${fileExt(file.originalname)}`;
     this.logger.debug(`uploadAndRespond: putting object at ${key} (${file.size} bytes, ${file.mimetype})`);
     await this.s3.putObject(key, file.buffer, file.mimetype);
     const previewUrl = await this.s3.getSignedGetUrl(key);
@@ -93,7 +93,7 @@ export class UploadsController {
       throw new BadRequestException("No file uploaded");
     }
     try {
-      const result = await this.uploadAndRespond(file, LOGO_PREFIX);
+      const result = await this.uploadAndRespond(file, LOGO_SEGMENT);
       this.logger.debug(`POST /uploads/logo succeeded`);
       return result;
     } catch (err) {
@@ -126,7 +126,7 @@ export class UploadsController {
       throw new BadRequestException("No file uploaded");
     }
     try {
-      const result = await this.uploadAndRespond(file, EMPLOYEE_PHOTO_PREFIX);
+      const result = await this.uploadAndRespond(file, EMPLOYEE_PHOTO_SEGMENT);
       this.logger.debug(`POST /uploads/employee-photo succeeded`);
       return result;
     } catch (err) {
@@ -159,7 +159,7 @@ export class UploadsController {
       throw new BadRequestException("No file uploaded");
     }
     try {
-      const result = await this.uploadAndRespond(file, EMPLOYEE_CV_PREFIX);
+      const result = await this.uploadAndRespond(file, EMPLOYEE_CV_SEGMENT);
       this.logger.debug(`POST /uploads/employee-cv succeeded`);
       return result;
     } catch (err) {
@@ -193,7 +193,7 @@ export class UploadsController {
       throw new BadRequestException("No file uploaded");
     }
     try {
-      const result = await this.uploadAndRespond(file, CERTIFICATION_PREFIX);
+      const result = await this.uploadAndRespond(file, CERTIFICATION_SEGMENT);
       this.logger.debug(`POST /uploads/certification succeeded`);
       return result;
     } catch (err) {

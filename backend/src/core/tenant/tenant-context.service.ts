@@ -3,6 +3,10 @@ import { Injectable } from "@nestjs/common";
 
 export interface TenantStore {
   tenantId?: string;
+  // Carried alongside tenantId (from the JWT's tenantSlug claim, or the
+  // act-as-tenant token's actAsTenantSlug when impersonating) so S3 key
+  // generation never needs its own DB lookup -- see storage.constants.ts.
+  tenantSlug?: string;
   userId?: string;
   roles: string[];
 }
@@ -29,6 +33,14 @@ export class TenantContextService {
       throw new Error("Tenant context has no tenantId set for this request");
     }
     return tenantId;
+  }
+
+  getTenantSlug(): string {
+    const { tenantSlug } = this.getStore();
+    if (!tenantSlug) {
+      throw new Error("Tenant context has no tenantSlug set for this request");
+    }
+    return tenantSlug;
   }
 
   getUserId(): string | undefined {

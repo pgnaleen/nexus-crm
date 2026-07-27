@@ -1,12 +1,12 @@
-import { EmploymentStatus } from "@orelia/common";
+import { DocumentOwnerType, EmploymentStatus } from "@orelia/common";
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource, IsNull } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
-import { S3Service } from "../../core/storage/s3.service";
-import { assertKeyBelongsToTenant, EMPLOYEE_CV_PREFIX, EMPLOYEE_PHOTO_PREFIX } from "../../core/storage/storage.constants";
+import { assertKeyBelongsToTenant, EMPLOYEE_CV_SEGMENT, EMPLOYEE_PHOTO_SEGMENT } from "../../core/storage/storage.constants";
 import { TenantContextService } from "../../core/tenant";
 import { Deal } from "../deals/entities/deal.entity";
+import { DocumentsService } from "../documents/documents.service";
 import { CreateEmployeeDto } from "./dto/create-employee.dto";
 import { UpdateEmployeeDto } from "./dto/update-employee.dto";
 import { UpdateOrgChartStructureDto } from "./dto/update-org-chart-structure.dto";
@@ -22,7 +22,7 @@ export class EmployeesService {
   constructor(
     private readonly employeesRepo: EmployeesRepository,
     private readonly auditLogService: AuditLogService,
-    private readonly s3: S3Service,
+    private readonly documentsService: DocumentsService,
     private readonly tenantContext: TenantContextService,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
@@ -118,21 +118,27 @@ export class EmployeesService {
   async create(dto: CreateEmployeeDto, userId: string): Promise<Employee> {
     this.logger.debug(`create called by ${userId} (fullName="${dto.fullName}")`);
     try {
-      const tenantId = this.tenantContext.getTenantId();
+      const tenantSlug = this.tenantContext.getTenantSlug();
       if (dto.profilePhotoUrl) {
-        assertKeyBelongsToTenant(dto.profilePhotoUrl, EMPLOYEE_PHOTO_PREFIX, tenantId);
+        assertKeyBelongsToTenant(dto.profilePhotoUrl, EMPLOYEE_PHOTO_SEGMENT, tenantSlug);
       }
       if (dto.cvUrl) {
-        assertKeyBelongsToTenant(dto.cvUrl, EMPLOYEE_CV_PREFIX, tenantId);
+        assertKeyBelongsToTenant(dto.cvUrl, EMPLOYEE_CV_SEGMENT, tenantSlug);
       }
 
-      const { cvUrl, ...employeeFields } = dto;
+      const { cvUrl, profilePhotoUrl, ...employeeFields } = dto;
       const employee = this.employeesRepo.createScoped({
         ...employeeFields,
-        s3Key: cvUrl,
         createdBy: userId,
       });
       const saved = await this.employeesRepo.saveScoped(employee);
+
+      if (profilePhotoUrl) {
+        await this.documentsService.replaceSingle(DocumentOwnerType.EmployeePhoto, saved.id, profilePhotoUrl, userId);
+      }
+      if (cvUrl) {
+        await this.documentsService.replaceSingle(DocumentOwnerType.EmployeeCv, saved.id, cvUrl, userId);
+      }
       this.logger.debug(`create succeeded for employee ${saved.id}`);
 
       await this.auditLogService.record({
@@ -140,7 +146,7 @@ export class EmployeesService {
         entityId: saved.id,
         action: "insert",
         actorId: userId,
-        changes: { ...employeeFields, s3Key: cvUrl },
+        changes: { ...employeeFields, profilePhotoUrl, cvUrl },
       });
 
       return this.findOneOrFail(saved.id);
@@ -160,23 +166,25 @@ export class EmployeesService {
   async update(id: string, dto: UpdateEmployeeDto, userId: string): Promise<Employee> {
     this.logger.debug(`update called for employee ${id} by ${userId} (fields: ${Object.keys(dto).join(", ") || "none"})`);
     try {
-      const tenantId = this.tenantContext.getTenantId();
+      const tenantSlug = this.tenantContext.getTenantSlug();
       if (dto.profilePhotoUrl) {
-        assertKeyBelongsToTenant(dto.profilePhotoUrl, EMPLOYEE_PHOTO_PREFIX, tenantId);
+        assertKeyBelongsToTenant(dto.profilePhotoUrl, EMPLOYEE_PHOTO_SEGMENT, tenantSlug);
       }
       if (dto.cvUrl) {
-        assertKeyBelongsToTenant(dto.cvUrl, EMPLOYEE_CV_PREFIX, tenantId);
+        assertKeyBelongsToTenant(dto.cvUrl, EMPLOYEE_CV_SEGMENT, tenantSlug);
       }
 
       // Bare load for the actual mutation -- see findOneBareOrFail's comment.
       const employee = await this.findOneBareOrFail(id);
 
-      // The API field is cvUrl; the entity column is s3Key (same rename
-      // create() does). Build the patch with entity-column names.
+      // profilePhotoUrl/cvUrl no longer live on the entity -- handled
+      // separately via DocumentsService below. Everything else builds the
+      // patch as before.
       const patch: Record<string, unknown> = {};
       for (const key of Object.keys(dto)) {
+        if (key === "profilePhotoUrl" || key === "cvUrl") continue;
         const value = (dto as unknown as Record<string, unknown>)[key];
-        patch[key === "cvUrl" ? "s3Key" : key] = value;
+        patch[key] = value;
       }
 
       const employeeAsRecord = employee as unknown as Record<string, unknown>;
@@ -184,22 +192,32 @@ export class EmployeesService {
       for (const key of Object.keys(patch)) {
         before[key] = employeeAsRecord[key];
       }
-      const oldPhotoUrl = employee.profilePhotoUrl;
-      const oldCvKey = employee.s3Key;
+      const oldPhotoDoc = "profilePhotoUrl" in dto
+        ? await this.documentsService.findCurrentScoped(DocumentOwnerType.EmployeePhoto, id)
+        : null;
+      const oldCvDoc = "cvUrl" in dto
+        ? await this.documentsService.findCurrentScoped(DocumentOwnerType.EmployeeCv, id)
+        : null;
 
       Object.assign(employee, patch, { updatedBy: userId });
       await this.employeesRepo.saveScoped(employee);
 
-      // Old file cleanup (replace, don't orphan) -- best-effort, after the
-      // save has definitely succeeded; a failed S3 delete never fails the
-      // update, it just orphans one object for later cleanup.
-      if ("profilePhotoUrl" in patch && oldPhotoUrl && patch.profilePhotoUrl !== oldPhotoUrl) {
-        this.logger.debug(`update: profile photo replaced, removing old object ${oldPhotoUrl}`);
-        await this.s3.deleteObjectBestEffort(oldPhotoUrl);
+      // Replace/clear -- photo hard-retires the old one (no history), CV
+      // soft-retires (old CVs stay recoverable), per DocumentsService's
+      // per-owner-type policy.
+      if ("profilePhotoUrl" in dto) {
+        if (dto.profilePhotoUrl) {
+          await this.documentsService.replaceSingle(DocumentOwnerType.EmployeePhoto, id, dto.profilePhotoUrl, userId);
+        } else {
+          await this.documentsService.clearSingle(DocumentOwnerType.EmployeePhoto, id);
+        }
       }
-      if ("s3Key" in patch && oldCvKey && patch.s3Key !== oldCvKey) {
-        this.logger.debug(`update: CV replaced, removing old object ${oldCvKey}`);
-        await this.s3.deleteObjectBestEffort(oldCvKey);
+      if ("cvUrl" in dto) {
+        if (dto.cvUrl) {
+          await this.documentsService.replaceSingle(DocumentOwnerType.EmployeeCv, id, dto.cvUrl, userId);
+        } else {
+          await this.documentsService.clearSingle(DocumentOwnerType.EmployeeCv, id);
+        }
       }
 
       // Re-fetch (with relations) for the response rather than returning the
@@ -222,6 +240,12 @@ export class EmployeesService {
         if (!unchanged) {
           changes[key] = { old: oldValue ?? null, new: newValue ?? null };
         }
+      }
+      if ("profilePhotoUrl" in dto && (oldPhotoDoc?.s3Key ?? null) !== (dto.profilePhotoUrl ?? null)) {
+        changes.profilePhotoUrl = { old: oldPhotoDoc?.s3Key ?? null, new: dto.profilePhotoUrl ?? null };
+      }
+      if ("cvUrl" in dto && (oldCvDoc?.s3Key ?? null) !== (dto.cvUrl ?? null)) {
+        changes.cvUrl = { old: oldCvDoc?.s3Key ?? null, new: dto.cvUrl ?? null };
       }
       if (Object.keys(changes).length > 0) {
         await this.auditLogService.record({

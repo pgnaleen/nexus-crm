@@ -368,6 +368,38 @@
     },
     "newTaskButton": "New Task",
     "addToQuadrantAriaLabel": "Add a task to {quadrant}",
+    "archive": {
+      "button": "Archive",
+      "title": "Archived Tasks",
+      "loading": "Loading...",
+      "emptyTitle": "Nothing archived",
+      "emptyMessage": "Completed tasks you archive will appear here.",
+      "finalProgress": "Final progress {value}%",
+      "restoreButton": "Restore",
+      "errors": {
+        "loadFailed": "Failed to load archived tasks",
+        "restoreFailed": "Failed to restore task"
+      }
+    },
+    "incoming": {
+      "button": "Incoming",
+      "title": "Incoming Tasks",
+      "loading": "Loading...",
+      "emptyTitle": "Nothing incoming",
+      "emptyMessage": "Tasks shared or delegated to you will appear here.",
+      "from": "From {name}",
+      "sharedBadge": "Shared",
+      "delegatedBadge": "Delegated",
+      "sharedHint": "Shared with you for visibility — open it from the board to read it.",
+      "placeInLabel": "Place in",
+      "acceptButton": "Accept",
+      "redelegateButton": "Re-delegate",
+      "errors": {
+        "loadFailed": "Failed to load incoming tasks",
+        "acceptFailed": "Failed to accept task",
+        "redelegateFailed": "Failed to re-delegate task"
+      }
+    },
     "errors": {
       "moveFailed": "Failed to save the new position",
       "moveFailedTitle": "Move failed"
@@ -391,20 +423,43 @@
       "quadrantLabel": "Quadrant",
       "statusLabel": "Status",
       "progressLabel": "Progress",
+      "updateProgressLabel": "Update progress",
+      "readyToClose": "Ready to close",
       "notesLabel": "Notes",
       "notesPlaceholder": "Optional details or context...",
       "notesReadOnlyHint": "Only the current owner can edit notes.",
       "saveNotesButton": "Save Notes",
       "historyLabel": "History",
-      "historyCreatedEntry": "Created",
-      "historyCreatedByEntry": "Created by {actor}",
+      "historyEmpty": "No history yet.",
+      "completeHint": "Mark this task done once the work is finished.",
+      "completeButton": "Mark Complete",
+      "archiveHint": "Archive this completed task to clear it from your board.",
+      "archiveButton": "Archive",
+      "history": {
+        "someone": "Someone",
+        "created": "Created by {actor}",
+        "delegated": "{actor} delegated it to {name}",
+        "redelegated": "{actor} re-delegated it to {name}",
+        "accepted": "{actor} accepted it",
+        "progress": "{actor} set progress to {value}%",
+        "completed": "{actor} marked it complete",
+        "archived": "{actor} archived it",
+        "restored": "{actor} restored it"
+      },
       "status": {
-        "placed": "Placed"
+        "placed": "Placed",
+        "delegated": "Delegated",
+        "accepted": "Accepted",
+        "completed": "Completed",
+        "archived": "Archived"
       },
       "errors": {
         "saveFailed": "Failed to save notes",
         "loadFailed": "Failed to load task",
-        "unshareFailed": "Failed to stop sharing"
+        "unshareFailed": "Failed to stop sharing",
+        "progressFailed": "Failed to update progress",
+        "completeFailed": "Failed to mark task complete",
+        "archiveFailed": "Failed to archive task"
       },
       "sharedLabel": "Shared With",
       "shareButton": "Share",

@@ -21,6 +21,22 @@ export class AuditLogService {
     private readonly tenantContext: TenantContextService,
   ) {}
 
+  // Story 1.9 -- read the recorded trail for one entity, oldest-first, for a
+  // detail view's lifecycle history. Tenant-scoped: never returns another
+  // tenant's rows even if a caller somehow passes a foreign entityId.
+  async findForEntity(entityType: string, entityId: string): Promise<AuditLog[]> {
+    let tenantId: string | undefined;
+    try {
+      tenantId = this.tenantContext.getTenantId();
+    } catch {
+      tenantId = undefined;
+    }
+    return this.repo.find({
+      where: { entityType, entityId, ...(tenantId ? { tenantId } : {}) },
+      order: { occurredAt: "ASC" },
+    });
+  }
+
   async record(input: RecordAuditLogInput): Promise<void> {
     this.logger.debug(
       `record called: ${input.action} ${input.entityType}:${input.entityId} by ${input.actorId ?? "unknown"}`,

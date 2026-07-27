@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -23,10 +23,17 @@ import {
 } from "@orelia/common";
 import { t } from "@/lib/i18n";
 import { PlusIcon } from "@/components/ui/icons";
-import { delegatePriorityTask, listPriorityTaskDelegationTrackers, movePriorityTask } from "@/lib/api/priority-tasks";
+import {
+  delegatePriorityTask,
+  listIncomingPriorityTasks,
+  listPriorityTaskDelegationTrackers,
+  movePriorityTask,
+} from "@/lib/api/priority-tasks";
 import { ApiError } from "@/lib/api/client";
 import { useAlert } from "@/components/providers/DialogProvider";
+import { ArchivePanelDialog } from "./ArchivePanelDialog";
 import { CreateTaskDialog } from "./CreateTaskDialog";
+import { IncomingPanelDialog } from "./IncomingPanelDialog";
 import { TaskDetailDialog } from "./TaskDetailDialog";
 import { DEFAULT_QUADRANT, QUADRANT_ORDER } from "./types";
 
@@ -182,11 +189,14 @@ function QuadrantPanel({
 
   return (
     <div
-      className={`relative flex h-full min-h-[220px] flex-col overflow-hidden rounded-2xl border p-4 ${config.panelClass}`}
+      className={`relative flex min-h-[280px] flex-col overflow-hidden rounded-2xl border p-4 ${config.panelClass}`}
     >
+      {/* Watermark sits in the reserved bottom padding (pb-16 on the list
+          below), so however many cards stack up they never cover the action
+          word -- it stays a visible translucent watermark (AC 1.1). */}
       <span
         aria-hidden="true"
-        className={`pointer-events-none absolute right-2 bottom-0 z-0 text-[64px] leading-none font-black tracking-tight select-none ${config.watermarkClass}`}
+        className={`pointer-events-none absolute right-3 bottom-1 z-0 text-[64px] leading-none font-black tracking-tight select-none ${config.watermarkClass}`}
       >
         {config.watermark}
       </span>
@@ -208,7 +218,7 @@ function QuadrantPanel({
         </button>
       </div>
 
-      <div ref={setNodeRef} className="relative z-10 flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto">
+      <div ref={setNodeRef} className="relative z-10 flex flex-1 flex-col gap-2.5 pb-16">
         {trackers.length > 0 && (
           <div className="flex flex-col gap-2.5">
             {trackers.map((tracker) => (
@@ -252,7 +262,20 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
   // DELEGATE quadrant, real/backed by GET /priority-tasks/delegated-trackers.
   const [delegationTrackers, setDelegationTrackers] =
     useState<PriorityTaskDelegationTrackerResponse[]>(initialDelegationTrackers);
+  // Story 1.8 -- Incoming panel: count for the header badge, opened on demand.
+  const [incomingCount, setIncomingCount] = useState(0);
+  const [isIncomingOpen, setIsIncomingOpen] = useState(false);
+  // Story 1.10 -- Archive view.
+  const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const { showError } = useAlert();
+
+  useEffect(() => {
+    listIncomingPriorityTasks()
+      .then((items) => setIncomingCount(items.length))
+      .catch(() => {
+        // Non-fatal -- the badge just stays at 0 if the count can't load.
+      });
+  }, []);
 
   // Snapshot of `order` from the moment the current drag began -- used to
   // roll the board back exactly if the PATCH .../:id/move call fails.
@@ -370,6 +393,33 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
     setTaskById((current) => ({ ...current, [task.id]: task }));
   }
 
+  // Story 1.8 -- an accepted task transfers to me and lands on my board in
+  // the quadrant I chose; append it (owned) exactly like a freshly-created one.
+  function handleTaskAccepted(task: PriorityTaskResponse) {
+    setTaskById((current) => ({ ...current, [task.id]: task }));
+    setOrder((current) => ({ ...current, [task.quadrant]: [...current[task.quadrant], task.id] }));
+  }
+
+  // Story 1.10 -- archiving removes the task from the active board.
+  function handleTaskArchived(taskId: string) {
+    setOrder((current) => {
+      const quadrant = QUADRANT_ORDER.find((q) => current[q].includes(taskId));
+      if (!quadrant) return current;
+      return { ...current, [quadrant]: current[quadrant].filter((id) => id !== taskId) };
+    });
+  }
+
+  // Story 1.10 -- restoring returns it to its old quadrant at the bottom.
+  function handleTaskRestored(task: PriorityTaskResponse) {
+    setTaskById((current) => ({ ...current, [task.id]: task }));
+    setOrder((current) => ({
+      ...current,
+      [task.quadrant]: current[task.quadrant].includes(task.id)
+        ? current[task.quadrant]
+        : [...current[task.quadrant], task.id],
+    }));
+  }
+
   // Story 1.6 -- persists the delegation, then removes the task from the
   // board entirely (it no longer comes back from findAllForUser while
   // pending) and re-fetches the tracker list so the new card (with its
@@ -397,7 +447,7 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
   const activeTaskRank = activeTask ? order[activeTask.quadrant].indexOf(activeTask.id) + 1 : 1;
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex flex-col">
       <div className="mb-6 flex flex-shrink-0 items-center justify-between">
         <div className="flex flex-col">
           <h1 className="mx-0 mt-0 mb-0.5 text-[26px] font-bold text-[var(--color-text)]">
@@ -405,18 +455,40 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
           </h1>
           <p className="m-0 text-[13.5px] text-[var(--color-text-muted)]">{t("priorityTracker.subtitle")}</p>
         </div>
-        <button
-          type="button"
-          className="cursor-pointer rounded-lg border-0 bg-crm-primary px-5 py-2.5 text-[13.5px] font-semibold text-white transition-colors duration-150 hover:bg-crm-primary-hover"
-          onClick={() => setCreateDialogQuadrant(DEFAULT_QUADRANT)}
-        >
-          + {t("priorityTracker.newTaskButton")}
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            className="relative cursor-pointer rounded-lg border border-[var(--color-border)] bg-white px-4 py-2.5 text-[13.5px] font-semibold text-crm-text transition-colors duration-150 hover:bg-[var(--color-bg)]"
+            onClick={() => setIsIncomingOpen(true)}
+          >
+            {t("priorityTracker.incoming.button")}
+            {incomingCount > 0 && (
+              <span className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-crm-primary px-1.5 py-[1px] text-[11px] font-bold text-white">
+                {incomingCount}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            className="cursor-pointer rounded-lg border border-[var(--color-border)] bg-white px-4 py-2.5 text-[13.5px] font-semibold text-crm-text transition-colors duration-150 hover:bg-[var(--color-bg)]"
+            onClick={() => setIsArchiveOpen(true)}
+          >
+            {t("priorityTracker.archive.button")}
+          </button>
+          <button
+            type="button"
+            className="cursor-pointer rounded-lg border-0 bg-crm-primary px-5 py-2.5 text-[13.5px] font-semibold text-white transition-colors duration-150 hover:bg-crm-primary-hover"
+            onClick={() => setCreateDialogQuadrant(DEFAULT_QUADRANT)}
+          >
+            + {t("priorityTracker.newTaskButton")}
+          </button>
+        </div>
       </div>
 
-      {/* Equal-size 2x2 grid filling all remaining height -- each quadrant is
-          exactly one grid cell, together covering the full board area with
-          no leftover space, instead of sizing to its own content. */}
+      {/* 2-column grid that grows with content -- the whole page scrolls
+          (main is overflow-y-auto), never each quadrant on its own. Grid's
+          default row-stretch makes both quadrants in a row equal height, so
+          a full Do sizes its Decide neighbour to match. */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -425,7 +497,7 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
-        <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-4 gap-4 md:grid-cols-2 md:grid-rows-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {QUADRANTS.map((config) => (
             <QuadrantPanel
               key={config.id}
@@ -456,7 +528,20 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
           onClose={() => setSelectedTaskId(null)}
           onSaved={handleTaskSaved}
           onDelegated={handleTaskDelegated}
+          onArchived={handleTaskArchived}
         />
+      )}
+
+      {isIncomingOpen && (
+        <IncomingPanelDialog
+          onClose={() => setIsIncomingOpen(false)}
+          onAccepted={handleTaskAccepted}
+          onCountChange={setIncomingCount}
+        />
+      )}
+
+      {isArchiveOpen && (
+        <ArchivePanelDialog onClose={() => setIsArchiveOpen(false)} onRestored={handleTaskRestored} />
       )}
     </div>
   );

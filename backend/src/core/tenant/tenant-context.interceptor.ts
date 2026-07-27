@@ -9,6 +9,7 @@ import { TenantContextService, TenantStore } from "./tenant-context.service";
 interface RequestUser {
   sub?: string;
   tenantId?: string;
+  tenantSlug?: string;
   roles?: string[];
 }
 
@@ -34,6 +35,7 @@ export class TenantContextInterceptor implements NestInterceptor {
     const res = httpContext.getResponse<Response>();
 
     let tenantId = req.user?.tenantId;
+    let tenantSlug = req.user?.tenantSlug;
 
     const actAsCookie: string | undefined = req.cookies?.[ACT_AS_TENANT_COOKIE];
     if (actAsCookie) {
@@ -72,12 +74,14 @@ export class TenantContextInterceptor implements NestInterceptor {
           res.setHeader("X-Act-As-Tenant-Expired", "1");
         } else {
           tenantId = payload!.actAsTenantId;
+          tenantSlug = payload!.actAsTenantSlug;
         }
       }
     }
 
     const store: TenantStore = {
       tenantId,
+      tenantSlug,
       userId: req.user?.sub,
       roles: req.user?.roles ?? [],
     };

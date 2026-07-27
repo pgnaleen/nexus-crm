@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
+import { DocumentsModule } from "../documents/documents.module";
 import { EmployeesModule } from "../employees/employees.module";
 import { RbacModule } from "../rbac/rbac.module";
 import { CertificationsController } from "./certifications.controller";
@@ -12,7 +13,7 @@ import { EmployeeCertification } from "./entities/employee-certification.entity"
   // (EmployeesService.findByUserId) on every self-service route. RbacModule:
   // the Story 1.13 review routes use PermissionsGuard. AuditLogService comes
   // from the global CoreModule, no import needed.
-  imports: [TypeOrmModule.forFeature([EmployeeCertification]), EmployeesModule, RbacModule],
+  imports: [TypeOrmModule.forFeature([EmployeeCertification]), EmployeesModule, RbacModule, DocumentsModule],
   controllers: [CertificationsController],
   providers: [CertificationsService, CertificationsRepository],
   exports: [CertificationsService],

@@ -5,6 +5,7 @@ import { Company } from "../companies/entities/company.entity";
 import { ContactsRepository } from "../contacts/contacts.repository";
 import { Contact } from "../contacts/entities/contact.entity";
 import { Department } from "../departments/entities/department.entity";
+import { DocumentsModule } from "../documents/documents.module";
 import { Employee } from "../employees/entities/employee.entity";
 import { RbacModule } from "../rbac/rbac.module";
 import { RelationshipCompanyContactMap } from "./entities/relationship-company-contact-map.entity";
@@ -27,6 +28,7 @@ import { RelationshipTypesService } from "./relationship-types.service";
       Department,
     ]),
     RbacModule,
+    DocumentsModule,
   ],
   controllers: [RelationshipTypesController, RelationshipPartiesController],
   providers: [

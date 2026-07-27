@@ -1,10 +1,10 @@
-import { EmployeeCertificationStatus, EmploymentStatus } from "@orelia/common";
+import { DocumentOwnerType, EmployeeCertificationStatus, EmploymentStatus } from "@orelia/common";
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { ILike } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
-import { S3Service } from "../../core/storage/s3.service";
-import { assertKeyBelongsToTenant, CERTIFICATION_PREFIX } from "../../core/storage/storage.constants";
+import { assertKeyBelongsToTenant, CERTIFICATION_SEGMENT } from "../../core/storage/storage.constants";
 import { TenantContextService } from "../../core/tenant";
+import { DocumentsService } from "../documents/documents.service";
 import { EmployeesService } from "../employees/employees.service";
 import { CertificationsRepository } from "./certifications.repository";
 import { CreateCertificationDto } from "./dto/create-certification.dto";
@@ -21,7 +21,7 @@ export class CertificationsService {
     private readonly certificationsRepo: CertificationsRepository,
     private readonly employeesService: EmployeesService,
     private readonly auditLogService: AuditLogService,
-    private readonly s3: S3Service,
+    private readonly documentsService: DocumentsService,
     private readonly tenantContext: TenantContextService,
   ) {}
 
@@ -70,19 +70,28 @@ export class CertificationsService {
   async createMine(userId: string, dto: CreateCertificationDto): Promise<EmployeeCertification> {
     this.logger.debug(`createMine called by ${userId} (name="${dto.name}")`);
     try {
-      if (dto.evidenceFileUrl) {
-        assertKeyBelongsToTenant(dto.evidenceFileUrl, CERTIFICATION_PREFIX, this.tenantContext.getTenantId());
+      const { evidenceFileUrl, ...certData } = dto;
+      if (evidenceFileUrl) {
+        assertKeyBelongsToTenant(evidenceFileUrl, CERTIFICATION_SEGMENT, this.tenantContext.getTenantSlug());
       }
       const employeeId = await this.resolveEmployeeId(userId);
       // Status is always Pending on creation -- never trust a client to set
       // it; there's no status field on the DTO at all.
       const certification = this.certificationsRepo.createScoped({
-        ...dto,
+        ...certData,
         employeeId,
         status: EmployeeCertificationStatus.Pending,
         createdBy: userId,
       });
       const saved = await this.certificationsRepo.saveScoped(certification);
+      if (evidenceFileUrl) {
+        await this.documentsService.replaceSingle(
+          DocumentOwnerType.CertificationEvidence,
+          saved.id,
+          evidenceFileUrl,
+          userId,
+        );
+      }
       this.logger.debug(`createMine succeeded (certification ${saved.id})`);
       await this.auditLogService.record({
         entityType: AUDIT_ENTITY_TYPE,
@@ -103,8 +112,9 @@ export class CertificationsService {
   async updateMine(userId: string, id: string, dto: UpdateCertificationDto): Promise<EmployeeCertification> {
     this.logger.debug(`updateMine called by ${userId} for certification ${id}`);
     try {
-      if (dto.evidenceFileUrl) {
-        assertKeyBelongsToTenant(dto.evidenceFileUrl, CERTIFICATION_PREFIX, this.tenantContext.getTenantId());
+      const { evidenceFileUrl, ...certDto } = dto;
+      if (evidenceFileUrl) {
+        assertKeyBelongsToTenant(evidenceFileUrl, CERTIFICATION_SEGMENT, this.tenantContext.getTenantSlug());
       }
       const employeeId = await this.resolveEmployeeId(userId);
       const certification = await this.findOwnedOrFail(id, employeeId);
@@ -118,29 +128,42 @@ export class CertificationsService {
 
       const before: Record<string, unknown> = {};
       const asRecord = certification as unknown as Record<string, unknown>;
-      for (const key of Object.keys(dto)) {
+      for (const key of Object.keys(certDto)) {
         before[key] = asRecord[key];
       }
-      const oldEvidenceFileUrl = certification.evidenceFileUrl;
+      const oldEvidenceDoc = "evidenceFileUrl" in dto
+        ? await this.documentsService.findCurrentScoped(DocumentOwnerType.CertificationEvidence, id)
+        : null;
 
-      Object.assign(certification, dto, { updatedBy: userId });
+      Object.assign(certification, certDto, { updatedBy: userId });
       const saved = await this.certificationsRepo.saveScoped(certification);
       this.logger.debug(`updateMine succeeded for certification ${id}`);
 
-      // Old file cleanup (replace, don't orphan) -- best-effort, after the
-      // save has definitely succeeded; a failed S3 delete never fails the
-      // update, it just orphans one object for later cleanup.
-      if ("evidenceFileUrl" in dto && oldEvidenceFileUrl && dto.evidenceFileUrl !== oldEvidenceFileUrl) {
-        this.logger.debug(`updateMine: evidence file replaced, removing old object ${oldEvidenceFileUrl}`);
-        await this.s3.deleteObjectBestEffort(oldEvidenceFileUrl);
+      // Evidence file replaced/cleared -- soft-delete only (old evidence
+      // stays recoverable in S3), never a hard delete, per the client's
+      // explicit "certifications need soft delete" call.
+      if ("evidenceFileUrl" in dto) {
+        if (evidenceFileUrl) {
+          await this.documentsService.replaceSingle(
+            DocumentOwnerType.CertificationEvidence,
+            id,
+            evidenceFileUrl,
+            userId,
+          );
+        } else {
+          await this.documentsService.clearSingle(DocumentOwnerType.CertificationEvidence, id);
+        }
       }
 
       const changes: Record<string, { old: unknown; new: unknown }> = {};
       const savedAsRecord = saved as unknown as Record<string, unknown>;
-      for (const key of Object.keys(dto)) {
+      for (const key of Object.keys(certDto)) {
         if (before[key] !== savedAsRecord[key]) {
           changes[key] = { old: before[key] ?? null, new: savedAsRecord[key] ?? null };
         }
+      }
+      if ("evidenceFileUrl" in dto && (oldEvidenceDoc?.s3Key ?? null) !== (evidenceFileUrl ?? null)) {
+        changes.evidenceFileUrl = { old: oldEvidenceDoc?.s3Key ?? null, new: evidenceFileUrl ?? null };
       }
       if (Object.keys(changes).length > 0) {
         await this.auditLogService.record({
@@ -202,7 +225,11 @@ export class CertificationsService {
       const certification = await this.findPendingOrFail(id);
       // AC: a claim with no evidence (neither file nor link) cannot be
       // verified -- an unsupported claim can only be rejected.
-      if (!certification.evidenceFileUrl && !certification.evidenceLink) {
+      const evidenceDoc = await this.documentsService.findCurrentScoped(
+        DocumentOwnerType.CertificationEvidence,
+        id,
+      );
+      if (!evidenceDoc && !certification.evidenceLink) {
         this.logger.debug(`verify: certification ${id} has no evidence, refusing to verify`);
         throw new BadRequestException("A certification with no evidence cannot be verified");
       }
@@ -301,9 +328,10 @@ export class CertificationsService {
       }
       await this.certificationsRepo.softRemoveScoped(certification, userId);
       this.logger.debug(`deleteMine succeeded for certification ${id}`);
-      // Best-effort -- a failed S3 delete must never fail the DB delete that
-      // already succeeded above; it just orphans one object for later cleanup.
-      await this.s3.deleteObjectBestEffort(certification.evidenceFileUrl);
+      // Evidence document soft-deleted alongside the certification -- never
+      // an S3 delete, the file stays recoverable, matching the client's
+      // "certifications need soft delete" call.
+      await this.documentsService.clearSingle(DocumentOwnerType.CertificationEvidence, id);
       await this.auditLogService.record({
         entityType: AUDIT_ENTITY_TYPE,
         entityId: id,

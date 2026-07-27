@@ -31,9 +31,8 @@ export class EmployeeCertification extends AuditedTenantEntity {
   @Column({ type: "date", nullable: true })
   expiryDate?: string;
 
-  @Column({ nullable: true })
-  evidenceFileUrl?: string;
-
+  // Evidence file lives in the shared `documents` table (ownerType
+  // CertificationEvidence, ownerId this row's id) -- see documents.module.ts.
   @Column({ nullable: true })
   evidenceLink?: string;
 
