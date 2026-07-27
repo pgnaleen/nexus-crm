@@ -1,8 +1,9 @@
-import { CertifiedEmployeeResponse, CertificationResponse, CertificationReviewResponse, PERMISSIONS } from "@orelia/common";
+import { CertifiedEmployeeResponse, CertificationResponse, CertificationReviewResponse, DocumentOwnerType, PERMISSIONS } from "@orelia/common";
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Logger, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { S3Service } from "../../core/storage/s3.service";
+import { DocumentsService } from "../documents/documents.service";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
 import { CertificationsService } from "./certifications.service";
@@ -24,6 +25,7 @@ export class CertificationsController {
 
   constructor(
     private readonly certificationsService: CertificationsService,
+    private readonly documentsService: DocumentsService,
     private readonly s3: S3Service,
   ) {}
 
@@ -186,6 +188,12 @@ export class CertificationsController {
   }
 
   private async toReviewResponse(certification: EmployeeCertification): Promise<CertificationReviewResponse> {
+    // Evidence file now lives in the shared documents table -- the row
+    // itself only ever stores the bare S3 key (evidenceDoc.s3Key).
+    const evidenceDoc = await this.documentsService.findCurrentScoped(
+      DocumentOwnerType.CertificationEvidence,
+      certification.id,
+    );
     return {
       id: certification.id,
       employeeId: certification.employeeId,
@@ -195,16 +203,18 @@ export class CertificationsController {
       credentialId: certification.credentialId ?? null,
       issueDate: certification.issueDate,
       expiryDate: certification.expiryDate ?? null,
-      evidenceFileUrl: certification.evidenceFileUrl ?? null,
-      // A fresh signed URL, generated on every response -- the row itself
-      // only ever stores the bare S3 key (certification.evidenceFileUrl).
-      evidenceFileDisplayUrl: await this.s3.getSignedGetUrl(certification.evidenceFileUrl),
+      evidenceFileUrl: evidenceDoc?.s3Key ?? null,
+      evidenceFileDisplayUrl: evidenceDoc ? await this.s3.getSignedGetUrl(evidenceDoc.s3Key) : null,
       evidenceLink: certification.evidenceLink ?? null,
       createdAt: certification.createdAt.toISOString(),
     };
   }
 
   private async toResponse(certification: EmployeeCertification): Promise<CertificationResponse> {
+    const evidenceDoc = await this.documentsService.findCurrentScoped(
+      DocumentOwnerType.CertificationEvidence,
+      certification.id,
+    );
     return {
       id: certification.id,
       name: certification.name,
@@ -212,8 +222,8 @@ export class CertificationsController {
       credentialId: certification.credentialId ?? null,
       issueDate: certification.issueDate,
       expiryDate: certification.expiryDate ?? null,
-      evidenceFileUrl: certification.evidenceFileUrl ?? null,
-      evidenceFileDisplayUrl: await this.s3.getSignedGetUrl(certification.evidenceFileUrl),
+      evidenceFileUrl: evidenceDoc?.s3Key ?? null,
+      evidenceFileDisplayUrl: evidenceDoc ? await this.s3.getSignedGetUrl(evidenceDoc.s3Key) : null,
       evidenceLink: certification.evidenceLink ?? null,
       status: certification.status,
       verifiedAt: certification.verifiedAt ? certification.verifiedAt.toISOString() : null,

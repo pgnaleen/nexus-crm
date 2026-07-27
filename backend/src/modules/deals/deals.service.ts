@@ -1,4 +1,4 @@
-import { DealStatus } from "@orelia/common";
+import { DealStatus, DocumentOwnerType } from "@orelia/common";
 import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
@@ -9,12 +9,12 @@ import { DealSourcesRepository } from "../deal-sources/deal-sources.repository";
 import { MainStagesService } from "../deal-stages/main-stages.service";
 import { SubStagesService } from "../deal-stages/sub-stages.service";
 import { DepartmentsRepository } from "../departments/departments.repository";
+import { Document } from "../documents/entities/document.entity";
 import { EmployeesRepository } from "../employees/employees.repository";
 import { CreateDealDto } from "./dto/create-deal.dto";
 import { MoveDealDto } from "./dto/move-deal.dto";
 import { UpdateDealDto } from "./dto/update-deal.dto";
 import { Deal } from "./entities/deal.entity";
-import { DealDocument } from "./entities/deal-document.entity";
 import { DealNote } from "./entities/deal-note.entity";
 import { DealPartnersMap } from "./entities/deal-partners-map.entity";
 import { DealStageHistoryService } from "./deal-stage-history.service";
@@ -118,7 +118,9 @@ export class DealsService {
   async countDependents(id: string): Promise<number> {
     await this.findOneBareOrFail(id);
     const [documents, notes, partners] = await Promise.all([
-      this.dataSource.getRepository(DealDocument).count({ where: { dealId: id } }),
+      this.dataSource
+        .getRepository(Document)
+        .count({ where: { ownerType: DocumentOwnerType.DealDocument, ownerId: id } }),
       this.dataSource.getRepository(DealNote).count({ where: { dealId: id } }),
       this.dataSource.getRepository(DealPartnersMap).count({ where: { dealId: id } }),
     ]);
@@ -248,12 +250,14 @@ export class DealsService {
     this.logger.debug(`remove called for deal ${id}`);
     try {
       await this.dataSource.transaction(async (manager) => {
-        const documentRepo = manager.getRepository(DealDocument);
+        const documentRepo = manager.getRepository(Document);
         const noteRepo = manager.getRepository(DealNote);
         const partnerRepo = manager.getRepository(DealPartnersMap);
         const dealRepo = manager.getRepository(Deal);
 
-        const documents = await documentRepo.find({ where: { dealId: id } });
+        const documents = await documentRepo.find({
+          where: { ownerType: DocumentOwnerType.DealDocument, ownerId: id },
+        });
         if (documents.length > 0) {
           this.logger.debug(`Cascading soft-delete to ${documents.length} document(s)`);
           await documentRepo.softRemove(documents);

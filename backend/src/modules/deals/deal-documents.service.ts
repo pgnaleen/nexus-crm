@@ -1,31 +1,34 @@
+import { DocumentOwnerType } from "@orelia/common";
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
-import { S3Service } from "../../core/storage/s3.service";
+import { Document } from "../documents/entities/document.entity";
+import { DocumentsService } from "../documents/documents.service";
 import { CreateDealDocumentDto } from "./dto/create-deal-document.dto";
-import { DealDocument } from "./entities/deal-document.entity";
 import { DealsService } from "./deals.service";
 
 const AUDIT_ENTITY_TYPE = "deal_document";
 
+// Deal documents are one of the five owner types stored in the shared
+// `documents` table (see documents.service.ts) -- a pure multi-row list,
+// nothing auto-retires, explicit delete is soft-delete only. This service
+// keeps the deal-scoped route shape (/deals/:dealId/documents) and just
+// delegates the actual storage to DocumentsService.
 @Injectable()
 export class DealDocumentsService {
   private readonly logger = new Logger(DealDocumentsService.name);
 
   constructor(
-    @InjectRepository(DealDocument) private readonly repo: Repository<DealDocument>,
+    private readonly documentsService: DocumentsService,
     private readonly dealsService: DealsService,
     private readonly auditLogService: AuditLogService,
-    private readonly s3: S3Service,
   ) {}
 
-  async findAll(dealId: string): Promise<DealDocument[]> {
+  async findAll(dealId: string): Promise<Document[]> {
     this.logger.debug(`findAll called for deal ${dealId}`);
     // Confirms the deal exists and belongs to the current tenant before
-    // touching its documents -- DealDocument has no tenant_id of its own.
+    // touching its documents.
     await this.dealsService.findOneOrFail(dealId);
-    const documents = await this.repo.find({ where: { dealId }, order: { createdAt: "DESC" } });
+    const documents = await this.documentsService.findAllScoped(DocumentOwnerType.DealDocument, dealId);
     this.logger.debug(`findAll returning ${documents.length} document(s) for deal ${dealId}`);
     return documents;
   }
@@ -35,18 +38,18 @@ export class DealDocumentsService {
     dto: CreateDealDocumentDto,
     s3Key: string,
     userId: string,
-  ): Promise<DealDocument> {
+  ): Promise<Document> {
     this.logger.debug(`create called for deal ${dealId} by ${userId} (docType=${dto.docType})`);
     await this.dealsService.findOneOrFail(dealId);
     try {
-      const document = this.repo.create({
+      const saved = await this.documentsService.add(
+        DocumentOwnerType.DealDocument,
         dealId,
-        docType: dto.docType,
-        title: dto.title,
         s3Key,
-        createdBy: userId,
-      });
-      const saved = await this.repo.save(document);
+        userId,
+        dto.title,
+        dto.docType,
+      );
       this.logger.debug(`create succeeded, document ${saved.id}`);
       await this.auditLogService.record({
         entityType: AUDIT_ENTITY_TYPE,
@@ -65,24 +68,21 @@ export class DealDocumentsService {
   async remove(dealId: string, documentId: string, userId: string): Promise<void> {
     this.logger.debug(`remove called for document ${documentId} on deal ${dealId} by ${userId}`);
     await this.dealsService.findOneOrFail(dealId);
-    const document = await this.repo.findOne({ where: { id: documentId, dealId } });
-    if (!document) {
+    const documents = await this.documentsService.findAllScoped(DocumentOwnerType.DealDocument, dealId);
+    const target = documents.find((d) => d.id === documentId);
+    if (!target) {
       this.logger.debug(`Blocked: document ${documentId} not found on deal ${dealId}`);
       throw new NotFoundException("Deal document not found");
     }
     try {
-      await this.repo.softRemove(document);
-      await this.repo.update(document.id, { deletedBy: userId });
+      await this.documentsService.removeScoped(documentId, DocumentOwnerType.DealDocument, dealId, userId);
       this.logger.debug(`remove succeeded for document ${documentId}`);
-      // Best-effort -- a failed S3 delete must never fail the DB delete that
-      // already succeeded above; it just orphans one object for later cleanup.
-      await this.s3.deleteObjectBestEffort(document.s3Key);
       await this.auditLogService.record({
         entityType: AUDIT_ENTITY_TYPE,
         entityId: documentId,
         action: "delete",
         actorId: userId,
-        changes: { dealId, docType: document.docType, title: document.title },
+        changes: { dealId, docType: target.docType, title: target.title },
       });
     } catch (err) {
       this.logger.error(`remove failed for document ${documentId}: ${(err as Error).message}`, (err as Error).stack);

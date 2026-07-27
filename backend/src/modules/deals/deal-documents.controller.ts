@@ -20,13 +20,13 @@ import { memoryStorage } from "multer";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { S3Service } from "../../core/storage/s3.service";
-import { DEAL_DOCUMENTS_PREFIX, tenantKeyPrefix } from "../../core/storage/storage.constants";
+import { DEAL_DOCUMENTS_SEGMENT, tenantKeyPrefix } from "../../core/storage/storage.constants";
 import { TenantContextService } from "../../core/tenant";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
 import { ALLOWED_DEAL_DOCUMENT_MIME_TYPES, MAX_DEAL_DOCUMENT_SIZE_BYTES } from "../uploads/uploads.constants";
+import { Document } from "../documents/entities/document.entity";
 import { CreateDealDocumentDto } from "./dto/create-deal-document.dto";
-import { DealDocument } from "./entities/deal-document.entity";
 import { DealDocumentsService } from "./deal-documents.service";
 
 @Controller("deals/:dealId/documents")
@@ -83,13 +83,13 @@ export class DealDocumentsController {
     }
     try {
       const ext = file.originalname.split(".").pop() ?? "bin";
-      const tenantId = this.tenantContext.getTenantId();
+      const tenantSlug = this.tenantContext.getTenantSlug();
       // dealId itself is only ever reachable here after dealsService.findOneOrFail
       // (inside DealDocumentsService.create) resolves it as belonging to the
       // current tenant, so s3Key is never client-trusted the way logo/photo/
       // CV/evidence keys are -- this tenant segment is for consistent physical
       // layout, not a security boundary that needs its own assertion.
-      const s3Key = `${tenantKeyPrefix(DEAL_DOCUMENTS_PREFIX, tenantId)}${dealId}/${randomUUID()}.${ext}`;
+      const s3Key = `${tenantKeyPrefix(tenantSlug, DEAL_DOCUMENTS_SEGMENT)}${dealId}/${randomUUID()}.${ext}`;
       await this.s3.putObject(s3Key, file.buffer, file.mimetype);
       const document = await this.dealDocumentsService.create(dealId, dto, s3Key, user.sub);
       const response = await this.toResponse(document);
@@ -120,12 +120,15 @@ export class DealDocumentsController {
     }
   }
 
-  private async toResponse(document: DealDocument): Promise<DealDocumentResponse> {
+  private async toResponse(document: Document): Promise<DealDocumentResponse> {
     return {
       id: document.id,
-      dealId: document.dealId,
-      docType: document.docType,
-      title: document.title,
+      dealId: document.ownerId,
+      // docType/title are always set for a DealDocument row (required on
+      // CreateDealDocumentDto) -- only null for the other four owner types
+      // sharing this table.
+      docType: document.docType!,
+      title: document.title!,
       // A fresh signed URL, generated on every response -- the row itself
       // only ever stores the bare S3 key (document.s3Key).
       url: (await this.s3.getSignedGetUrl(document.s3Key)) ?? "",

@@ -5,12 +5,15 @@ import { SchedulerRegistry } from "@nestjs/schedule";
 import { CronJob } from "cron";
 import { S3Service } from "../../core/storage/s3.service";
 
-// Own subdirectory, not the bare "db-backups/" root -- that root prefix is
-// also where the predecessor Hisham-Project's job wrote its own dumps
-// (db-backups/orel-kanban-*.dump) in the same shared bucket. A retention prune
-// filters by age only, not filename, so sharing the literal prefix meant this
-// job's cleanup swept up and permanently deleted that project's old dumps too.
-const S3_PREFIX = "db-backups/orelia/";
+// Own subdirectory, not the bare "backups/" root -- that root prefix is also
+// where the predecessor Hisham-Project's job wrote its own dumps
+// (db-backups/orel-kanban-*.dump, under the previous top-level folder name)
+// in the same shared bucket. A retention prune filters by age only, not
+// filename, so sharing the literal prefix meant this job's cleanup swept up
+// and permanently deleted that project's old dumps too. "backups/" (renamed
+// from "db-backups/") sits at the bucket root as a sibling of every tenant's
+// own folder -- see storage.constants.ts -- never nested inside one.
+const S3_PREFIX = "backups/orelia/";
 const NIGHTLY_JOB_NAME = "nightly-db-backup";
 
 // Nightly full-DB backup: pg_dump --format=custom piped straight to a Buffer

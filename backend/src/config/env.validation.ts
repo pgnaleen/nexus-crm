@@ -26,11 +26,11 @@ export const envValidationSchema = Joi.object({
   // Comma-separated list of allowed origins for cookie-credentialed requests.
   CORS_ORIGIN: Joi.string().default("http://localhost:3000"),
 
-  // Shared app S3 bucket -- nightly DB backups (db-backups/orelia/ prefix)
+  // Shared app S3 bucket -- nightly DB backups (backups/orelia/ prefix)
   // AND every user-facing file upload (logo, deal documents, employee
-  // photo/CV, certification evidence -- uploads/ prefix, see
-  // core/storage/storage.constants.ts) both use this one bucket, key prefix
-  // is what keeps them apart. All optional at the schema level (so a fresh
+  // photo/CV, certification evidence -- under each tenant's own {slug}/
+  // folder, see core/storage/storage.constants.ts) both use this one bucket,
+  // key prefix is what keeps them apart. All optional at the schema level (so a fresh
   // clone still boots): backups log a warning and no-op when unset, but any
   // upload attempted while unset fails loudly instead (see S3Service).
   // .empty("") treats the blank values from .env.example (e.g. `AWS_REGION=`) as

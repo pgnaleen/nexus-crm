@@ -1,8 +1,9 @@
-import { EmployeeDetailResponse, EmployeeListItemResponse, OrgChartEmployeeResponse, PERMISSIONS } from "@orelia/common";
+import { DocumentOwnerType, EmployeeDetailResponse, EmployeeListItemResponse, OrgChartEmployeeResponse, PERMISSIONS } from "@orelia/common";
 import { Body, Controller, Delete, Get, Logger, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { S3Service } from "../../core/storage/s3.service";
+import { DocumentsService } from "../documents/documents.service";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
 import { RbacService } from "../rbac/rbac.service";
@@ -19,6 +20,7 @@ export class EmployeesController {
   constructor(
     private readonly employeesService: EmployeesService,
     private readonly rbacService: RbacService,
+    private readonly documentsService: DocumentsService,
     private readonly s3: S3Service,
   ) {}
 
@@ -102,17 +104,20 @@ export class EmployeesController {
     try {
       const employees = await this.employeesService.findForOrgChart();
       const responses = await Promise.all(
-        employees.map(async (employee) => ({
-          id: employee.id,
-          fullName: employee.fullName,
-          currentDesignation: employee.currentDesignation ?? null,
-          departmentId: employee.departmentId ?? null,
-          departmentName: employee.department?.name ?? null,
-          profilePhotoUrl: employee.profilePhotoUrl ?? null,
-          profilePhotoDisplayUrl: await this.s3.getSignedGetUrl(employee.profilePhotoUrl),
-          reportingManagerId: employee.reportingManagerId ?? null,
-          placedAtRoot: employee.placedAtRoot,
-        })),
+        employees.map(async (employee) => {
+          const photoDoc = await this.documentsService.findCurrentScoped(DocumentOwnerType.EmployeePhoto, employee.id);
+          return {
+            id: employee.id,
+            fullName: employee.fullName,
+            currentDesignation: employee.currentDesignation ?? null,
+            departmentId: employee.departmentId ?? null,
+            departmentName: employee.department?.name ?? null,
+            profilePhotoUrl: photoDoc?.s3Key ?? null,
+            profilePhotoDisplayUrl: photoDoc ? await this.s3.getSignedGetUrl(photoDoc.s3Key) : null,
+            reportingManagerId: employee.reportingManagerId ?? null,
+            placedAtRoot: employee.placedAtRoot,
+          };
+        }),
       );
       this.logger.debug(`GET /employees/org-chart returning ${responses.length} row(s)`);
       return responses;
@@ -239,12 +244,16 @@ export class EmployeesController {
   }
 
   private async toDetailResponse(employee: Employee, hasSensitiveAccess: boolean): Promise<EmployeeDetailResponse> {
-    // profilePhotoUrl/cvUrl on the row are the bare stored S3 keys -- the
-    // *DisplayUrl fields are fresh signed URLs generated here, on every
-    // response, purely for rendering (never persisted).
+    // Photo/CV now live in the shared documents table -- the row itself
+    // only ever stores the bare S3 key (doc.s3Key). *DisplayUrl fields are
+    // fresh signed URLs generated here, on every response, never persisted.
+    const [photoDoc, cvDoc] = await Promise.all([
+      this.documentsService.findCurrentScoped(DocumentOwnerType.EmployeePhoto, employee.id),
+      this.documentsService.findCurrentScoped(DocumentOwnerType.EmployeeCv, employee.id),
+    ]);
     const [profilePhotoDisplayUrl, cvDisplayUrl] = await Promise.all([
-      this.s3.getSignedGetUrl(employee.profilePhotoUrl),
-      this.s3.getSignedGetUrl(employee.s3Key),
+      photoDoc ? this.s3.getSignedGetUrl(photoDoc.s3Key) : null,
+      cvDoc ? this.s3.getSignedGetUrl(cvDoc.s3Key) : null,
     ]);
     return {
       id: employee.id,
@@ -253,7 +262,7 @@ export class EmployeesController {
       gender: employee.gender ?? null,
       nationality: employee.nationality ?? null,
       bio: employee.bio ?? null,
-      profilePhotoUrl: employee.profilePhotoUrl ?? null,
+      profilePhotoUrl: photoDoc?.s3Key ?? null,
       profilePhotoDisplayUrl,
       employeeCode: employee.employeeCode ?? null,
       title: employee.title ?? null,
@@ -267,7 +276,7 @@ export class EmployeesController {
       primaryLocation: employee.primaryLocation ?? null,
       baseCountry: employee.baseCountry ?? null,
       clearanceLevel: employee.clearanceLevel ?? null,
-      cvUrl: employee.s3Key ?? null,
+      cvUrl: cvDoc?.s3Key ?? null,
       cvDisplayUrl,
       employeeEmail: employee.employeeEmail ?? null,
       mobileNo: employee.mobileNo ?? null,

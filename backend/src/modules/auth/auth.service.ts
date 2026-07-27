@@ -236,6 +236,7 @@ export class AuthService {
       const payload: ActAsTenantTokenPayload = {
         typ: ACT_AS_TENANT_TOKEN_TYPE,
         actAsTenantId: tenant.id,
+        actAsTenantSlug: tenant.slug,
         actingUserId,
       };
       const token = this.jwtService.sign(payload, {
@@ -306,7 +307,7 @@ export class AuthService {
       this.rbacService.getPermissionsForUser(user.id),
     ]);
 
-    const payload: AuthenticatedUser = { sub: user.id, tenantId: tenant.id, roles };
+    const payload: AuthenticatedUser = { sub: user.id, tenantId: tenant.id, tenantSlug: tenant.slug, roles };
     const accessToken = this.jwtService.sign(payload, {
       secret: this.config.get<string>("JWT_ACCESS_SECRET"),
       expiresIn: this.config.get<string>("JWT_ACCESS_EXPIRES_IN"),

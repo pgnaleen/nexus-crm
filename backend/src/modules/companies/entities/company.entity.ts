@@ -20,8 +20,8 @@ export class Company extends AuditedTenantEntity {
   @Column({ nullable: true })
   url?: string;
 
-  @Column({ nullable: true })
-  logo?: string;
+  // Logo lives in the shared `documents` table (ownerType CompanyLogo,
+  // ownerId this row's id) -- see documents.module.ts.
 
   @Column({ type: "jsonb", nullable: true })
   brands?: string[];

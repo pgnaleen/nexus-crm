@@ -1,10 +1,11 @@
-import { CompanyResponse, ContactResponse, PERMISSIONS, RelationshipPartyResponse } from "@orelia/common";
+import { CompanyResponse, ContactResponse, DocumentOwnerType, PERMISSIONS, RelationshipPartyResponse } from "@orelia/common";
 import { Body, Controller, Delete, Get, Logger, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { S3Service } from "../../core/storage/s3.service";
 import { Company } from "../companies/entities/company.entity";
 import { Contact } from "../contacts/entities/contact.entity";
+import { DocumentsService } from "../documents/documents.service";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
 import { CreateRelationshipPartyCompanyDto } from "./dto/create-relationship-party-company.dto";
@@ -27,6 +28,7 @@ export class RelationshipPartiesController {
 
   constructor(
     private readonly partiesService: RelationshipPartiesService,
+    private readonly documentsService: DocumentsService,
     private readonly s3: S3Service,
   ) {}
 
@@ -277,15 +279,17 @@ export class RelationshipPartiesController {
   }
 
   private async toCompanyResponse(company: Company): Promise<CompanyResponse> {
+    // Logo now lives in the shared documents table -- the row itself only
+    // ever stores the bare S3 key (logoDoc.s3Key).
+    const logoDoc = await this.documentsService.findCurrentScoped(DocumentOwnerType.CompanyLogo, company.id);
     return {
       id: company.id,
       tenantId: company.tenantId,
       name: company.name,
       url: company.url ?? null,
-      logo: company.logo ?? null,
-      // A fresh signed URL, generated on every response -- the row itself
-      // only ever stores the bare S3 key (company.logo).
-      logoDisplayUrl: await this.s3.getSignedGetUrl(company.logo),
+      logo: logoDoc?.s3Key ?? null,
+      // A fresh signed URL, generated on every response.
+      logoDisplayUrl: logoDoc ? await this.s3.getSignedGetUrl(logoDoc.s3Key) : null,
       brands: company.brands ?? null,
       industryId: company.industryId ?? null,
       subIndustry: company.subIndustry ?? null,

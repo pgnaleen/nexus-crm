@@ -74,9 +74,8 @@ export class Employee extends AuditedTenantEntity {
   @Column({ type: "text", nullable: true })
   bio?: string;
 
-  @Column({ nullable: true })
-  profilePhotoUrl?: string;
-
+  // Profile photo and CV live in the shared `documents` table (ownerType
+  // EmployeePhoto/EmployeeCv, ownerId this row's id) -- see documents.module.ts.
   @Column({ type: "timestamptz", nullable: true })
   cvLastUpdated?: Date;
 
@@ -87,9 +86,6 @@ export class Employee extends AuditedTenantEntity {
 
   @Column({ default: false })
   nicPassportEncrypted!: boolean;
-
-  @Column({ nullable: true })
-  s3Key?: string;
 
   @Column({ type: "numeric", precision: 12, scale: 2, nullable: true })
   baseSalary?: number;
