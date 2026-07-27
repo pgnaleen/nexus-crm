@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { PriorityTaskQuadrant } from "@orelia/common";
 import type { IncomingTaskResponse, PriorityTaskResponse, UserPickerResponse } from "@orelia/common";
-import { Dialog } from "@/components/ui/Dialog";
+import { SidePanel } from "@/components/ui/SidePanel";
 import { Button } from "@/components/ui/Button";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { acceptPriorityTask, listIncomingPriorityTasks, redelegatePriorityTask } from "@/lib/api/priority-tasks";
@@ -92,7 +92,7 @@ export function IncomingPanelDialog({ onClose, onAccepted, onCountChange }: Inco
   }
 
   return (
-    <Dialog open title={t("priorityTracker.incoming.title")} onClose={onClose} maxWidth="600px">
+    <SidePanel title={t("priorityTracker.incoming.title")} onClose={onClose} width="440px">
       {loadError && <p className="mt-1.5 mb-3 text-[12.5px] text-[var(--color-danger)]">{loadError}</p>}
 
       {!items && !loadError && (
@@ -169,15 +169,9 @@ export function IncomingPanelDialog({ onClose, onAccepted, onCountChange }: Inco
         </div>
       )}
 
-      <div className="mt-4 flex justify-end">
-        <Button type="button" variant="secondary" onClick={onClose}>
-          {t("common.actions.close")}
-        </Button>
-      </div>
-
       {redelegatingId && (
         <DelegateTaskDialog onClose={() => setRedelegatingId(null)} onDelegated={handleRedelegated} />
       )}
-    </Dialog>
+    </SidePanel>
   );
 }

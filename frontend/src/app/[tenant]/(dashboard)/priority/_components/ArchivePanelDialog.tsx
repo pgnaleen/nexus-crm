@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { PriorityTaskResponse } from "@orelia/common";
-import { Dialog } from "@/components/ui/Dialog";
+import { SidePanel } from "@/components/ui/SidePanel";
 import { Button } from "@/components/ui/Button";
 import { listArchivedPriorityTasks, restorePriorityTask } from "@/lib/api/priority-tasks";
 import { ApiError } from "@/lib/api/client";
@@ -49,7 +49,7 @@ export function ArchivePanelDialog({ onClose, onRestored }: ArchivePanelDialogPr
   }
 
   return (
-    <Dialog open title={t("priorityTracker.archive.title")} onClose={onClose} maxWidth="560px">
+    <SidePanel title={t("priorityTracker.archive.title")} onClose={onClose} width="440px">
       {loadError && <p className="mt-1.5 mb-3 text-[12.5px] text-[var(--color-danger)]">{loadError}</p>}
 
       {!items && !loadError && (
@@ -84,11 +84,6 @@ export function ArchivePanelDialog({ onClose, onRestored }: ArchivePanelDialogPr
         </div>
       )}
 
-      <div className="mt-4 flex justify-end">
-        <Button type="button" variant="secondary" onClick={onClose}>
-          {t("common.actions.close")}
-        </Button>
-      </div>
-    </Dialog>
+    </SidePanel>
   );
 }
