@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import type { EmployeeDetailResponse } from "@orelia/common";
-import { resolveUploadUrl } from "@/lib/api/uploads";
 import { t } from "@/lib/i18n";
 import {
   CLEARANCE_LEVEL_LABELS,
@@ -41,9 +40,9 @@ export function MyEmployeeRecord({ record }: { record: EmployeeDetailResponse })
         {t("profile.employeeRecord.hint")}
       </p>
 
-      {record.profilePhotoUrl && (
+      {record.profilePhotoDisplayUrl && (
         <img
-          src={resolveUploadUrl(record.profilePhotoUrl)}
+          src={record.profilePhotoDisplayUrl}
           alt=""
           className="mb-4 h-16 w-16 rounded-full border border-[var(--color-border)] object-cover"
         />

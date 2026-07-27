@@ -2,6 +2,7 @@ import { CertifiedEmployeeResponse, CertificationResponse, CertificationReviewRe
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Logger, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
+import { S3Service } from "../../core/storage/s3.service";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
 import { CertificationsService } from "./certifications.service";
@@ -21,15 +22,19 @@ import { EmployeeCertification } from "./entities/employee-certification.entity"
 export class CertificationsController {
   private readonly logger = new Logger(CertificationsController.name);
 
-  constructor(private readonly certificationsService: CertificationsService) {}
+  constructor(
+    private readonly certificationsService: CertificationsService,
+    private readonly s3: S3Service,
+  ) {}
 
   @Get("me")
   async listMine(@CurrentUser() user: AuthenticatedUser): Promise<CertificationResponse[]> {
     this.logger.debug(`GET /certifications/me called by ${user.sub}`);
     try {
       const certifications = await this.certificationsService.listMine(user.sub);
-      this.logger.debug(`GET /certifications/me returning ${certifications.length} row(s)`);
-      return certifications.map((certification) => this.toResponse(certification));
+      const responses = await Promise.all(certifications.map((certification) => this.toResponse(certification)));
+      this.logger.debug(`GET /certifications/me returning ${responses.length} row(s)`);
+      return responses;
     } catch (err) {
       this.logger.error(`GET /certifications/me failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -94,8 +99,9 @@ export class CertificationsController {
     this.logger.debug(`GET /certifications/review called by ${user.sub}`);
     try {
       const pending = await this.certificationsService.findPendingForReview();
-      this.logger.debug(`GET /certifications/review returning ${pending.length} pending claim(s)`);
-      return pending.map((certification) => this.toReviewResponse(certification));
+      const responses = await Promise.all(pending.map((certification) => this.toReviewResponse(certification)));
+      this.logger.debug(`GET /certifications/review returning ${responses.length} pending claim(s)`);
+      return responses;
     } catch (err) {
       this.logger.error(`GET /certifications/review failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -179,7 +185,7 @@ export class CertificationsController {
     };
   }
 
-  private toReviewResponse(certification: EmployeeCertification): CertificationReviewResponse {
+  private async toReviewResponse(certification: EmployeeCertification): Promise<CertificationReviewResponse> {
     return {
       id: certification.id,
       employeeId: certification.employeeId,
@@ -190,12 +196,15 @@ export class CertificationsController {
       issueDate: certification.issueDate,
       expiryDate: certification.expiryDate ?? null,
       evidenceFileUrl: certification.evidenceFileUrl ?? null,
+      // A fresh signed URL, generated on every response -- the row itself
+      // only ever stores the bare S3 key (certification.evidenceFileUrl).
+      evidenceFileDisplayUrl: await this.s3.getSignedGetUrl(certification.evidenceFileUrl),
       evidenceLink: certification.evidenceLink ?? null,
       createdAt: certification.createdAt.toISOString(),
     };
   }
 
-  private toResponse(certification: EmployeeCertification): CertificationResponse {
+  private async toResponse(certification: EmployeeCertification): Promise<CertificationResponse> {
     return {
       id: certification.id,
       name: certification.name,
@@ -204,6 +213,7 @@ export class CertificationsController {
       issueDate: certification.issueDate,
       expiryDate: certification.expiryDate ?? null,
       evidenceFileUrl: certification.evidenceFileUrl ?? null,
+      evidenceFileDisplayUrl: await this.s3.getSignedGetUrl(certification.evidenceFileUrl),
       evidenceLink: certification.evidenceLink ?? null,
       status: certification.status,
       verifiedAt: certification.verifiedAt ? certification.verifiedAt.toISOString() : null,

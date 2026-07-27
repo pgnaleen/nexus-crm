@@ -2,6 +2,7 @@ import { CompanyResponse, ContactResponse, PERMISSIONS, RelationshipPartyRespons
 import { Body, Controller, Delete, Get, Logger, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
+import { S3Service } from "../../core/storage/s3.service";
 import { Company } from "../companies/entities/company.entity";
 import { Contact } from "../contacts/entities/contact.entity";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
@@ -24,7 +25,10 @@ const ANY_RELATIONSHIP_PERMISSION = [
 export class RelationshipPartiesController {
   private readonly logger = new Logger(RelationshipPartiesController.name);
 
-  constructor(private readonly partiesService: RelationshipPartiesService) {}
+  constructor(
+    private readonly partiesService: RelationshipPartiesService,
+    private readonly s3: S3Service,
+  ) {}
 
   @UseGuards(PermissionsGuard)
   @RequirePermission(ANY_RELATIONSHIP_PERMISSION)
@@ -35,8 +39,9 @@ export class RelationshipPartiesController {
     this.logger.debug(`GET /relationship-types/${relationshipTypeId}/parties called`);
     try {
       const parties = await this.partiesService.findAllForType(relationshipTypeId);
-      this.logger.debug(`GET /relationship-types/${relationshipTypeId}/parties returning ${parties.length} row(s)`);
-      return parties.map((party) => this.toResponse(party));
+      const responses = await Promise.all(parties.map((party) => this.toResponse(party)));
+      this.logger.debug(`GET /relationship-types/${relationshipTypeId}/parties returning ${responses.length} row(s)`);
+      return responses;
     } catch (err) {
       this.logger.error(`GET /relationship-types/${relationshipTypeId}/parties failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -212,7 +217,7 @@ export class RelationshipPartiesController {
     }
   }
 
-  private toResponse(party: RelationshipCompanyContactMap): RelationshipPartyResponse {
+  private async toResponse(party: RelationshipCompanyContactMap): Promise<RelationshipPartyResponse> {
     return {
       id: party.id,
       relationshipTypeId: party.relationshipTypeId,
@@ -220,18 +225,21 @@ export class RelationshipPartiesController {
       isActive: party.isActive,
       createdAt: party.createdAt.toISOString(),
       updatedAt: party.updatedAt.toISOString(),
-      company: party.company ? this.toCompanyResponse(party.company) : null,
+      company: party.company ? await this.toCompanyResponse(party.company) : null,
       contact: party.contact ? this.toContactResponse(party.contact) : null,
     };
   }
 
-  private toCompanyResponse(company: Company): CompanyResponse {
+  private async toCompanyResponse(company: Company): Promise<CompanyResponse> {
     return {
       id: company.id,
       tenantId: company.tenantId,
       name: company.name,
       url: company.url ?? null,
       logo: company.logo ?? null,
+      // A fresh signed URL, generated on every response -- the row itself
+      // only ever stores the bare S3 key (company.logo).
+      logoDisplayUrl: await this.s3.getSignedGetUrl(company.logo),
       brands: company.brands ?? null,
       industryId: company.industryId ?? null,
       subIndustry: company.subIndustry ?? null,

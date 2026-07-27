@@ -28,8 +28,13 @@ export interface UserPickerResponse {
   displayName: string;
 }
 
+// key is the bare, stable S3 key -- this is what gets submitted back to the
+// server as the field's value (logo/profilePhotoUrl/cvUrl/evidenceFileUrl).
+// previewUrl is a short-lived signed URL, for immediate display only in the
+// same session -- it expires and must never itself be persisted anywhere.
 export interface UploadResponse {
-  url: string;
+  key: string;
+  previewUrl: string;
 }
 
 /** Companies/contacts tagged under whichever Relationship Type a tenant has flagged

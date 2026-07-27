@@ -3,7 +3,7 @@ import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { SchedulerRegistry } from "@nestjs/schedule";
 import { CronJob } from "cron";
-import { S3Service } from "./s3.service";
+import { S3Service } from "../../core/storage/s3.service";
 
 // Own subdirectory, not the bare "db-backups/" root -- that root prefix is
 // also where the predecessor Hisham-Project's job wrote its own dumps

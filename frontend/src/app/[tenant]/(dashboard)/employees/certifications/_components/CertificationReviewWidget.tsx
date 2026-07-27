@@ -3,7 +3,6 @@
 import { useState } from "react";
 import type { CertificationReviewResponse } from "@orelia/common";
 import { rejectCertification, verifyCertification } from "@/lib/api/certifications";
-import { resolveUploadUrl } from "@/lib/api/uploads";
 import { ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/Button";
 import { ExternalLinkIcon, FileIcon } from "@/components/ui/icons";
@@ -97,9 +96,9 @@ export function CertificationReviewWidget({ canReview, initial }: CertificationR
                           ` · ${t("certificationReview.expires")}: ${certification.expiryDate}`}
                       </div>
                       <div className="mt-1.5 flex items-center gap-3">
-                        {certification.evidenceFileUrl && (
+                        {certification.evidenceFileDisplayUrl && (
                           <a
-                            href={resolveUploadUrl(certification.evidenceFileUrl)}
+                            href={certification.evidenceFileDisplayUrl}
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex items-center gap-1 text-[12.5px] text-crm-primary underline"

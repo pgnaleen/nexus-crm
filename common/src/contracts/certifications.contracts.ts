@@ -12,7 +12,11 @@ export interface CertificationResponse {
   credentialId: string | null;
   issueDate: string;
   expiryDate: string | null;
+  // evidenceFileUrl is the stored S3 key, submitted back verbatim on save if
+  // untouched. evidenceFileDisplayUrl is a fresh, short-lived signed URL
+  // generated at response-build time purely for rendering -- never persisted.
   evidenceFileUrl: string | null;
+  evidenceFileDisplayUrl: string | null;
   evidenceLink: string | null;
   status: EmployeeCertificationStatus;
   verifiedAt: string | null;
@@ -61,6 +65,7 @@ export interface CertificationReviewResponse {
   issueDate: string;
   expiryDate: string | null;
   evidenceFileUrl: string | null;
+  evidenceFileDisplayUrl: string | null;
   evidenceLink: string | null;
   createdAt: string;
 }

@@ -1,10 +1,9 @@
-import { existsSync, mkdirSync } from "fs";
-import { join } from "path";
 import { randomUUID } from "crypto";
 import { PERMISSIONS, UploadResponse } from "@orelia/common";
 import {
   BadRequestException,
   Controller,
+  Logger,
   Post,
   UploadedFile,
   UseGuards,
@@ -12,7 +11,14 @@ import {
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import type { Request } from "express";
-import { diskStorage } from "multer";
+import { memoryStorage } from "multer";
+import { S3Service } from "../../core/storage/s3.service";
+import {
+  CERTIFICATION_PREFIX,
+  EMPLOYEE_CV_PREFIX,
+  EMPLOYEE_PHOTO_PREFIX,
+  LOGO_PREFIX,
+} from "../../core/storage/storage.constants";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
 import {
@@ -20,15 +26,10 @@ import {
   ALLOWED_EMPLOYEE_CV_MIME_TYPES,
   ALLOWED_EMPLOYEE_PHOTO_MIME_TYPES,
   ALLOWED_LOGO_MIME_TYPES,
-  CERTIFICATION_SUBDIR,
-  EMPLOYEE_CV_SUBDIR,
-  EMPLOYEE_PHOTO_SUBDIR,
-  LOGO_SUBDIR,
   MAX_CERTIFICATION_SIZE_BYTES,
   MAX_EMPLOYEE_CV_SIZE_BYTES,
   MAX_EMPLOYEE_PHOTO_SIZE_BYTES,
   MAX_LOGO_SIZE_BYTES,
-  UPLOAD_DIR,
 } from "./uploads.constants";
 
 const ANY_RELATIONSHIP_PERMISSION = [
@@ -38,34 +39,38 @@ const ANY_RELATIONSHIP_PERMISSION = [
   PERMISSIONS.RELATIONSHIP_DELETE,
 ];
 
-const logoDir = join(process.cwd(), UPLOAD_DIR, LOGO_SUBDIR);
-const employeePhotoDir = join(process.cwd(), UPLOAD_DIR, EMPLOYEE_PHOTO_SUBDIR);
-const employeeCvDir = join(process.cwd(), UPLOAD_DIR, EMPLOYEE_CV_SUBDIR);
-const certificationDir = join(process.cwd(), UPLOAD_DIR, CERTIFICATION_SUBDIR);
-
-function ensureDir(dir: string): void {
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
+function fileExt(originalname: string): string {
+  return originalname.split(".").pop() ?? "bin";
 }
 
 @Controller("uploads")
 export class UploadsController {
+  private readonly logger = new Logger(UploadsController.name);
+
+  constructor(private readonly s3: S3Service) {}
+
+  private async uploadAndRespond(file: Express.Multer.File, prefix: string): Promise<UploadResponse> {
+    const key = `${prefix}${randomUUID()}.${fileExt(file.originalname)}`;
+    this.logger.debug(`uploadAndRespond: putting object at ${key} (${file.size} bytes, ${file.mimetype})`);
+    await this.s3.putObject(key, file.buffer, file.mimetype);
+    const previewUrl = await this.s3.getSignedGetUrl(key);
+    if (!previewUrl) {
+      // Only reachable if S3 is disabled after putObject just succeeded above
+      // (requireEnabled() would already have thrown) -- treated as a
+      // genuine failure since the caller needs a preview URL to show the
+      // file it just uploaded.
+      throw new BadRequestException("Uploaded, but failed to generate a preview URL");
+    }
+    this.logger.debug(`uploadAndRespond: succeeded for ${key}`);
+    return { key, previewUrl };
+  }
+
   @UseGuards(PermissionsGuard)
   @RequirePermission(ANY_RELATIONSHIP_PERMISSION)
   @Post("logo")
   @UseInterceptors(
     FileInterceptor("file", {
-      storage: diskStorage({
-        destination: (_req: Request, _file: Express.Multer.File, callback: (error: Error | null, destination: string) => void) => {
-          ensureDir(logoDir);
-          callback(null, logoDir);
-        },
-        filename: (_req: Request, file: Express.Multer.File, callback: (error: Error | null, filename: string) => void) => {
-          const ext = file.originalname.split(".").pop();
-          callback(null, `${randomUUID()}.${ext}`);
-        },
-      }),
+      storage: memoryStorage(),
       limits: { fileSize: MAX_LOGO_SIZE_BYTES },
       fileFilter: (_req: Request, file: Express.Multer.File, callback: (error: Error | null, acceptFile: boolean) => void) => {
         if (!ALLOWED_LOGO_MIME_TYPES.includes(file.mimetype)) {
@@ -76,11 +81,19 @@ export class UploadsController {
       },
     }),
   )
-  uploadLogo(@UploadedFile() file: Express.Multer.File): UploadResponse {
+  async uploadLogo(@UploadedFile() file: Express.Multer.File): Promise<UploadResponse> {
+    this.logger.debug(`POST /uploads/logo called (file=${file?.originalname ?? "none"})`);
     if (!file) {
       throw new BadRequestException("No file uploaded");
     }
-    return { url: `/uploads/${LOGO_SUBDIR}/${file.filename}` };
+    try {
+      const result = await this.uploadAndRespond(file, LOGO_PREFIX);
+      this.logger.debug(`POST /uploads/logo succeeded`);
+      return result;
+    } catch (err) {
+      this.logger.error(`POST /uploads/logo failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   // Stories 1.2/1.4 (Create/Update Employee) -- Personal tab's profile
@@ -90,16 +103,7 @@ export class UploadsController {
   @Post("employee-photo")
   @UseInterceptors(
     FileInterceptor("file", {
-      storage: diskStorage({
-        destination: (_req: Request, _file: Express.Multer.File, callback: (error: Error | null, destination: string) => void) => {
-          ensureDir(employeePhotoDir);
-          callback(null, employeePhotoDir);
-        },
-        filename: (_req: Request, file: Express.Multer.File, callback: (error: Error | null, filename: string) => void) => {
-          const ext = file.originalname.split(".").pop();
-          callback(null, `${randomUUID()}.${ext}`);
-        },
-      }),
+      storage: memoryStorage(),
       limits: { fileSize: MAX_EMPLOYEE_PHOTO_SIZE_BYTES },
       fileFilter: (_req: Request, file: Express.Multer.File, callback: (error: Error | null, acceptFile: boolean) => void) => {
         if (!ALLOWED_EMPLOYEE_PHOTO_MIME_TYPES.includes(file.mimetype)) {
@@ -110,11 +114,19 @@ export class UploadsController {
       },
     }),
   )
-  uploadEmployeePhoto(@UploadedFile() file: Express.Multer.File): UploadResponse {
+  async uploadEmployeePhoto(@UploadedFile() file: Express.Multer.File): Promise<UploadResponse> {
+    this.logger.debug(`POST /uploads/employee-photo called (file=${file?.originalname ?? "none"})`);
     if (!file) {
       throw new BadRequestException("No file uploaded");
     }
-    return { url: `/uploads/${EMPLOYEE_PHOTO_SUBDIR}/${file.filename}` };
+    try {
+      const result = await this.uploadAndRespond(file, EMPLOYEE_PHOTO_PREFIX);
+      this.logger.debug(`POST /uploads/employee-photo succeeded`);
+      return result;
+    } catch (err) {
+      this.logger.error(`POST /uploads/employee-photo failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   // Stories 1.2/1.4 (Create/Update Employee) -- Employment tab's CV upload,
@@ -124,16 +136,7 @@ export class UploadsController {
   @Post("employee-cv")
   @UseInterceptors(
     FileInterceptor("file", {
-      storage: diskStorage({
-        destination: (_req: Request, _file: Express.Multer.File, callback: (error: Error | null, destination: string) => void) => {
-          ensureDir(employeeCvDir);
-          callback(null, employeeCvDir);
-        },
-        filename: (_req: Request, file: Express.Multer.File, callback: (error: Error | null, filename: string) => void) => {
-          const ext = file.originalname.split(".").pop();
-          callback(null, `${randomUUID()}.${ext}`);
-        },
-      }),
+      storage: memoryStorage(),
       limits: { fileSize: MAX_EMPLOYEE_CV_SIZE_BYTES },
       fileFilter: (_req: Request, file: Express.Multer.File, callback: (error: Error | null, acceptFile: boolean) => void) => {
         if (!ALLOWED_EMPLOYEE_CV_MIME_TYPES.includes(file.mimetype)) {
@@ -144,11 +147,19 @@ export class UploadsController {
       },
     }),
   )
-  uploadEmployeeCv(@UploadedFile() file: Express.Multer.File): UploadResponse {
+  async uploadEmployeeCv(@UploadedFile() file: Express.Multer.File): Promise<UploadResponse> {
+    this.logger.debug(`POST /uploads/employee-cv called (file=${file?.originalname ?? "none"})`);
     if (!file) {
       throw new BadRequestException("No file uploaded");
     }
-    return { url: `/uploads/${EMPLOYEE_CV_SUBDIR}/${file.filename}` };
+    try {
+      const result = await this.uploadAndRespond(file, EMPLOYEE_CV_PREFIX);
+      this.logger.debug(`POST /uploads/employee-cv succeeded`);
+      return result;
+    } catch (err) {
+      this.logger.error(`POST /uploads/employee-cv failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   // Story 1.12 (Self-Report a Certification) -- evidence file for a
@@ -159,16 +170,7 @@ export class UploadsController {
   @Post("certification")
   @UseInterceptors(
     FileInterceptor("file", {
-      storage: diskStorage({
-        destination: (_req: Request, _file: Express.Multer.File, callback: (error: Error | null, destination: string) => void) => {
-          ensureDir(certificationDir);
-          callback(null, certificationDir);
-        },
-        filename: (_req: Request, file: Express.Multer.File, callback: (error: Error | null, filename: string) => void) => {
-          const ext = file.originalname.split(".").pop();
-          callback(null, `${randomUUID()}.${ext}`);
-        },
-      }),
+      storage: memoryStorage(),
       limits: { fileSize: MAX_CERTIFICATION_SIZE_BYTES },
       fileFilter: (_req: Request, file: Express.Multer.File, callback: (error: Error | null, acceptFile: boolean) => void) => {
         if (!ALLOWED_CERTIFICATION_MIME_TYPES.includes(file.mimetype)) {
@@ -179,10 +181,18 @@ export class UploadsController {
       },
     }),
   )
-  uploadCertification(@UploadedFile() file: Express.Multer.File): UploadResponse {
+  async uploadCertification(@UploadedFile() file: Express.Multer.File): Promise<UploadResponse> {
+    this.logger.debug(`POST /uploads/certification called (file=${file?.originalname ?? "none"})`);
     if (!file) {
       throw new BadRequestException("No file uploaded");
     }
-    return { url: `/uploads/${CERTIFICATION_SUBDIR}/${file.filename}` };
+    try {
+      const result = await this.uploadAndRespond(file, CERTIFICATION_PREFIX);
+      this.logger.debug(`POST /uploads/certification succeeded`);
+      return result;
+    } catch (err) {
+      this.logger.error(`POST /uploads/certification failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 }

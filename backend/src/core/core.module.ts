@@ -5,6 +5,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { Tenant } from "../modules/tenants/entities/tenant.entity";
 import { AuditLog } from "./audit-log/audit-log.entity";
 import { AuditLogService } from "./audit-log/audit-log.service";
+import { S3Service } from "./storage/s3.service";
 import { SystemTenantCache, TenantContextInterceptor, TenantContextService } from "./tenant";
 
 @Global()
@@ -21,11 +22,12 @@ import { SystemTenantCache, TenantContextInterceptor, TenantContextService } fro
     TenantContextService,
     SystemTenantCache,
     AuditLogService,
+    S3Service,
     {
       provide: APP_INTERCEPTOR,
       useClass: TenantContextInterceptor,
     },
   ],
-  exports: [TenantContextService, SystemTenantCache, AuditLogService],
+  exports: [TenantContextService, SystemTenantCache, AuditLogService, S3Service],
 })
 export class CoreModule {}

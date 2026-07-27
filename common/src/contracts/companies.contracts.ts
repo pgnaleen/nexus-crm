@@ -52,4 +52,9 @@ export interface UpdateCompanyRequest {
   territoryNotes?: string;
 }
 
-export type CompanyResponse = ICompany;
+// logo (from ICompany) is the stable stored S3 key, submitted back verbatim
+// on save if untouched. logoDisplayUrl is a fresh, short-lived signed URL
+// generated at response-build time purely for rendering -- never persisted.
+export interface CompanyResponse extends ICompany {
+  logoDisplayUrl: string | null;
+}

@@ -3,7 +3,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { EmployeeDetailResponse } from "@orelia/common";
 import { getEmployee } from "@/lib/api/employees";
-import { resolveUploadUrl } from "@/lib/api/uploads";
 import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
@@ -126,9 +125,9 @@ export function EmployeeDetailDialog({ employeeId, canViewSensitive, onClose }: 
                 <div className="mb-1 text-xs font-semibold text-[var(--color-text-muted)]">
                   {t("employees.dialog.personal.photo")}
                 </div>
-                {detail.profilePhotoUrl ? (
+                {detail.profilePhotoDisplayUrl ? (
                   <img
-                    src={resolveUploadUrl(detail.profilePhotoUrl)}
+                    src={detail.profilePhotoDisplayUrl}
                     alt=""
                     className="h-16 w-16 rounded-full border border-[var(--color-border)] object-cover"
                   />
@@ -171,14 +170,14 @@ export function EmployeeDetailDialog({ employeeId, canViewSensitive, onClose }: 
                 <div className="mb-1 text-xs font-semibold text-[var(--color-text-muted)]">
                   {t("employees.dialog.employment.cv")}
                 </div>
-                {detail.cvUrl ? (
+                {detail.cvDisplayUrl ? (
                   <a
-                    href={resolveUploadUrl(detail.cvUrl)}
+                    href={detail.cvDisplayUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="text-[13px] text-crm-primary underline"
                   >
-                    {detail.cvUrl.split("/").pop()}
+                    {detail.cvUrl?.split("/").pop()}
                   </a>
                 ) : (
                   <span className="text-sm text-crm-text">{t("employees.notSet")}</span>

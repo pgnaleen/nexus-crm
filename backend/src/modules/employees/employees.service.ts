@@ -2,7 +2,7 @@ import { EmploymentStatus } from "@orelia/common";
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { IsNull } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
-import { deleteUploadedEmployeeFile } from "../uploads/uploaded-file.util";
+import { S3Service } from "../../core/storage/s3.service";
 import { CreateEmployeeDto } from "./dto/create-employee.dto";
 import { UpdateEmployeeDto } from "./dto/update-employee.dto";
 import { UpdateOrgChartStructureDto } from "./dto/update-org-chart-structure.dto";
@@ -18,6 +18,7 @@ export class EmployeesService {
   constructor(
     private readonly employeesRepo: EmployeesRepository,
     private readonly auditLogService: AuditLogService,
+    private readonly s3: S3Service,
   ) {}
 
   async findPicker(): Promise<Employee[]> {
@@ -168,14 +169,15 @@ export class EmployeesService {
       await this.employeesRepo.saveScoped(employee);
 
       // Old file cleanup (replace, don't orphan) -- best-effort, after the
-      // save has definitely succeeded; a failed unlink never fails the update.
+      // save has definitely succeeded; a failed S3 delete never fails the
+      // update, it just orphans one object for later cleanup.
       if ("profilePhotoUrl" in patch && oldPhotoUrl && patch.profilePhotoUrl !== oldPhotoUrl) {
-        this.logger.debug(`update: profile photo replaced, removing old file ${oldPhotoUrl}`);
-        await deleteUploadedEmployeeFile(oldPhotoUrl);
+        this.logger.debug(`update: profile photo replaced, removing old object ${oldPhotoUrl}`);
+        await this.s3.deleteObjectBestEffort(oldPhotoUrl);
       }
       if ("s3Key" in patch && oldCvKey && patch.s3Key !== oldCvKey) {
-        this.logger.debug(`update: CV replaced, removing old file ${oldCvKey}`);
-        await deleteUploadedEmployeeFile(oldCvKey);
+        this.logger.debug(`update: CV replaced, removing old object ${oldCvKey}`);
+        await this.s3.deleteObjectBestEffort(oldCvKey);
       }
 
       // Re-fetch (with relations) for the response rather than returning the

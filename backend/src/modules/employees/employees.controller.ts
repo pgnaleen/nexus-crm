@@ -2,6 +2,7 @@ import { EmployeeDetailResponse, EmployeeListItemResponse, OrgChartEmployeeRespo
 import { Body, Controller, Delete, Get, Logger, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
+import { S3Service } from "../../core/storage/s3.service";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
 import { RbacService } from "../rbac/rbac.service";
@@ -18,6 +19,7 @@ export class EmployeesController {
   constructor(
     private readonly employeesService: EmployeesService,
     private readonly rbacService: RbacService,
+    private readonly s3: S3Service,
   ) {}
 
   @UseGuards(PermissionsGuard)
@@ -99,17 +101,21 @@ export class EmployeesController {
     this.logger.debug("GET /employees/org-chart called");
     try {
       const employees = await this.employeesService.findForOrgChart();
-      this.logger.debug(`GET /employees/org-chart returning ${employees.length} row(s)`);
-      return employees.map((employee) => ({
-        id: employee.id,
-        fullName: employee.fullName,
-        currentDesignation: employee.currentDesignation ?? null,
-        departmentId: employee.departmentId ?? null,
-        departmentName: employee.department?.name ?? null,
-        profilePhotoUrl: employee.profilePhotoUrl ?? null,
-        reportingManagerId: employee.reportingManagerId ?? null,
-        placedAtRoot: employee.placedAtRoot,
-      }));
+      const responses = await Promise.all(
+        employees.map(async (employee) => ({
+          id: employee.id,
+          fullName: employee.fullName,
+          currentDesignation: employee.currentDesignation ?? null,
+          departmentId: employee.departmentId ?? null,
+          departmentName: employee.department?.name ?? null,
+          profilePhotoUrl: employee.profilePhotoUrl ?? null,
+          profilePhotoDisplayUrl: await this.s3.getSignedGetUrl(employee.profilePhotoUrl),
+          reportingManagerId: employee.reportingManagerId ?? null,
+          placedAtRoot: employee.placedAtRoot,
+        })),
+      );
+      this.logger.debug(`GET /employees/org-chart returning ${responses.length} row(s)`);
+      return responses;
     } catch (err) {
       this.logger.error(`GET /employees/org-chart failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -232,7 +238,14 @@ export class EmployeesController {
     };
   }
 
-  private toDetailResponse(employee: Employee, hasSensitiveAccess: boolean): EmployeeDetailResponse {
+  private async toDetailResponse(employee: Employee, hasSensitiveAccess: boolean): Promise<EmployeeDetailResponse> {
+    // profilePhotoUrl/cvUrl on the row are the bare stored S3 keys -- the
+    // *DisplayUrl fields are fresh signed URLs generated here, on every
+    // response, purely for rendering (never persisted).
+    const [profilePhotoDisplayUrl, cvDisplayUrl] = await Promise.all([
+      this.s3.getSignedGetUrl(employee.profilePhotoUrl),
+      this.s3.getSignedGetUrl(employee.s3Key),
+    ]);
     return {
       id: employee.id,
       fullName: employee.fullName,
@@ -241,6 +254,7 @@ export class EmployeesController {
       nationality: employee.nationality ?? null,
       bio: employee.bio ?? null,
       profilePhotoUrl: employee.profilePhotoUrl ?? null,
+      profilePhotoDisplayUrl,
       employeeCode: employee.employeeCode ?? null,
       title: employee.title ?? null,
       currentDesignation: employee.currentDesignation ?? null,
@@ -254,6 +268,7 @@ export class EmployeesController {
       baseCountry: employee.baseCountry ?? null,
       clearanceLevel: employee.clearanceLevel ?? null,
       cvUrl: employee.s3Key ?? null,
+      cvDisplayUrl,
       employeeEmail: employee.employeeEmail ?? null,
       mobileNo: employee.mobileNo ?? null,
       officeNo: employee.officeNo ?? null,

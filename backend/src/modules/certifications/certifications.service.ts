@@ -2,6 +2,7 @@ import { EmployeeCertificationStatus, EmploymentStatus } from "@orelia/common";
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { ILike } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
+import { S3Service } from "../../core/storage/s3.service";
 import { EmployeesService } from "../employees/employees.service";
 import { CertificationsRepository } from "./certifications.repository";
 import { CreateCertificationDto } from "./dto/create-certification.dto";
@@ -18,6 +19,7 @@ export class CertificationsService {
     private readonly certificationsRepo: CertificationsRepository,
     private readonly employeesService: EmployeesService,
     private readonly auditLogService: AuditLogService,
+    private readonly s3: S3Service,
   ) {}
 
   // Every self-service route resolves the caller's own employee from their
@@ -110,10 +112,19 @@ export class CertificationsService {
       for (const key of Object.keys(dto)) {
         before[key] = asRecord[key];
       }
+      const oldEvidenceFileUrl = certification.evidenceFileUrl;
 
       Object.assign(certification, dto, { updatedBy: userId });
       const saved = await this.certificationsRepo.saveScoped(certification);
       this.logger.debug(`updateMine succeeded for certification ${id}`);
+
+      // Old file cleanup (replace, don't orphan) -- best-effort, after the
+      // save has definitely succeeded; a failed S3 delete never fails the
+      // update, it just orphans one object for later cleanup.
+      if ("evidenceFileUrl" in dto && oldEvidenceFileUrl && dto.evidenceFileUrl !== oldEvidenceFileUrl) {
+        this.logger.debug(`updateMine: evidence file replaced, removing old object ${oldEvidenceFileUrl}`);
+        await this.s3.deleteObjectBestEffort(oldEvidenceFileUrl);
+      }
 
       const changes: Record<string, { old: unknown; new: unknown }> = {};
       const savedAsRecord = saved as unknown as Record<string, unknown>;
@@ -281,6 +292,9 @@ export class CertificationsService {
       }
       await this.certificationsRepo.softRemoveScoped(certification, userId);
       this.logger.debug(`deleteMine succeeded for certification ${id}`);
+      // Best-effort -- a failed S3 delete must never fail the DB delete that
+      // already succeeded above; it just orphans one object for later cleanup.
+      await this.s3.deleteObjectBestEffort(certification.evidenceFileUrl);
       await this.auditLogService.record({
         entityType: AUDIT_ENTITY_TYPE,
         entityId: id,

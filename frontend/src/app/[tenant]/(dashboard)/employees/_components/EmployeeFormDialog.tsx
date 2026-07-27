@@ -9,7 +9,7 @@ import type {
   UpdateEmployeeRequest,
 } from "@orelia/common";
 import { createEmployee, updateEmployee } from "@/lib/api/employees";
-import { resolveUploadUrl, uploadEmployeeCv, uploadEmployeePhoto } from "@/lib/api/uploads";
+import { uploadEmployeeCv, uploadEmployeePhoto } from "@/lib/api/uploads";
 import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
@@ -156,6 +156,15 @@ export function EmployeeFormDialog({
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isUploadingCv, setIsUploadingCv] = useState(false);
+  // values.profilePhotoUrl/cvUrl are the stable S3 keys that actually get
+  // saved -- both are private objects, so there's no permanent URL to render
+  // directly. These hold whichever signed URL is current for preview: the
+  // freshly-uploaded one this session, or (on edit) the one the server
+  // already resolved for the existing file. Never themselves persisted.
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(
+    initialDetail?.profilePhotoDisplayUrl ?? null,
+  );
+  const [cvPreviewUrl, setCvPreviewUrl] = useState<string | null>(initialDetail?.cvDisplayUrl ?? null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const cvInputRef = useRef<HTMLInputElement>(null);
 
@@ -169,8 +178,9 @@ export function EmployeeFormDialog({
     setFormError(null);
     setIsUploadingPhoto(true);
     try {
-      const { url } = await uploadEmployeePhoto(file);
-      setField("profilePhotoUrl", url);
+      const { key, previewUrl } = await uploadEmployeePhoto(file);
+      setField("profilePhotoUrl", key);
+      setPhotoPreviewUrl(previewUrl);
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : t("employees.dialog.errors.photoUploadFailed"));
     } finally {
@@ -185,8 +195,9 @@ export function EmployeeFormDialog({
     setFormError(null);
     setIsUploadingCv(true);
     try {
-      const { url } = await uploadEmployeeCv(file);
-      setField("cvUrl", url);
+      const { key, previewUrl } = await uploadEmployeeCv(file);
+      setField("cvUrl", key);
+      setCvPreviewUrl(previewUrl);
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : t("employees.dialog.errors.cvUploadFailed"));
     } finally {
@@ -394,9 +405,9 @@ export function EmployeeFormDialog({
                 {t("employees.dialog.personal.photo")}
               </label>
               <div className="flex items-center gap-3">
-                {values.profilePhotoUrl && (
+                {photoPreviewUrl && (
                   <img
-                    src={resolveUploadUrl(values.profilePhotoUrl)}
+                    src={photoPreviewUrl}
                     alt=""
                     className="h-12 w-12 rounded-full border border-[var(--color-border)] object-cover"
                   />
@@ -413,7 +424,14 @@ export function EmployeeFormDialog({
                     : t("employees.dialog.personal.uploadPhoto")}
                 </Button>
                 {values.profilePhotoUrl && (
-                  <Button type="button" variant="secondary" onClick={() => setField("profilePhotoUrl", "")}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setField("profilePhotoUrl", "");
+                      setPhotoPreviewUrl(null);
+                    }}
+                  >
                     {t("employees.dialog.personal.removePhoto")}
                   </Button>
                 )}
@@ -543,9 +561,9 @@ export function EmployeeFormDialog({
                 {t("employees.dialog.employment.cv")}
               </label>
               <div className="flex items-center gap-3">
-                {values.cvUrl && (
+                {cvPreviewUrl && (
                   <a
-                    href={resolveUploadUrl(values.cvUrl)}
+                    href={cvPreviewUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="text-[13px] text-crm-primary underline"
@@ -558,7 +576,14 @@ export function EmployeeFormDialog({
                   {values.cvUrl ? t("employees.dialog.employment.replaceCv") : t("employees.dialog.employment.uploadCv")}
                 </Button>
                 {values.cvUrl && (
-                  <Button type="button" variant="secondary" onClick={() => setField("cvUrl", "")}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setField("cvUrl", "");
+                      setCvPreviewUrl(null);
+                    }}
+                  >
                     {t("employees.dialog.employment.removeCv")}
                   </Button>
                 )}

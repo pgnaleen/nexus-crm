@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from "@nes
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
+import { S3Service } from "../../core/storage/s3.service";
 import { TenantContextService } from "../../core/tenant";
 import { CompaniesRepository } from "../companies/companies.repository";
 import { Company } from "../companies/entities/company.entity";
@@ -26,6 +27,7 @@ export class RelationshipPartiesService {
     private readonly relationshipTypesService: RelationshipTypesService,
     private readonly tenantContext: TenantContextService,
     private readonly auditLogService: AuditLogService,
+    private readonly s3: S3Service,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
@@ -218,11 +220,20 @@ export class RelationshipPartiesService {
     for (const key of Object.keys(dto)) {
       before[key] = companyAsRecord[key];
     }
+    const oldLogo = company.logo;
 
     try {
       Object.assign(company, dto, { updatedBy: userId });
       await this.companiesRepo.saveScoped(company);
       this.logger.debug(`updateCompany succeeded for company ${company.id}`);
+
+      // Old file cleanup (replace, don't orphan) -- best-effort, after the
+      // save has definitely succeeded; a failed S3 delete never fails the
+      // update, it just orphans one object for later cleanup.
+      if ("logo" in dto && oldLogo && dto.logo !== oldLogo) {
+        this.logger.debug(`updateCompany: logo replaced, removing old object ${oldLogo}`);
+        await this.s3.deleteObjectBestEffort(oldLogo);
+      }
 
       const changes: Record<string, { old: unknown; new: unknown }> = {};
       const companyAfterAsRecord = company as unknown as Record<string, unknown>;

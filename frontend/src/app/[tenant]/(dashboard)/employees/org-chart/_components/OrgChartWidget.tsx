@@ -22,7 +22,6 @@ import "@xyflow/react/dist/style.css";
 import dagre from "@dagrejs/dagre";
 import { toPng } from "html-to-image";
 import { getOrgChart, updateOrgChartStructure } from "@/lib/api/employees";
-import { resolveUploadUrl } from "@/lib/api/uploads";
 import { ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/Button";
 import { useAlert, useConfirm } from "@/components/providers/DialogProvider";
@@ -119,9 +118,9 @@ function EmployeeNode({ data }: NodeProps<Node<EmployeeNodeData>>) {
           {isCollapsed ? `+${reportCount}` : "−"}
         </button>
       )}
-      {employee.profilePhotoUrl ? (
+      {employee.profilePhotoDisplayUrl ? (
         <img
-          src={resolveUploadUrl(employee.profilePhotoUrl)}
+          src={employee.profilePhotoDisplayUrl}
           alt=""
           className="h-9 w-9 shrink-0 rounded-full border border-[var(--color-border)] object-cover"
         />

@@ -20,10 +20,11 @@ import type {
 import {
   createRelationshipPartyCompany,
   createRelationshipPartyContact,
+  deleteCompanyContact,
   listCompanyContacts,
   updateRelationshipPartyCompany,
 } from "@/lib/api/relationship-parties";
-import { resolveUploadUrl, uploadLogo } from "@/lib/api/uploads";
+import { uploadLogo } from "@/lib/api/uploads";
 import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
@@ -31,9 +32,11 @@ import { TextField } from "@/components/ui/TextField";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { CountrySelect } from "@/components/ui/CountrySelect";
 import { Spinner } from "@/components/ui/Spinner";
-import { PlusIcon, TrashIcon, UploadCloudIcon } from "@/components/ui/icons";
+import { EditIcon, PlusIcon, TrashIcon, UploadCloudIcon } from "@/components/ui/icons";
+import { useConfirm, useAlert } from "@/components/providers/DialogProvider";
 import { min, minLength, required, validate } from "@/lib/validation";
 import { ContactFields, type ContactFieldsValue } from "./ContactFields";
+import { ContactFormDialog } from "./ContactFormDialog";
 
 const ACCOUNT_TIER_LABELS: Record<AccountTier, string> = {
   [AccountTier.Strategic]: "Strategic",
@@ -204,6 +207,12 @@ interface CompanyFormDialogProps {
   industries: IndustryResponse[];
   employees: EmployeePickerResponse[];
   companies: CompanyPickerResponse[];
+  // Gates Edit/Delete on the "Existing contacts" list -- this dialog took no
+  // permission props at all before; RelationshipViewWidget.tsx's own
+  // canUpdate/canDelete (RELATIONSHIP_UPDATE/RELATIONSHIP_DELETE) thread
+  // straight through, same permissions as everything else in this dialog.
+  canUpdate?: boolean;
+  canDelete?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -217,6 +226,8 @@ export function CompanyFormDialog({
   industries,
   employees,
   companies,
+  canUpdate = false,
+  canDelete = false,
   onClose,
   onSaved,
 }: CompanyFormDialogProps) {
@@ -226,9 +237,17 @@ export function CompanyFormDialog({
   const [contacts, setContacts] = useState<ContactRow[]>([]);
   const [existingContacts, setExistingContacts] = useState<ContactResponse[]>([]);
   const [isLoadingExistingContacts, setIsLoadingExistingContacts] = useState(mode === "edit");
+  const [editingExistingContact, setEditingExistingContact] = useState<ContactResponse | null>(null);
+  const [deletingContactId, setDeletingContactId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  // values.logo is the stable S3 key that actually gets saved -- logos are
+  // private objects, so there's no permanent URL to render directly. This
+  // holds whichever signed URL is current for preview: the freshly-uploaded
+  // one this session, or (on edit) the one the server already resolved for
+  // the existing logo. Never itself persisted anywhere.
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(company?.logoDisplayUrl ?? null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Tracks which new contact rows (by their stable `key`) have already been
   // successfully posted -- if row 3 of 5 fails and the user fixes it and
@@ -258,6 +277,41 @@ export function CompanyFormDialog({
     };
   }, [mode, mapId, relationshipTypeId]);
 
+  const confirm = useConfirm();
+  const { showError } = useAlert();
+
+  async function refreshExistingContacts() {
+    if (!mapId) return;
+    try {
+      const rows = await listCompanyContacts(relationshipTypeId, mapId);
+      setExistingContacts(rows);
+    } catch {
+      // Non-fatal -- the saved change already succeeded; the list will
+      // catch up next time this dialog opens.
+    }
+  }
+
+  async function handleDeleteExistingContact(existing: ContactResponse) {
+    if (!mapId) return;
+    const ok = await confirm({
+      title: "Delete Contact",
+      message: `Are you sure you want to delete "${existing.fullName}"? This action cannot be undone.`,
+      confirmLabel: "Delete",
+      isDestructive: true,
+    });
+    if (!ok) return;
+
+    setDeletingContactId(existing.id);
+    try {
+      await deleteCompanyContact(relationshipTypeId, mapId, existing.id);
+      setExistingContacts((current) => current.filter((c) => c.id !== existing.id));
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : "Failed to delete contact");
+    } finally {
+      setDeletingContactId(null);
+    }
+  }
+
   function setField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setValues((current) => ({ ...current, [field]: value }));
   }
@@ -280,8 +334,9 @@ export function CompanyFormDialog({
     setFormError(null);
     setIsUploadingLogo(true);
     try {
-      const { url } = await uploadLogo(file);
-      setField("logo", url);
+      const { key, previewUrl } = await uploadLogo(file);
+      setField("logo", key);
+      setLogoPreviewUrl(previewUrl);
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Failed to upload logo");
     } finally {
@@ -582,9 +637,9 @@ export function CompanyFormDialog({
             <div className="mb-[18px]">
               <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Logo</label>
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                {values.logo && (
+                {logoPreviewUrl && (
                   <img
-                    src={resolveUploadUrl(values.logo)}
+                    src={logoPreviewUrl}
                     alt="Company logo"
                     style={{ width: 48, height: 48, borderRadius: 8, objectFit: "cover", border: "1px solid var(--color-border)" }}
                   />
@@ -598,7 +653,14 @@ export function CompanyFormDialog({
                   <UploadCloudIcon size={14} /> {values.logo ? "Replace logo" : "Upload logo"}
                 </Button>
                 {values.logo && (
-                  <Button type="button" variant="secondary" onClick={() => setField("logo", "")}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setField("logo", "");
+                      setLogoPreviewUrl(null);
+                    }}
+                  >
                     Remove
                   </Button>
                 )}
@@ -752,12 +814,33 @@ export function CompanyFormDialog({
                             <TextField label="Mobile number" value={existing.mobileNo || "—"} disabled />
                           </div>
                         </div>
+                        {(canUpdate || canDelete) && (
+                          <div className="flex flex-col gap-1.5">
+                            {canUpdate && (
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                aria-label={`Edit ${existing.fullName}`}
+                                onClick={() => setEditingExistingContact(existing)}
+                              >
+                                <EditIcon size={15} />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                type="button"
+                                className="icon-btn icon-btn-danger"
+                                aria-label={`Delete ${existing.fullName}`}
+                                onClick={() => handleDeleteExistingContact(existing)}
+                                disabled={deletingContactId === existing.id}
+                              >
+                                <TrashIcon size={15} />
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
-                    <p className="text-xs text-[var(--color-text-muted)]">
-                      Editing or removing an existing contact isn't available here yet — add a
-                      replacement below if their details changed.
-                    </p>
                   </>
                 )}
               </div>
@@ -805,6 +888,21 @@ export function CompanyFormDialog({
           </Button>
         </div>
       </form>
+
+      {editingExistingContact && mapId && (
+        <ContactFormDialog
+          mode="edit"
+          relationshipTypeId={relationshipTypeId}
+          relationshipTypeName={relationshipTypeName}
+          companyContext={{ companyMapId: mapId, contactId: editingExistingContact.id }}
+          contact={editingExistingContact}
+          companies={companies}
+          onClose={() => setEditingExistingContact(null)}
+          onSaved={() => {
+            void refreshExistingContacts();
+          }}
+        />
+      )}
     </Dialog>
   );
 }

@@ -1,11 +1,11 @@
-// Relative to the backend package's cwd. A named volume should be mounted
-// over this path in production so uploads survive container recreation.
-export const UPLOAD_DIR = process.env.UPLOAD_DIR ?? "uploads";
-export const LOGO_SUBDIR = "logos";
+// Size limits and MIME allowlists for every upload type. Storage location
+// (S3 bucket/key prefix) lives in core/storage/storage.constants.ts -- these
+// two used to be combined here when uploads went to local disk; kept
+// separate now since size/MIME rules are upload-feature concerns, storage
+// location is a core/infra concern.
 export const MAX_LOGO_SIZE_BYTES = 5 * 1024 * 1024;
 export const ALLOWED_LOGO_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
 
-export const DEAL_DOCUMENTS_SUBDIR = "deal-documents";
 export const MAX_DEAL_DOCUMENT_SIZE_BYTES = 20 * 1024 * 1024;
 export const ALLOWED_DEAL_DOCUMENT_MIME_TYPES = [
   "application/pdf",
@@ -18,11 +18,9 @@ export const ALLOWED_DEAL_DOCUMENT_MIME_TYPES = [
   "image/webp",
 ];
 
-export const EMPLOYEE_PHOTO_SUBDIR = "employee-photos";
 export const MAX_EMPLOYEE_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
 export const ALLOWED_EMPLOYEE_PHOTO_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
-export const EMPLOYEE_CV_SUBDIR = "employee-cvs";
 export const MAX_EMPLOYEE_CV_SIZE_BYTES = 20 * 1024 * 1024;
 export const ALLOWED_EMPLOYEE_CV_MIME_TYPES = [
   "application/pdf",
@@ -32,7 +30,6 @@ export const ALLOWED_EMPLOYEE_CV_MIME_TYPES = [
 
 // Story 1.12 -- certificate evidence an employee attaches to a self-reported
 // certification. A scanned certificate is typically a PDF or an image.
-export const CERTIFICATION_SUBDIR = "certifications";
 export const MAX_CERTIFICATION_SIZE_BYTES = 10 * 1024 * 1024;
 export const ALLOWED_CERTIFICATION_MIME_TYPES = [
   "application/pdf",

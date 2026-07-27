@@ -106,7 +106,10 @@ export interface OrgChartEmployeeResponse {
   currentDesignation: string | null;
   departmentId: string | null;
   departmentName: string | null;
+  // profilePhotoUrl is the stored S3 key; profilePhotoDisplayUrl is a fresh
+  // signed URL generated at response time, for rendering the chart node only.
   profilePhotoUrl: string | null;
+  profilePhotoDisplayUrl: string | null;
   reportingManagerId: string | null;
   // Story 1.8 -- placed directly beneath the Company root (top of a
   // reporting line). Placed = reportingManagerId set OR placedAtRoot;
@@ -157,7 +160,12 @@ export interface EmployeeDetailResponse {
   gender: Gender | null;
   nationality: string | null;
   bio: string | null;
+  // profilePhotoUrl/cvUrl are the stored S3 keys, submitted back verbatim on
+  // save if untouched. The matching *DisplayUrl fields are fresh, short-lived
+  // signed URLs generated at response-build time purely for rendering --
+  // never persisted.
   profilePhotoUrl: string | null;
+  profilePhotoDisplayUrl: string | null;
   // Employment
   employeeCode: string | null;
   title: EmployeeTitle | null;
@@ -173,6 +181,7 @@ export interface EmployeeDetailResponse {
   baseCountry: string | null;
   clearanceLevel: ClearanceLevel | null;
   cvUrl: string | null;
+  cvDisplayUrl: string | null;
   // Contact
   employeeEmail: string | null;
   mobileNo: string | null;

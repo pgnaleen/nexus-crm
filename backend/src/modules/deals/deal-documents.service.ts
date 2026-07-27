@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
+import { S3Service } from "../../core/storage/s3.service";
 import { CreateDealDocumentDto } from "./dto/create-deal-document.dto";
 import { DealDocument } from "./entities/deal-document.entity";
 import { DealsService } from "./deals.service";
@@ -16,6 +17,7 @@ export class DealDocumentsService {
     @InjectRepository(DealDocument) private readonly repo: Repository<DealDocument>,
     private readonly dealsService: DealsService,
     private readonly auditLogService: AuditLogService,
+    private readonly s3: S3Service,
   ) {}
 
   async findAll(dealId: string): Promise<DealDocument[]> {
@@ -72,6 +74,9 @@ export class DealDocumentsService {
       await this.repo.softRemove(document);
       await this.repo.update(document.id, { deletedBy: userId });
       this.logger.debug(`remove succeeded for document ${documentId}`);
+      // Best-effort -- a failed S3 delete must never fail the DB delete that
+      // already succeeded above; it just orphans one object for later cleanup.
+      await this.s3.deleteObjectBestEffort(document.s3Key);
       await this.auditLogService.record({
         entityType: AUDIT_ENTITY_TYPE,
         entityId: documentId,

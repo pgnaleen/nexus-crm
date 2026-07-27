@@ -4,7 +4,6 @@ import { useState } from "react";
 import { EmployeeCertificationStatus } from "@orelia/common";
 import type { CertificationResponse } from "@orelia/common";
 import { deleteMyCertification } from "@/lib/api/certifications";
-import { resolveUploadUrl } from "@/lib/api/uploads";
 import { ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/Button";
 import { EditIcon, ExternalLinkIcon, FileIcon, TrashIcon } from "@/components/ui/icons";
@@ -96,9 +95,9 @@ export function MyCertifications({ initial }: { initial: CertificationResponse[]
                     </div>
                     {(certification.evidenceFileUrl || certification.evidenceLink) && (
                       <div className="mt-1.5 flex items-center gap-3">
-                        {certification.evidenceFileUrl && (
+                        {certification.evidenceFileDisplayUrl && (
                           <a
-                            href={resolveUploadUrl(certification.evidenceFileUrl)}
+                            href={certification.evidenceFileDisplayUrl}
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex items-center gap-1 text-[12.5px] text-crm-primary underline"

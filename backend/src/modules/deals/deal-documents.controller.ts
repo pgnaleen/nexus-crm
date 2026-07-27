@@ -1,5 +1,3 @@
-import { existsSync, mkdirSync } from "fs";
-import { join } from "path";
 import { randomUUID } from "crypto";
 import { DealDocumentResponse, PERMISSIONS } from "@orelia/common";
 import {
@@ -8,6 +6,7 @@ import {
   Controller,
   Delete,
   Get,
+  Logger,
   Param,
   ParseUUIDPipe,
   Post,
@@ -17,33 +16,41 @@ import {
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import type { Request } from "express";
-import { diskStorage } from "multer";
+import { memoryStorage } from "multer";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
+import { S3Service } from "../../core/storage/s3.service";
+import { DEAL_DOCUMENTS_PREFIX } from "../../core/storage/storage.constants";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
-import {
-  ALLOWED_DEAL_DOCUMENT_MIME_TYPES,
-  DEAL_DOCUMENTS_SUBDIR,
-  MAX_DEAL_DOCUMENT_SIZE_BYTES,
-  UPLOAD_DIR,
-} from "../uploads/uploads.constants";
+import { ALLOWED_DEAL_DOCUMENT_MIME_TYPES, MAX_DEAL_DOCUMENT_SIZE_BYTES } from "../uploads/uploads.constants";
 import { CreateDealDocumentDto } from "./dto/create-deal-document.dto";
 import { DealDocument } from "./entities/deal-document.entity";
 import { DealDocumentsService } from "./deal-documents.service";
 
-const documentsDir = join(process.cwd(), UPLOAD_DIR, DEAL_DOCUMENTS_SUBDIR);
-
 @Controller("deals/:dealId/documents")
 export class DealDocumentsController {
-  constructor(private readonly dealDocumentsService: DealDocumentsService) {}
+  private readonly logger = new Logger(DealDocumentsController.name);
+
+  constructor(
+    private readonly dealDocumentsService: DealDocumentsService,
+    private readonly s3: S3Service,
+  ) {}
 
   @UseGuards(PermissionsGuard)
   @RequirePermission([PERMISSIONS.DEALS_VIEW])
   @Get()
   async findAll(@Param("dealId", ParseUUIDPipe) dealId: string): Promise<DealDocumentResponse[]> {
-    const documents = await this.dealDocumentsService.findAll(dealId);
-    return documents.map((doc) => this.toResponse(doc));
+    this.logger.debug(`GET /deals/${dealId}/documents called`);
+    try {
+      const documents = await this.dealDocumentsService.findAll(dealId);
+      const responses = await Promise.all(documents.map((doc) => this.toResponse(doc)));
+      this.logger.debug(`GET /deals/${dealId}/documents returning ${responses.length} row(s)`);
+      return responses;
+    } catch (err) {
+      this.logger.error(`GET /deals/${dealId}/documents failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
@@ -51,18 +58,7 @@ export class DealDocumentsController {
   @Post()
   @UseInterceptors(
     FileInterceptor("file", {
-      storage: diskStorage({
-        destination: (_req: Request, _file: Express.Multer.File, callback: (error: Error | null, destination: string) => void) => {
-          if (!existsSync(documentsDir)) {
-            mkdirSync(documentsDir, { recursive: true });
-          }
-          callback(null, documentsDir);
-        },
-        filename: (_req: Request, file: Express.Multer.File, callback: (error: Error | null, filename: string) => void) => {
-          const ext = file.originalname.split(".").pop();
-          callback(null, `${randomUUID()}.${ext}`);
-        },
-      }),
+      storage: memoryStorage(),
       limits: { fileSize: MAX_DEAL_DOCUMENT_SIZE_BYTES },
       fileFilter: (_req: Request, file: Express.Multer.File, callback: (error: Error | null, acceptFile: boolean) => void) => {
         if (!ALLOWED_DEAL_DOCUMENT_MIME_TYPES.includes(file.mimetype)) {
@@ -79,12 +75,22 @@ export class DealDocumentsController {
     @Body() dto: CreateDealDocumentDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<DealDocumentResponse> {
+    this.logger.debug(`POST /deals/${dealId}/documents called by ${user.sub} (file=${file?.originalname ?? "none"}, docType=${dto?.docType})`);
     if (!file) {
       throw new BadRequestException("No file uploaded");
     }
-    const s3Key = `/uploads/${DEAL_DOCUMENTS_SUBDIR}/${file.filename}`;
-    const document = await this.dealDocumentsService.create(dealId, dto, s3Key, user.sub);
-    return this.toResponse(document);
+    try {
+      const ext = file.originalname.split(".").pop() ?? "bin";
+      const s3Key = `${DEAL_DOCUMENTS_PREFIX}${dealId}/${randomUUID()}.${ext}`;
+      await this.s3.putObject(s3Key, file.buffer, file.mimetype);
+      const document = await this.dealDocumentsService.create(dealId, dto, s3Key, user.sub);
+      const response = await this.toResponse(document);
+      this.logger.debug(`POST /deals/${dealId}/documents succeeded, document ${document.id}`);
+      return response;
+    } catch (err) {
+      this.logger.error(`POST /deals/${dealId}/documents failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   @UseGuards(PermissionsGuard)
@@ -95,17 +101,26 @@ export class DealDocumentsController {
     @Param("documentId", ParseUUIDPipe) documentId: string,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<{ success: true }> {
-    await this.dealDocumentsService.remove(dealId, documentId, user.sub);
-    return { success: true };
+    this.logger.debug(`DELETE /deals/${dealId}/documents/${documentId} called by ${user.sub}`);
+    try {
+      await this.dealDocumentsService.remove(dealId, documentId, user.sub);
+      this.logger.debug(`DELETE /deals/${dealId}/documents/${documentId} succeeded`);
+      return { success: true };
+    } catch (err) {
+      this.logger.error(`DELETE /deals/${dealId}/documents/${documentId} failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
-  private toResponse(document: DealDocument): DealDocumentResponse {
+  private async toResponse(document: DealDocument): Promise<DealDocumentResponse> {
     return {
       id: document.id,
       dealId: document.dealId,
       docType: document.docType,
       title: document.title,
-      url: document.s3Key,
+      // A fresh signed URL, generated on every response -- the row itself
+      // only ever stores the bare S3 key (document.s3Key).
+      url: (await this.s3.getSignedGetUrl(document.s3Key)) ?? "",
       createdAt: document.createdAt.toISOString(),
     };
   }
