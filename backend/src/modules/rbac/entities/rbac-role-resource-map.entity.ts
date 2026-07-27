@@ -19,7 +19,7 @@ export class RbacRoleResourceMap {
   @JoinColumn({ name: "resource_id" })
   resource?: RbacResource;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: "timestamptz" })
   createdAt!: Date;
 
   @Column({ type: "uuid", nullable: true })

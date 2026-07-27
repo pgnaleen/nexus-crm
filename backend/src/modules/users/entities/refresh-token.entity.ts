@@ -49,6 +49,6 @@ export class RefreshToken {
   @Column({ type: "timestamptz", nullable: true })
   graceExpiresAt?: Date;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: "timestamptz" })
   createdAt!: Date;
 }

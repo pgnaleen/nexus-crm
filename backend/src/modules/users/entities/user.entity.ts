@@ -23,7 +23,7 @@ export class User extends TenantOwnedEntity {
   @JoinColumn({ name: "updated_by" })
   updatedByUser?: User;
 
-  @DeleteDateColumn()
+  @DeleteDateColumn({ type: "timestamptz" })
   deletedAt?: Date;
 
   @Column({ type: "uuid", nullable: true })

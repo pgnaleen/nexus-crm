@@ -22,6 +22,9 @@ export const dataSourceOptions: DataSourceOptions = {
   entities: [__dirname + "/../modules/**/entities/*.entity{.ts,.js}"],
   migrations: [__dirname + "/migrations/*{.ts,.js}"],
   migrationsTableName: "typeorm_migrations",
+  extra: {
+    options: "-c timezone=Asia/Colombo",
+  },
 };
 
 const AppDataSource = new DataSource(dataSourceOptions);

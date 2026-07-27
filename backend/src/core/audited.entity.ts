@@ -17,10 +17,10 @@ export abstract class AuditedEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: "timestamptz" })
   createdAt!: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: "timestamptz" })
   updatedAt!: Date;
 
   @Column({ type: "uuid", nullable: true })
@@ -29,7 +29,7 @@ export abstract class AuditedEntity {
   @Column({ type: "uuid", nullable: true })
   updatedBy?: string;
 
-  @DeleteDateColumn()
+  @DeleteDateColumn({ type: "timestamptz" })
   deletedAt?: Date;
 
   @Column({ type: "uuid", nullable: true })

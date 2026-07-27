@@ -31,7 +31,7 @@ export class DealPartnersMap {
   @JoinColumn({ name: "contact_id" })
   contact?: Contact;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: "timestamptz" })
   createdAt!: Date;
 
   @Column({ name: "created_by", type: "uuid", nullable: true })

@@ -102,15 +102,15 @@ export function ContactFormDialog({
         // enum) rather than undefined, or a clear would silently no-op.
         await updateRelationshipPartyContact(relationshipTypeId, mapId!, {
           fullName: values.fullName.trim(),
-          title: values.title.trim(),
-          department: values.department.trim(),
+          title: values.title.trim() || undefined,
+          department: values.department.trim() || undefined,
           roleBuying: values.roleBuying || null,
-          email: values.email.trim(),
-          mobileNo: values.mobileNo.trim(),
-          directPhoneNo: values.directPhoneNo.trim(),
-          linkedIn: values.linkedIn.trim(),
-          country: values.country.trim(),
-          timezone: values.timezone.trim(),
+          email: values.email.trim() || undefined,
+          mobileNo: values.mobileNo.trim() || undefined,
+          directPhoneNo: values.directPhoneNo.trim() || undefined,
+          linkedIn: values.linkedIn.trim() || undefined,
+          country: values.country.trim() || undefined,
+          timezone: values.timezone.trim() || undefined,
           companyId: values.companyId || undefined,
         });
       }
@@ -154,6 +154,9 @@ export function ContactFormDialog({
             onChange={(val) => setField("companyId", val)}
             options={companyOptions}
           />
+          <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+            Select a company only if this contact works under an organization. Leave as &quot;None&quot; to list them as an individual standalone person.
+          </p>
         </div>
 
         <div className="mt-2 flex justify-end gap-2.5">

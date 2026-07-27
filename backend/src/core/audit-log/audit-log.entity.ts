@@ -30,7 +30,7 @@ export class AuditLog {
   @Column({ type: "uuid", nullable: true })
   actorId?: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: "timestamptz" })
   occurredAt!: Date;
 
   // Field-level { field: { old, new } } diffs for updates; a full snapshot

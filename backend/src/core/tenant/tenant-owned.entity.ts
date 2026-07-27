@@ -19,9 +19,9 @@ export abstract class TenantOwnedEntity {
   @JoinColumn({ name: "tenant_id" })
   tenant?: Tenant;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: "timestamptz" })
   createdAt!: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: "timestamptz" })
   updatedAt!: Date;
 }

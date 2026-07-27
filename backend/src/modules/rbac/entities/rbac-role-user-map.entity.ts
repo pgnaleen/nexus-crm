@@ -18,7 +18,7 @@ export class RbacRoleUserMap {
   @JoinColumn({ name: "user_id" })
   user?: User;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: "timestamptz" })
   createdAt!: Date;
 
   @Column({ type: "uuid", nullable: true })

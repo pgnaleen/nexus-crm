@@ -24,6 +24,9 @@ import { SnakeNamingStrategy } from "typeorm-naming-strategies";
         namingStrategy: new SnakeNamingStrategy(),
         autoLoadEntities: true,
         logging: config.get<boolean>("DB_LOGGING"),
+        extra: {
+          options: "-c timezone=Asia/Colombo",
+        },
       }),
     }),
   ],

@@ -47,7 +47,7 @@ type DialogState =
   | null;
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString("en-US", { timeZone: "UTC", dateStyle: "medium" });
+  return new Date(iso).toLocaleString("en-US", { timeZone: "Asia/Colombo", dateStyle: "medium" });
 }
 
 function partyName(party: RelationshipPartyResponse): string {

@@ -26,7 +26,7 @@ function DetailItem({ label, value }: { label: string; value: ReactNode }) {
 
 // Pinned locale + timeZone -- see UsersTableWidget's formatLastLogin for why.
 function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("en-US", { timeZone: "UTC", dateStyle: "medium", timeStyle: "short" });
+  return new Date(iso).toLocaleString("en-US", { timeZone: "Asia/Colombo", dateStyle: "medium", timeStyle: "short" });
 }
 
 export function UserDetailsDialog({ user, onClose }: UserDetailsDialogProps) {

@@ -14,7 +14,7 @@ export abstract class AuditedTenantEntity extends TenantOwnedEntity {
   @Column({ type: "uuid", nullable: true })
   updatedBy?: string;
 
-  @DeleteDateColumn()
+  @DeleteDateColumn({ type: "timestamptz" })
   deletedAt?: Date;
 
   @Column({ type: "uuid", nullable: true })

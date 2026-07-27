@@ -19,7 +19,7 @@ export class TeamsEmployeeMap {
   @JoinColumn({ name: "employee_id" })
   employee?: Employee;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: "timestamptz" })
   createdAt!: Date;
 
   @Column({ type: "uuid", nullable: true })

@@ -11,7 +11,7 @@ interface ProfileViewProps {
 // UsersTableWidget.tsx.
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("en-US", {
-    timeZone: "UTC",
+    timeZone: "Asia/Colombo",
     dateStyle: "medium",
     timeStyle: "short",
   });

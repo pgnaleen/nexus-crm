@@ -27,7 +27,7 @@ type DialogState =
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("en-US", {
-    timeZone: "UTC",
+    timeZone: "Asia/Colombo",
     dateStyle: "medium",
   });
 }

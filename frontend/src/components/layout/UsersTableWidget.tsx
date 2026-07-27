@@ -30,7 +30,7 @@ type FormDialogState = { mode: "create" } | { mode: "edit"; user: UserSummaryRes
 // settings causes a React hydration mismatch.
 function formatLastLogin(iso: string): string {
   return new Date(iso).toLocaleString("en-US", {
-    timeZone: "UTC",
+    timeZone: "Asia/Colombo",
     dateStyle: "medium",
     timeStyle: "short",
   });
