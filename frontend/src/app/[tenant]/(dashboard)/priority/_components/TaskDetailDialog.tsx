@@ -1,12 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { PriorityTaskResponse, PriorityTaskShareResponse, UserPickerResponse } from "@orelia/common";
+import { PriorityTaskStatus } from "@orelia/common";
+import type {
+  PriorityTaskHistoryEntry,
+  PriorityTaskResponse,
+  PriorityTaskShareResponse,
+  UserPickerResponse,
+} from "@orelia/common";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { TrashIcon } from "@/components/ui/icons";
 import {
+  completePriorityTask,
   getPriorityTask,
+  getPriorityTaskHistory,
   listPriorityTaskShares,
   removePriorityTaskShare,
   updatePriorityTask,
@@ -22,6 +30,33 @@ const TEXTAREA_CLASS =
 
 function formatTimestamp(isoTimestamp: string): string {
   return new Date(isoTimestamp).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+// Story 1.9 -- render a structured history entry via i18n (the backend
+// returns a `kind` + `detail`, never a pre-formatted string).
+function historyLabel(entry: PriorityTaskHistoryEntry): string {
+  const actor = entry.actorName ?? t("priorityTracker.detailDialog.history.someone");
+  const name = entry.detail ?? "";
+  switch (entry.kind) {
+    case "created":
+      return t("priorityTracker.detailDialog.history.created", { actor });
+    case "delegated":
+      return t("priorityTracker.detailDialog.history.delegated", { actor, name });
+    case "redelegated":
+      return t("priorityTracker.detailDialog.history.redelegated", { actor, name });
+    case "accepted":
+      return t("priorityTracker.detailDialog.history.accepted", { actor });
+    case "progress":
+      return t("priorityTracker.detailDialog.history.progress", { actor, value: name });
+    case "completed":
+      return t("priorityTracker.detailDialog.history.completed", { actor });
+    case "archived":
+      return t("priorityTracker.detailDialog.history.archived", { actor });
+    case "restored":
+      return t("priorityTracker.detailDialog.history.restored", { actor });
+    default:
+      return actor;
+  }
 }
 
 function ProgressBar({ progress }: { progress: number }) {
@@ -62,6 +97,8 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated }: Task
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isDelegateDialogOpen, setIsDelegateDialogOpen] = useState(false);
   const [isSavingProgress, setIsSavingProgress] = useState(false);
+  const [history, setHistory] = useState<PriorityTaskHistoryEntry[]>([]);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,6 +113,14 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated }: Task
       .catch((err) => {
         if (cancelled) return;
         setLoadError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.errors.loadFailed"));
+      });
+    // Story 1.9 -- the real lifecycle history from audit_logs.
+    getPriorityTaskHistory(taskId)
+      .then((entries) => {
+        if (!cancelled) setHistory(entries);
+      })
+      .catch(() => {
+        // Non-fatal -- the rest of the detail view still works without it.
       });
     return () => {
       cancelled = true;
@@ -134,6 +179,24 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated }: Task
       setSaveError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.errors.progressFailed"));
     } finally {
       setIsSavingProgress(false);
+    }
+  }
+
+  // Story 1.9 -- owner marks the work done (prerequisite for archive).
+  async function handleComplete() {
+    if (!task) return;
+    setIsCompleting(true);
+    setSaveError(null);
+    try {
+      const updated = await completePriorityTask(task.id);
+      setTask(updated);
+      onSaved(updated);
+      const entries = await getPriorityTaskHistory(task.id);
+      setHistory(entries);
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.errors.completeFailed"));
+    } finally {
+      setIsCompleting(false);
     }
   }
 
@@ -312,23 +375,45 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated }: Task
             </div>
           )}
 
+          {/* Story 1.9 -- owner marks the work done; enables archive (1.10).
+              Hidden once already completed/archived. */}
+          {isOwner &&
+            task.status !== PriorityTaskStatus.Completed &&
+            task.status !== PriorityTaskStatus.Archived && (
+              <div className="mb-[18px] flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5">
+                <p className="text-[12.5px] text-[var(--color-text-muted)]">
+                  {t("priorityTracker.detailDialog.completeHint")}
+                </p>
+                <Button type="button" onClick={handleComplete} isLoading={isCompleting}>
+                  {t("priorityTracker.detailDialog.completeButton")}
+                </Button>
+              </div>
+            )}
+
+          {/* Story 1.9 -- real lifecycle history from audit_logs, chronological. */}
           <div className="mb-2">
             <p className="mb-2 text-[13px] font-semibold text-[var(--color-text-muted)]">
               {t("priorityTracker.detailDialog.historyLabel")}
             </p>
-            {/* Story 1.9 owns the real event-by-event lifecycle trail
-                (Shared, Delegated, Progress updated, etc.) recorded via
-                AuditLogService -- this is a minimal stand-in showing just
-                the one event every task already has for real: its own
-                creation, with who and when. */}
-            <div className="flex items-center gap-2.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5">
-              <span className="h-2 w-2 flex-shrink-0 rounded-full bg-crm-primary" />
-              <span className="flex-1 text-[13px] text-crm-text">
-                {task.createdByName
-                  ? t("priorityTracker.detailDialog.historyCreatedByEntry", { actor: task.createdByName })
-                  : t("priorityTracker.detailDialog.historyCreatedEntry")}
-              </span>
-              <span className="text-[11.5px] text-[var(--color-text-muted)]">{formatTimestamp(task.createdAt)}</span>
+            <div className="flex flex-col gap-2">
+              {history.length === 0 ? (
+                <p className="text-[12.5px] text-[var(--color-text-muted)]">
+                  {t("priorityTracker.detailDialog.historyEmpty")}
+                </p>
+              ) : (
+                history.map((entry, index) => (
+                  <div
+                    key={`${entry.kind}-${entry.timestamp}-${index}`}
+                    className="flex items-center gap-2.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5"
+                  >
+                    <span className="h-2 w-2 flex-shrink-0 rounded-full bg-crm-primary" />
+                    <span className="flex-1 text-[13px] text-crm-text">{historyLabel(entry)}</span>
+                    <span className="text-[11.5px] text-[var(--color-text-muted)]">
+                      {formatTimestamp(entry.timestamp)}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </>

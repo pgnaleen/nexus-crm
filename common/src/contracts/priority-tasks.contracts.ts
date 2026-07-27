@@ -94,6 +94,17 @@ export interface AcceptPriorityTaskRequest {
   quadrant: PriorityTaskQuadrant;
 }
 
+// Story 1.9 -- one entry in a task's lifecycle history, derived from the
+// existing audit_logs trail (not a bespoke table). `kind` is structured so
+// the frontend renders the label via i18n; `detail` carries the one variable
+// bit (a progress %, or the target's name on a delegate/re-delegate).
+export interface PriorityTaskHistoryEntry {
+  kind: "created" | "delegated" | "redelegated" | "accepted" | "progress" | "completed" | "archived" | "restored";
+  actorName: string | null;
+  detail: string | null;
+  timestamp: string;
+}
+
 // The delegator's own tracking card, live-joined to the real task's
 // current title/status/progress -- never a frozen snapshot.
 export interface PriorityTaskDelegationTrackerResponse {

@@ -12,4 +12,9 @@ export enum PriorityTaskStatus {
   // Story 1.8 -- set when a delegated task is accepted: ownership has
   // transferred to the acceptor and it now sits on their own board.
   Accepted = "accepted",
+  // Story 1.9 -- the owner has marked the work done; a Completed task is the
+  // one thing Story 1.10's archive flow will accept.
+  Completed = "completed",
+  // Story 1.10 -- archived off the active board (restorable).
+  Archived = "archived",
 }

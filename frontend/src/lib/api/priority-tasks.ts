@@ -5,6 +5,7 @@ import type {
   DelegatePriorityTaskRequest,
   IncomingTaskResponse,
   MovePriorityTaskRequest,
+  PriorityTaskHistoryEntry,
   PriorityTaskDelegationTrackerResponse,
   PriorityTaskResponse,
   PriorityTaskShareResponse,
@@ -33,6 +34,14 @@ export function updatePriorityTaskProgress(
     method: "PATCH",
     body: JSON.stringify(payload),
   });
+}
+
+export function getPriorityTaskHistory(id: string): Promise<PriorityTaskHistoryEntry[]> {
+  return apiFetch<PriorityTaskHistoryEntry[]>(`/priority-tasks/${id}/history`);
+}
+
+export function completePriorityTask(id: string): Promise<PriorityTaskResponse> {
+  return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}/complete`, { method: "PATCH" });
 }
 
 export function movePriorityTask(id: string, payload: MovePriorityTaskRequest): Promise<PriorityTaskResponse> {

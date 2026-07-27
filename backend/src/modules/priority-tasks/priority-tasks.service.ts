@@ -1,7 +1,13 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectDataSource, InjectRepository } from "@nestjs/typeorm";
 import { DataSource, IsNull, Repository } from "typeorm";
-import { IncomingTaskResponse, PriorityTaskQuadrant, PriorityTaskStatus, UserStatus } from "@orelia/common";
+import {
+  IncomingTaskResponse,
+  PriorityTaskHistoryEntry,
+  PriorityTaskQuadrant,
+  PriorityTaskStatus,
+  UserStatus,
+} from "@orelia/common";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { TenantContextService } from "../../core/tenant";
 import { User } from "../users/entities/user.entity";
@@ -141,6 +147,83 @@ export class PriorityTasksService {
       return saved;
     } catch (err) {
       this.logger.error(`updateNotes failed for task ${taskId}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Story 1.9 -- the task's lifecycle history, derived from the existing
+  // audit_logs trail. Access-gated exactly like the detail view
+  // (findOneForUser: owner or a share recipient); a stranger gets 404.
+  async getHistory(taskId: string, userId: string): Promise<PriorityTaskHistoryEntry[]> {
+    this.logger.debug(`getHistory called for task ${taskId} by ${userId}`);
+    await this.findOneForUser(taskId, userId); // access check (throws 404 if none)
+    const rows = await this.auditLogService.findForEntity(AUDIT_ENTITY_TYPE, taskId);
+    const entries: PriorityTaskHistoryEntry[] = [];
+    for (const row of rows) {
+      const mapped = this.mapAuditRow(row.action, (row.changes ?? {}) as Record<string, unknown>);
+      if (!mapped) continue; // skip updates that aren't a lifecycle event (e.g. notes)
+      entries.push({
+        kind: mapped.kind,
+        detail: mapped.detail,
+        actorName: await this.getUserDisplayName(row.actorId),
+        timestamp: row.occurredAt.toISOString(),
+      });
+    }
+    this.logger.debug(`getHistory returning ${entries.length} entry(ies) for task ${taskId}`);
+    return entries;
+  }
+
+  private mapAuditRow(
+    action: string,
+    changes: Record<string, unknown>,
+  ): { kind: PriorityTaskHistoryEntry["kind"]; detail: string | null } | null {
+    if (action === "insert") return { kind: "created", detail: null };
+    if (action !== "update") return null;
+
+    const statusChange = changes.status as { old?: string; new?: string } | undefined;
+    const delegatedToName = typeof changes.delegatedToName === "string" ? changes.delegatedToName : null;
+
+    if (statusChange?.new === PriorityTaskStatus.Delegated) return { kind: "delegated", detail: delegatedToName };
+    if (statusChange?.new === PriorityTaskStatus.Accepted) return { kind: "accepted", detail: null };
+    if (statusChange?.new === PriorityTaskStatus.Completed) return { kind: "completed", detail: null };
+    if (statusChange?.new === PriorityTaskStatus.Archived) return { kind: "archived", detail: null };
+    // Restore (Story 1.10) records status archived -> placed.
+    if (statusChange?.old === PriorityTaskStatus.Archived && statusChange?.new === PriorityTaskStatus.Placed) {
+      return { kind: "restored", detail: null };
+    }
+    // Re-delegation: delegatedToUserId moved without a status change.
+    if ("delegatedToUserId" in changes && !statusChange) return { kind: "redelegated", detail: delegatedToName };
+    // Progress update.
+    const progressChange = changes.progress as { new?: number } | undefined;
+    if (progressChange && typeof progressChange.new === "number") {
+      return { kind: "progress", detail: String(progressChange.new) };
+    }
+    return null;
+  }
+
+  // Story 1.9 -- the owner marks the work done. A Completed task is the one
+  // thing Story 1.10's archive accepts.
+  async complete(taskId: string, userId: string): Promise<PriorityTask> {
+    this.logger.debug(`complete called for task ${taskId} by ${userId}`);
+    try {
+      const task = await this.findOneOwnedOrFail(taskId, userId);
+      const previousStatus = task.status;
+      task.status = PriorityTaskStatus.Completed;
+      task.updatedBy = userId;
+      const saved = await this.priorityTasksRepo.saveScoped(task);
+      this.logger.debug(`complete succeeded for task ${taskId}`);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: taskId,
+        action: "update",
+        actorId: userId,
+        changes: { status: { old: previousStatus, new: PriorityTaskStatus.Completed } },
+      });
+      return saved;
+    } catch (err) {
+      if (!(err instanceof NotFoundException)) {
+        this.logger.error(`complete failed for task ${taskId}: ${(err as Error).message}`, (err as Error).stack);
+      }
       throw err;
     }
   }

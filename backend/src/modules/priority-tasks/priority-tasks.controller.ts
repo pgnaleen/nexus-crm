@@ -1,4 +1,9 @@
-import { IncomingTaskResponse, PriorityTaskDelegationTrackerResponse, PriorityTaskResponse } from "@orelia/common";
+import {
+  IncomingTaskResponse,
+  PriorityTaskDelegationTrackerResponse,
+  PriorityTaskHistoryEntry,
+  PriorityTaskResponse,
+} from "@orelia/common";
 import { Body, Controller, Get, Logger, Param, ParseUUIDPipe, Patch, Post } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
@@ -174,6 +179,39 @@ export class PriorityTasksController {
       return this.toResponse(task, user.sub, creatorName);
     } catch (err) {
       this.logger.error(`PATCH /priority-tasks/${id} failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  @Get(":id/history")
+  async getHistory(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<PriorityTaskHistoryEntry[]> {
+    this.logger.debug(`GET /priority-tasks/${id}/history called by ${user.sub}`);
+    try {
+      const entries = await this.priorityTasksService.getHistory(id, user.sub);
+      this.logger.debug(`GET /priority-tasks/${id}/history returning ${entries.length} entry(ies)`);
+      return entries;
+    } catch (err) {
+      this.logger.error(`GET /priority-tasks/${id}/history failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Story 1.9 -- owner marks the task complete (prerequisite for archive).
+  @Patch(":id/complete")
+  async complete(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<PriorityTaskResponse> {
+    this.logger.debug(`PATCH /priority-tasks/${id}/complete called by ${user.sub}`);
+    try {
+      const task = await this.priorityTasksService.complete(id, user.sub);
+      this.logger.debug(`PATCH /priority-tasks/${id}/complete succeeded`);
+      return this.toResponse(task, user.sub);
+    } catch (err) {
+      this.logger.error(`PATCH /priority-tasks/${id}/complete failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }

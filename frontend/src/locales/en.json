@@ -417,16 +417,33 @@
       "notesReadOnlyHint": "Only the current owner can edit notes.",
       "saveNotesButton": "Save Notes",
       "historyLabel": "History",
-      "historyCreatedEntry": "Created",
-      "historyCreatedByEntry": "Created by {actor}",
+      "historyEmpty": "No history yet.",
+      "completeHint": "Mark this task done once the work is finished.",
+      "completeButton": "Mark Complete",
+      "history": {
+        "someone": "Someone",
+        "created": "Created by {actor}",
+        "delegated": "{actor} delegated it to {name}",
+        "redelegated": "{actor} re-delegated it to {name}",
+        "accepted": "{actor} accepted it",
+        "progress": "{actor} set progress to {value}%",
+        "completed": "{actor} marked it complete",
+        "archived": "{actor} archived it",
+        "restored": "{actor} restored it"
+      },
       "status": {
-        "placed": "Placed"
+        "placed": "Placed",
+        "delegated": "Delegated",
+        "accepted": "Accepted",
+        "completed": "Completed",
+        "archived": "Archived"
       },
       "errors": {
         "saveFailed": "Failed to save notes",
         "loadFailed": "Failed to load task",
         "unshareFailed": "Failed to stop sharing",
-        "progressFailed": "Failed to update progress"
+        "progressFailed": "Failed to update progress",
+        "completeFailed": "Failed to mark task complete"
       },
       "sharedLabel": "Shared With",
       "shareButton": "Share",
