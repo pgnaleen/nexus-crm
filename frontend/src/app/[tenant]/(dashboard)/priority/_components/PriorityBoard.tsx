@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -23,10 +23,16 @@ import {
 } from "@orelia/common";
 import { t } from "@/lib/i18n";
 import { PlusIcon } from "@/components/ui/icons";
-import { delegatePriorityTask, listPriorityTaskDelegationTrackers, movePriorityTask } from "@/lib/api/priority-tasks";
+import {
+  delegatePriorityTask,
+  listIncomingPriorityTasks,
+  listPriorityTaskDelegationTrackers,
+  movePriorityTask,
+} from "@/lib/api/priority-tasks";
 import { ApiError } from "@/lib/api/client";
 import { useAlert } from "@/components/providers/DialogProvider";
 import { CreateTaskDialog } from "./CreateTaskDialog";
+import { IncomingPanelDialog } from "./IncomingPanelDialog";
 import { TaskDetailDialog } from "./TaskDetailDialog";
 import { DEFAULT_QUADRANT, QUADRANT_ORDER } from "./types";
 
@@ -252,7 +258,18 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
   // DELEGATE quadrant, real/backed by GET /priority-tasks/delegated-trackers.
   const [delegationTrackers, setDelegationTrackers] =
     useState<PriorityTaskDelegationTrackerResponse[]>(initialDelegationTrackers);
+  // Story 1.8 -- Incoming panel: count for the header badge, opened on demand.
+  const [incomingCount, setIncomingCount] = useState(0);
+  const [isIncomingOpen, setIsIncomingOpen] = useState(false);
   const { showError } = useAlert();
+
+  useEffect(() => {
+    listIncomingPriorityTasks()
+      .then((items) => setIncomingCount(items.length))
+      .catch(() => {
+        // Non-fatal -- the badge just stays at 0 if the count can't load.
+      });
+  }, []);
 
   // Snapshot of `order` from the moment the current drag began -- used to
   // roll the board back exactly if the PATCH .../:id/move call fails.
@@ -370,6 +387,13 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
     setTaskById((current) => ({ ...current, [task.id]: task }));
   }
 
+  // Story 1.8 -- an accepted task transfers to me and lands on my board in
+  // the quadrant I chose; append it (owned) exactly like a freshly-created one.
+  function handleTaskAccepted(task: PriorityTaskResponse) {
+    setTaskById((current) => ({ ...current, [task.id]: task }));
+    setOrder((current) => ({ ...current, [task.quadrant]: [...current[task.quadrant], task.id] }));
+  }
+
   // Story 1.6 -- persists the delegation, then removes the task from the
   // board entirely (it no longer comes back from findAllForUser while
   // pending) and re-fetches the tracker list so the new card (with its
@@ -405,13 +429,27 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
           </h1>
           <p className="m-0 text-[13.5px] text-[var(--color-text-muted)]">{t("priorityTracker.subtitle")}</p>
         </div>
-        <button
-          type="button"
-          className="cursor-pointer rounded-lg border-0 bg-crm-primary px-5 py-2.5 text-[13.5px] font-semibold text-white transition-colors duration-150 hover:bg-crm-primary-hover"
-          onClick={() => setCreateDialogQuadrant(DEFAULT_QUADRANT)}
-        >
-          + {t("priorityTracker.newTaskButton")}
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            className="relative cursor-pointer rounded-lg border border-[var(--color-border)] bg-white px-4 py-2.5 text-[13.5px] font-semibold text-crm-text transition-colors duration-150 hover:bg-[var(--color-bg)]"
+            onClick={() => setIsIncomingOpen(true)}
+          >
+            {t("priorityTracker.incoming.button")}
+            {incomingCount > 0 && (
+              <span className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-crm-primary px-1.5 py-[1px] text-[11px] font-bold text-white">
+                {incomingCount}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            className="cursor-pointer rounded-lg border-0 bg-crm-primary px-5 py-2.5 text-[13.5px] font-semibold text-white transition-colors duration-150 hover:bg-crm-primary-hover"
+            onClick={() => setCreateDialogQuadrant(DEFAULT_QUADRANT)}
+          >
+            + {t("priorityTracker.newTaskButton")}
+          </button>
+        </div>
       </div>
 
       {/* Equal-size 2x2 grid filling all remaining height -- each quadrant is
@@ -456,6 +494,14 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
           onClose={() => setSelectedTaskId(null)}
           onSaved={handleTaskSaved}
           onDelegated={handleTaskDelegated}
+        />
+      )}
+
+      {isIncomingOpen && (
+        <IncomingPanelDialog
+          onClose={() => setIsIncomingOpen(false)}
+          onAccepted={handleTaskAccepted}
+          onCountChange={setIncomingCount}
         />
       )}
     </div>

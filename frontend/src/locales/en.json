@@ -368,6 +368,25 @@
     },
     "newTaskButton": "New Task",
     "addToQuadrantAriaLabel": "Add a task to {quadrant}",
+    "incoming": {
+      "button": "Incoming",
+      "title": "Incoming Tasks",
+      "loading": "Loading...",
+      "emptyTitle": "Nothing incoming",
+      "emptyMessage": "Tasks shared or delegated to you will appear here.",
+      "from": "From {name}",
+      "sharedBadge": "Shared",
+      "delegatedBadge": "Delegated",
+      "sharedHint": "Shared with you for visibility — open it from the board to read it.",
+      "placeInLabel": "Place in",
+      "acceptButton": "Accept",
+      "redelegateButton": "Re-delegate",
+      "errors": {
+        "loadFailed": "Failed to load incoming tasks",
+        "acceptFailed": "Failed to accept task",
+        "redelegateFailed": "Failed to re-delegate task"
+      }
+    },
     "errors": {
       "moveFailed": "Failed to save the new position",
       "moveFailedTitle": "Move failed"

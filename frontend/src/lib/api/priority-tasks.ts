@@ -1,7 +1,9 @@
 import type {
+  AcceptPriorityTaskRequest,
   CreatePriorityTaskRequest,
   CreatePriorityTaskShareRequest,
   DelegatePriorityTaskRequest,
+  IncomingTaskResponse,
   MovePriorityTaskRequest,
   PriorityTaskDelegationTrackerResponse,
   PriorityTaskResponse,
@@ -67,4 +69,23 @@ export function delegatePriorityTask(id: string, payload: DelegatePriorityTaskRe
 
 export function listPriorityTaskDelegationTrackers(): Promise<PriorityTaskDelegationTrackerResponse[]> {
   return apiFetch<PriorityTaskDelegationTrackerResponse[]>("/priority-tasks/delegated-trackers");
+}
+
+// Story 1.8 -- Incoming panel: everything shared with or delegated to me.
+export function listIncomingPriorityTasks(): Promise<IncomingTaskResponse[]> {
+  return apiFetch<IncomingTaskResponse[]>("/priority-tasks/incoming");
+}
+
+export function acceptPriorityTask(id: string, payload: AcceptPriorityTaskRequest): Promise<PriorityTaskResponse> {
+  return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}/accept`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function redelegatePriorityTask(id: string, payload: DelegatePriorityTaskRequest): Promise<PriorityTaskResponse> {
+  return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}/redelegate`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
