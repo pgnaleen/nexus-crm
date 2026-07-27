@@ -1,7 +1,8 @@
-import { PriorityTaskDelegationTrackerResponse, PriorityTaskResponse } from "@orelia/common";
+import { IncomingTaskResponse, PriorityTaskDelegationTrackerResponse, PriorityTaskResponse } from "@orelia/common";
 import { Body, Controller, Get, Logger, Param, ParseUUIDPipe, Patch, Post } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
+import { AcceptPriorityTaskDto } from "./dto/accept-priority-task.dto";
 import { CreatePriorityTaskDto } from "./dto/create-priority-task.dto";
 import { DelegatePriorityTaskDto } from "./dto/delegate-priority-task.dto";
 import { MovePriorityTaskDto } from "./dto/move-priority-task.dto";
@@ -68,6 +69,59 @@ export class PriorityTasksController {
         `GET /priority-tasks/delegated-trackers failed: ${(err as Error).message}`,
         (err as Error).stack,
       );
+      throw err;
+    }
+  }
+
+  // Declared before ":id" (literal segment). Story 1.8 -- everything shared
+  // or delegated to me.
+  @Get("incoming")
+  async findIncoming(@CurrentUser() user: AuthenticatedUser): Promise<IncomingTaskResponse[]> {
+    this.logger.debug(`GET /priority-tasks/incoming called by ${user.sub}`);
+    try {
+      const items = await this.priorityTasksService.findIncomingForUser(user.sub);
+      this.logger.debug(`GET /priority-tasks/incoming returning ${items.length} row(s)`);
+      return items;
+    } catch (err) {
+      this.logger.error(`GET /priority-tasks/incoming failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Story 1.8 -- accept a delegated task onto my own board (ownership
+  // transfers to me).
+  @Post(":id/accept")
+  async accept(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: AcceptPriorityTaskDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<PriorityTaskResponse> {
+    this.logger.debug(`POST /priority-tasks/${id}/accept called by ${user.sub} (quadrant=${dto.quadrant})`);
+    try {
+      const task = await this.priorityTasksService.accept(id, user.sub, dto);
+      this.logger.debug(`POST /priority-tasks/${id}/accept succeeded`);
+      return this.toResponse(task, user.sub);
+    } catch (err) {
+      this.logger.error(`POST /priority-tasks/${id}/accept failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Story 1.8 -- pass a task delegated to me on to someone else without
+  // accepting it (ownership stays with the original delegator).
+  @Post(":id/redelegate")
+  async redelegate(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: DelegatePriorityTaskDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<PriorityTaskResponse> {
+    this.logger.debug(`POST /priority-tasks/${id}/redelegate called by ${user.sub} (userId=${dto.userId})`);
+    try {
+      const task = await this.priorityTasksService.redelegate(id, user.sub, dto);
+      this.logger.debug(`POST /priority-tasks/${id}/redelegate succeeded`);
+      return this.toResponse(task, user.sub);
+    } catch (err) {
+      this.logger.error(`POST /priority-tasks/${id}/redelegate failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }
@@ -170,14 +224,19 @@ export class PriorityTasksController {
     if (!tracker.task) {
       throw new Error(`Delegation tracker ${tracker.id} has no linked task`);
     }
-    const delegatedToName = await this.priorityTasksService.getUserDisplayName(tracker.task.delegatedToUserId);
+    // Before acceptance the current holder is the pending recipient
+    // (delegatedToUserId); once accepted (Story 1.8) that's cleared and the
+    // holder is the task's new owner. Fall back to ownerId so the
+    // delegator's card keeps naming whoever currently has it.
+    const currentHolderId = tracker.task.delegatedToUserId ?? tracker.task.ownerId;
+    const delegatedToName = await this.priorityTasksService.getUserDisplayName(currentHolderId);
     return {
       id: tracker.id,
       taskId: tracker.taskId,
       taskTitle: tracker.task.title,
       taskStatus: tracker.task.status,
       taskProgress: tracker.task.progress,
-      delegatedToUserId: tracker.task.delegatedToUserId ?? "",
+      delegatedToUserId: currentHolderId ?? "",
       delegatedToName: delegatedToName ?? "",
       rank: tracker.rank,
       createdAt: tracker.createdAt.toISOString(),

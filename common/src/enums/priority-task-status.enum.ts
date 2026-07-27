@@ -9,4 +9,7 @@ export enum PriorityTaskStatus {
   // pending-vs-accepted signal; this status is the human-readable mirror
   // of "delegatedToUserId is currently set").
   Delegated = "delegated",
+  // Story 1.8 -- set when a delegated task is accepted: ownership has
+  // transferred to the acceptor and it now sits on their own board.
+  Accepted = "accepted",
 }

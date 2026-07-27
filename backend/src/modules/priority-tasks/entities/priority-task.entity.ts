@@ -35,4 +35,11 @@ export class PriorityTask extends AuditedTenantEntity {
   // `status: Delegated` is just its human-readable mirror.
   @Column({ name: "delegated_to_user_id", type: "uuid", nullable: true })
   delegatedToUserId?: string;
+
+  // Story 1.8 -- who performed the current pending delegation. Equals the
+  // owner on a first delegation; on a re-delegation (recipient passes it on
+  // without accepting) it becomes the re-delegator, so the new recipient's
+  // Incoming panel shows the right "delegated by" name. Cleared on accept.
+  @Column({ name: "delegated_by_user_id", type: "uuid", nullable: true })
+  delegatedByUserId?: string;
 }

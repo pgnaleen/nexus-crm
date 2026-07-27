@@ -68,10 +68,30 @@ export interface PriorityTaskShareResponse {
   createdAt: string;
 }
 
-// Story 1.6 (Delegate a Task) -- send-side only. `accept` (transferring
-// ownerId to the recipient) is Story 1.8's job, not built yet.
+// Story 1.6 (Delegate a Task) -- send-side. Reused by Story 1.8's
+// re-delegate (a pending recipient passing it on instead of accepting).
 export interface DelegatePriorityTaskRequest {
   userId: string;
+}
+
+// Story 1.8 (Incoming). One item shared or delegated to the caller. `kind`
+// drives the UI: a delegated item can be accepted (pulled onto the board,
+// ownership transfers) or re-delegated; a shared item is read-only. `fromName`
+// is who shared it / who delegated it to me (the re-delegator on a re-deleg).
+export interface IncomingTaskResponse {
+  id: string;
+  title: string;
+  kind: "shared" | "delegated";
+  fromName: string;
+  status: PriorityTaskStatus;
+  progress: number;
+  createdAt: string;
+}
+
+// Story 1.8 -- accepting a delegated task: the acceptor picks which quadrant
+// it lands in on their own board. Ownership transfers to them.
+export interface AcceptPriorityTaskRequest {
+  quadrant: PriorityTaskQuadrant;
 }
 
 // The delegator's own tracking card, live-joined to the real task's

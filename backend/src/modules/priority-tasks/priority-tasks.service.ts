@@ -1,11 +1,12 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectDataSource, InjectRepository } from "@nestjs/typeorm";
 import { DataSource, IsNull, Repository } from "typeorm";
-import { PriorityTaskQuadrant, PriorityTaskStatus, UserStatus } from "@orelia/common";
+import { IncomingTaskResponse, PriorityTaskQuadrant, PriorityTaskStatus, UserStatus } from "@orelia/common";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { TenantContextService } from "../../core/tenant";
 import { User } from "../users/entities/user.entity";
 import { UsersService } from "../users/users.service";
+import { AcceptPriorityTaskDto } from "./dto/accept-priority-task.dto";
 import { CreatePriorityTaskDto } from "./dto/create-priority-task.dto";
 import { DelegatePriorityTaskDto } from "./dto/delegate-priority-task.dto";
 import { MovePriorityTaskDto } from "./dto/move-priority-task.dto";
@@ -144,6 +145,168 @@ export class PriorityTasksService {
     }
   }
 
+  // Story 1.8 -- everything shared with OR delegated to the caller, as one
+  // merged list for the Incoming panel. Delegated items are tasks currently
+  // pending the caller's acceptance (delegatedToUserId === caller); shared
+  // items come from the join table. fromName is who sent it.
+  async findIncomingForUser(userId: string): Promise<IncomingTaskResponse[]> {
+    this.logger.debug(`findIncomingForUser called (userId=${userId})`);
+    try {
+      const delegated = await this.priorityTasksRepo.findScoped({
+        where: { delegatedToUserId: userId },
+        order: { createdAt: "DESC" },
+      });
+      const shares = await this.sharesRepo.find({
+        where: { sharedWithUserId: userId },
+        relations: ["task"],
+        order: { createdAt: "DESC" },
+      });
+
+      const items: IncomingTaskResponse[] = [];
+      for (const task of delegated) {
+        items.push({
+          id: task.id,
+          title: task.title,
+          kind: "delegated",
+          fromName: (await this.getUserDisplayName(task.delegatedByUserId)) ?? "",
+          status: task.status,
+          progress: task.progress,
+          createdAt: task.createdAt.toISOString(),
+        });
+      }
+      for (const share of shares) {
+        if (!share.task) continue; // FK CASCADE should prevent this
+        items.push({
+          id: share.task.id,
+          title: share.task.title,
+          kind: "shared",
+          fromName: (await this.getUserDisplayName(share.createdBy)) ?? "",
+          status: share.task.status,
+          progress: share.task.progress,
+          createdAt: share.createdAt.toISOString(),
+        });
+      }
+      this.logger.debug(`findIncomingForUser returning ${items.length} item(s)`);
+      return items;
+    } catch (err) {
+      this.logger.error(`findIncomingForUser failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Story 1.8 -- accept a task delegated to me: ownership transfers to me and
+  // it lands on my board in the chosen quadrant. The original delegator's
+  // tracking card persists (it live-joins the task, now owned by me, so they
+  // keep seeing its progress). Only the pending recipient may accept.
+  async accept(taskId: string, userId: string, dto: AcceptPriorityTaskDto): Promise<PriorityTask> {
+    this.logger.debug(`accept called for task ${taskId} by ${userId} (quadrant=${dto.quadrant})`);
+    const tenantId = this.tenantContext.getTenantId();
+    let previousOwnerId: string | undefined;
+    try {
+      await this.dataSource.transaction(async (manager) => {
+        const repo = manager.getRepository(PriorityTask);
+        const lock = { mode: "pessimistic_write" as const };
+        const task = await repo.findOne({ where: { id: taskId, tenantId }, lock });
+        if (!task || task.delegatedToUserId !== userId) {
+          this.logger.debug(`Blocked: task ${taskId} is not pending acceptance by ${userId}`);
+          throw new NotFoundException("Task not found");
+        }
+        const [last] = await repo.find({
+          where: { tenantId, ownerId: userId, quadrant: dto.quadrant },
+          order: { rank: "DESC" },
+          take: 1,
+          lock,
+        });
+        previousOwnerId = task.ownerId;
+        task.ownerId = userId;
+        task.quadrant = dto.quadrant;
+        task.rank = (last?.rank ?? 0) + 1;
+        task.status = PriorityTaskStatus.Accepted;
+        // MUST be null, not undefined: TypeORM's save() skips undefined
+        // columns ("leave unchanged"), so undefined would leave the task
+        // still flagged as pending-delegation -- it would stay in the
+        // acceptor's Incoming and never appear on their board. null clears.
+        (task as unknown as { delegatedToUserId: string | null }).delegatedToUserId = null;
+        (task as unknown as { delegatedByUserId: string | null }).delegatedByUserId = null;
+        task.updatedBy = userId;
+        await repo.save(task);
+      });
+      this.logger.debug(`accept succeeded for task ${taskId}`);
+    } catch (err) {
+      if (!(err instanceof NotFoundException)) {
+        this.logger.error(`accept failed for task ${taskId}: ${(err as Error).message}`, (err as Error).stack);
+      }
+      throw err;
+    }
+
+    await this.auditLogService.record({
+      entityType: AUDIT_ENTITY_TYPE,
+      entityId: taskId,
+      action: "update",
+      actorId: userId,
+      changes: {
+        status: { old: PriorityTaskStatus.Delegated, new: PriorityTaskStatus.Accepted },
+        ownerId: { old: previousOwnerId ?? null, new: userId },
+        quadrant: dto.quadrant,
+      },
+    });
+
+    const updated = await this.priorityTasksRepo.findOneScoped({ where: { id: taskId } });
+    if (!updated) {
+      throw new NotFoundException("Task not found");
+    }
+    return updated;
+  }
+
+  // Story 1.8 -- a pending recipient passes a delegated task on to someone
+  // else instead of accepting it. Ownership does NOT change (still the
+  // original delegator's); only delegatedToUserId/By move. The full
+  // delegator -> me -> target chain lives in audit_logs history (Story 1.9).
+  async redelegate(taskId: string, userId: string, dto: DelegatePriorityTaskDto): Promise<PriorityTask> {
+    this.logger.debug(`redelegate called for task ${taskId} by ${userId} (userId=${dto.userId})`);
+    if (dto.userId === userId) {
+      throw new BadRequestException("You can't re-delegate a task to yourself");
+    }
+    const targetUser = await this.usersService.findOneOrFail(dto.userId);
+    if (targetUser.status !== UserStatus.Active) {
+      throw new BadRequestException("You can only delegate to active users");
+    }
+
+    const task = await this.priorityTasksRepo.findOneScoped({ where: { id: taskId } });
+    if (!task || task.delegatedToUserId !== userId) {
+      this.logger.debug(`Blocked: task ${taskId} is not pending acceptance by ${userId}`);
+      throw new NotFoundException("Task not found");
+    }
+    try {
+      task.delegatedToUserId = dto.userId;
+      task.delegatedByUserId = userId;
+      task.updatedBy = userId;
+      await this.priorityTasksRepo.saveScoped(task);
+      this.logger.debug(`redelegate succeeded for task ${taskId}`);
+    } catch (err) {
+      this.logger.error(`redelegate failed for task ${taskId}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+
+    await this.auditLogService.record({
+      entityType: AUDIT_ENTITY_TYPE,
+      entityId: taskId,
+      action: "update",
+      actorId: userId,
+      changes: {
+        delegatedToUserId: { old: userId, new: dto.userId },
+        delegatedByUserId: { old: null, new: userId },
+        delegatedToName: targetUser.displayName,
+      },
+    });
+
+    const updated = await this.priorityTasksRepo.findOneScoped({ where: { id: taskId } });
+    if (!updated) {
+      throw new NotFoundException("Task not found");
+    }
+    return updated;
+  }
+
   // Story 1.7 -- the current owner moves progress in 10% steps (0..100).
   // Owner-only (findOneOwnedOrFail); the DTO already rejects non-multiples
   // of 10. The delegator sees the new value the next time they load their
@@ -229,6 +392,9 @@ export class PriorityTasksService {
         previousStatus = task.status;
         task.status = PriorityTaskStatus.Delegated;
         task.delegatedToUserId = dto.userId;
+        // Story 1.8 -- the "delegated by" for the recipient's Incoming panel.
+        // On a first delegation this is the owner themselves.
+        task.delegatedByUserId = ownerId;
         task.updatedBy = ownerId;
         await repo.save(task);
 
