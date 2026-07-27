@@ -199,7 +199,7 @@ function toFormState(company?: CompanyResponse): FormState {
 type TabId = "details" | "business" | "contacts";
 
 interface CompanyFormDialogProps {
-  mode: "create" | "edit";
+  mode: "create" | "edit" | "view";
   relationshipTypeId: string;
   relationshipTypeName: string;
   mapId?: string;
@@ -231,12 +231,13 @@ export function CompanyFormDialog({
   onClose,
   onSaved,
 }: CompanyFormDialogProps) {
+  const isViewOnly = mode === "view";
   const [activeTab, setActiveTab] = useState<TabId>("details");
   const [values, setValues] = useState<FormState>(() => toFormState(company));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [contacts, setContacts] = useState<ContactRow[]>([]);
   const [existingContacts, setExistingContacts] = useState<ContactResponse[]>([]);
-  const [isLoadingExistingContacts, setIsLoadingExistingContacts] = useState(mode === "edit");
+  const [isLoadingExistingContacts, setIsLoadingExistingContacts] = useState(mode !== "create");
   const [editingExistingContact, setEditingExistingContact] = useState<ContactResponse | null>(null);
   const [deletingContactId, setDeletingContactId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -259,7 +260,7 @@ export function CompanyFormDialog({
   // on -- fetched directly by companyId instead, same fix that stopped them
   // double-counting as independent top-level relationship-type entries.
   useEffect(() => {
-    if (mode !== "edit" || !mapId) return;
+    if (mode === "create" || !mapId) return;
     let cancelled = false;
     setIsLoadingExistingContacts(true);
     listCompanyContacts(relationshipTypeId, mapId)
@@ -498,7 +499,13 @@ export function CompanyFormDialog({
   return (
     <Dialog
       open
-      title={mode === "create" ? `Add Company (${relationshipTypeName})` : "Edit Company"}
+      title={
+        mode === "create"
+          ? `Add Company (${relationshipTypeName})`
+          : mode === "view"
+            ? "View Company"
+            : "Edit Company"
+      }
       onClose={onClose}
       maxWidth="720px"
     >
@@ -538,6 +545,7 @@ export function CompanyFormDialog({
               value={values.name}
               error={errors.name}
               placeholder="e.g. Acme Corp"
+              disabled={isViewOnly}
               onChange={(e) => setField("name", e.target.value)}
             />
 
@@ -546,6 +554,7 @@ export function CompanyFormDialog({
               name="url"
               value={values.url}
               placeholder="https://example.com"
+              disabled={isViewOnly}
               onChange={(e) => setField("url", e.target.value)}
             />
 
@@ -558,12 +567,14 @@ export function CompanyFormDialog({
                   value={values.industryId}
                   onChange={(val) => setField("industryId", val)}
                   options={industryOptions}
+                  disabled={isViewOnly}
                 />
               </div>
               <TextField
                 label="Sub-industry"
                 name="subIndustry"
                 value={values.subIndustry}
+                disabled={isViewOnly}
                 onChange={(e) => setField("subIndustry", e.target.value)}
               />
             </div>
@@ -577,6 +588,7 @@ export function CompanyFormDialog({
                   value={values.sector}
                   onChange={(val) => setField("sector", val as Sector | "")}
                   options={SECTOR_OPTIONS}
+                  disabled={isViewOnly}
                 />
               </div>
               <div className="mb-[18px]">
@@ -587,6 +599,7 @@ export function CompanyFormDialog({
                   value={values.accountTier}
                   onChange={(val) => setField("accountTier", val as AccountTier | "")}
                   options={ACCOUNT_TIER_OPTIONS}
+                  disabled={isViewOnly}
                 />
               </div>
             </div>
@@ -600,6 +613,7 @@ export function CompanyFormDialog({
                   value={values.employeeCount}
                   onChange={(val) => setField("employeeCount", val as EmployeeCountBand | "")}
                   options={EMPLOYEE_COUNT_OPTIONS}
+                  disabled={isViewOnly}
                 />
               </div>
               <div className="mb-[18px]">
@@ -610,6 +624,7 @@ export function CompanyFormDialog({
                   value={values.revenueBand}
                   onChange={(val) => setField("revenueBand", val as RevenueBand | "")}
                   options={REVENUE_BAND_OPTIONS}
+                  disabled={isViewOnly}
                 />
               </div>
             </div>
@@ -620,11 +635,13 @@ export function CompanyFormDialog({
                 value={values.country}
                 onChange={(val) => setField("country", val)}
                 placeholder="Search countries..."
+                disabled={isViewOnly}
               />
               <TextField
                 label="HQ address"
                 name="hqCityAddress"
                 value={values.hqCityAddress}
+                disabled={isViewOnly}
                 onChange={(e) => setField("hqCityAddress", e.target.value)}
               />
             </div>
@@ -644,33 +661,37 @@ export function CompanyFormDialog({
                     style={{ width: 48, height: 48, borderRadius: 8, objectFit: "cover", border: "1px solid var(--color-border)" }}
                   />
                 )}
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => fileInputRef.current?.click()}
-                  isLoading={isUploadingLogo}
-                >
-                  <UploadCloudIcon size={14} /> {values.logo ? "Replace logo" : "Upload logo"}
-                </Button>
-                {values.logo && (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      setField("logo", "");
-                      setLogoPreviewUrl(null);
-                    }}
-                  >
-                    Remove
-                  </Button>
+                {!isViewOnly && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => fileInputRef.current?.click()}
+                      isLoading={isUploadingLogo}
+                    >
+                      <UploadCloudIcon size={14} /> {values.logo ? "Replace logo" : "Upload logo"}
+                    </Button>
+                    {values.logo && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => {
+                          setField("logo", "");
+                          setLogoPreviewUrl(null);
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                      hidden
+                      onChange={handleLogoChange}
+                    />
+                  </>
                 )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                  hidden
-                  onChange={handleLogoChange}
-                />
               </div>
             </div>
 
@@ -679,6 +700,7 @@ export function CompanyFormDialog({
               name="brands"
               value={values.brands}
               placeholder="e.g. Acme, AcmePro"
+              disabled={isViewOnly}
               onChange={(e) => setField("brands", e.target.value)}
             />
 
@@ -687,6 +709,7 @@ export function CompanyFormDialog({
                 label="Stock ticker"
                 name="stockTicker"
                 value={values.stockTicker}
+                disabled={isViewOnly}
                 onChange={(e) => setField("stockTicker", e.target.value)}
               />
               <div className="mb-[18px]">
@@ -697,6 +720,7 @@ export function CompanyFormDialog({
                   value={values.fiscalYearEnd}
                   onChange={(val) => setField("fiscalYearEnd", val as FiscalYearEndMonth | "")}
                   options={FISCAL_YEAR_END_OPTIONS}
+                  disabled={isViewOnly}
                 />
               </div>
             </div>
@@ -710,6 +734,7 @@ export function CompanyFormDialog({
                   value={values.region}
                   onChange={(val) => setField("region", val as Region | "")}
                   options={REGION_OPTIONS}
+                  disabled={isViewOnly}
                 />
               </div>
               <TextField
@@ -720,6 +745,7 @@ export function CompanyFormDialog({
                 step="0.01"
                 value={values.annualSpend}
                 error={errors.annualSpend}
+                disabled={isViewOnly}
                 onChange={(e) => setField("annualSpend", e.target.value)}
               />
             </div>
@@ -729,6 +755,7 @@ export function CompanyFormDialog({
               name="branches"
               value={values.branches}
               placeholder="e.g. Singapore, London"
+              disabled={isViewOnly}
               onChange={(e) => setField("branches", e.target.value)}
             />
 
@@ -741,13 +768,14 @@ export function CompanyFormDialog({
                   value={values.parentCompanyId}
                   onChange={(val) => setField("parentCompanyId", val)}
                   options={parentCompanyOptions}
+                  disabled={isViewOnly}
                 />
               </div>
               <TextField
                 label="Or parent company name (if not listed)"
                 name="parentCompanyName"
                 value={values.parentCompanyName}
-                disabled={!!values.parentCompanyId}
+                disabled={isViewOnly || !!values.parentCompanyId}
                 placeholder="e.g. Acme Holdings"
                 onChange={(e) => setField("parentCompanyName", e.target.value)}
               />
@@ -762,6 +790,7 @@ export function CompanyFormDialog({
                   value={values.credit}
                   onChange={(val) => setField("credit", val as CreditStatus | "")}
                   options={CREDIT_STATUS_OPTIONS}
+                  disabled={isViewOnly}
                 />
               </div>
               <div className="mb-[18px]">
@@ -772,6 +801,7 @@ export function CompanyFormDialog({
                   value={values.territoryOwnerId}
                   onChange={(val) => setField("territoryOwnerId", val)}
                   options={employeeOptions}
+                  disabled={isViewOnly}
                 />
               </div>
             </div>
@@ -784,6 +814,7 @@ export function CompanyFormDialog({
                 rows={3}
                 value={values.territoryNotes}
                 placeholder="Any additional context about this account's territory..."
+                disabled={isViewOnly}
                 onChange={(e) => setField("territoryNotes", e.target.value)}
               />
             </div>
@@ -793,7 +824,7 @@ export function CompanyFormDialog({
         {/* ── Tab 3: Contacts ─────────────────────────────── */}
         {activeTab === "contacts" && (
           <div className="h-[620px] overflow-y-auto pr-1">
-            {mode === "edit" && (
+            {mode !== "create" && (
               <div className="mb-5">
                 <p className="mb-2 text-[13.5px] font-semibold text-crm-text">Existing contacts</p>
                 {isLoadingExistingContacts ? (
@@ -814,7 +845,7 @@ export function CompanyFormDialog({
                             <TextField label="Mobile number" value={existing.mobileNo || "—"} disabled />
                           </div>
                         </div>
-                        {(canUpdate || canDelete) && (
+                        {!isViewOnly && (canUpdate || canDelete) && (
                           <div className="flex flex-col gap-1.5">
                             {canUpdate && (
                               <button
@@ -846,46 +877,52 @@ export function CompanyFormDialog({
               </div>
             )}
 
-            {contacts.length === 0 && (
-              <p className="deal-empty-tab">
-                {mode === "edit" ? "No new contacts to add." : "No contacts added yet. Add one or more people at this company below."}
-              </p>
+            {!isViewOnly && (
+              <>
+                {contacts.length === 0 && (
+                  <p className="deal-empty-tab">
+                    {mode === "edit" ? "No new contacts to add." : "No contacts added yet. Add one or more people at this company below."}
+                  </p>
+                )}
+
+                {contacts.map((contact) => {
+                  return (
+                    <div key={contact.key} className="deal-contact-row">
+                      <div className="deal-contact-fields">
+                        <ContactFields
+                          values={contact}
+                          onChange={(field, value) => updateContact(contact.key, field, value as never)}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="deal-contact-remove"
+                        aria-label="Remove contact"
+                        onClick={() => removeContact(contact.key)}
+                      >
+                        <TrashIcon size={16} />
+                      </button>
+                    </div>
+                  );
+                })}
+
+                <Button type="button" variant="secondary" className="btn-add" onClick={addContact}>
+                  <PlusIcon size={14} /> Add contact
+                </Button>
+              </>
             )}
-
-            {contacts.map((contact) => {
-              return (
-                <div key={contact.key} className="deal-contact-row">
-                  <div className="deal-contact-fields">
-                    <ContactFields
-                      values={contact}
-                      onChange={(field, value) => updateContact(contact.key, field, value as never)}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    className="deal-contact-remove"
-                    aria-label="Remove contact"
-                    onClick={() => removeContact(contact.key)}
-                  >
-                    <TrashIcon size={16} />
-                  </button>
-                </div>
-              );
-            })}
-
-            <Button type="button" variant="secondary" className="btn-add" onClick={addContact}>
-              <PlusIcon size={14} /> Add contact
-            </Button>
           </div>
         )}
 
         <div className="mt-2 flex justify-end gap-2.5">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
-            Cancel
+            {isViewOnly ? "Close" : "Cancel"}
           </Button>
-          <Button type="submit" isLoading={isSaving}>
-            {mode === "create" ? "Create company" : "Save changes"}
-          </Button>
+          {!isViewOnly && (
+            <Button type="submit" isLoading={isSaving}>
+              {mode === "create" ? "Create company" : "Save changes"}
+            </Button>
+          )}
         </div>
       </form>
 

@@ -3,6 +3,8 @@ import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundEx
 import { ILike } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { S3Service } from "../../core/storage/s3.service";
+import { assertKeyBelongsToTenant, CERTIFICATION_PREFIX } from "../../core/storage/storage.constants";
+import { TenantContextService } from "../../core/tenant";
 import { EmployeesService } from "../employees/employees.service";
 import { CertificationsRepository } from "./certifications.repository";
 import { CreateCertificationDto } from "./dto/create-certification.dto";
@@ -20,6 +22,7 @@ export class CertificationsService {
     private readonly employeesService: EmployeesService,
     private readonly auditLogService: AuditLogService,
     private readonly s3: S3Service,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
   // Every self-service route resolves the caller's own employee from their
@@ -67,6 +70,9 @@ export class CertificationsService {
   async createMine(userId: string, dto: CreateCertificationDto): Promise<EmployeeCertification> {
     this.logger.debug(`createMine called by ${userId} (name="${dto.name}")`);
     try {
+      if (dto.evidenceFileUrl) {
+        assertKeyBelongsToTenant(dto.evidenceFileUrl, CERTIFICATION_PREFIX, this.tenantContext.getTenantId());
+      }
       const employeeId = await this.resolveEmployeeId(userId);
       // Status is always Pending on creation -- never trust a client to set
       // it; there's no status field on the DTO at all.
@@ -97,6 +103,9 @@ export class CertificationsService {
   async updateMine(userId: string, id: string, dto: UpdateCertificationDto): Promise<EmployeeCertification> {
     this.logger.debug(`updateMine called by ${userId} for certification ${id}`);
     try {
+      if (dto.evidenceFileUrl) {
+        assertKeyBelongsToTenant(dto.evidenceFileUrl, CERTIFICATION_PREFIX, this.tenantContext.getTenantId());
+      }
       const employeeId = await this.resolveEmployeeId(userId);
       const certification = await this.findOwnedOrFail(id, employeeId);
       // Only a still-Pending claim is editable -- a Verified badge must not

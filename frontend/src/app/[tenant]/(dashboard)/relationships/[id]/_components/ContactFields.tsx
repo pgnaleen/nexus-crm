@@ -46,9 +46,10 @@ interface ContactFieldsProps {
   // Company is simply skipped on submit if left blank, so it isn't marked
   // required there.
   fullNameRequired?: boolean;
+  disabled?: boolean;
 }
 
-export function ContactFields({ values, onChange, fullNameError, fullNameRequired }: ContactFieldsProps) {
+export function ContactFields({ values, onChange, fullNameError, fullNameRequired, disabled }: ContactFieldsProps) {
   const emailError = values.email ? validate(values.email, [emailValidator()]) : undefined;
 
   return (
@@ -58,6 +59,7 @@ export function ContactFields({ values, onChange, fullNameError, fullNameRequire
         value={values.fullName}
         error={fullNameError}
         placeholder="e.g. Jane Doe"
+        disabled={disabled}
         onChange={(e) => onChange("fullName", e.target.value)}
       />
 
@@ -66,11 +68,13 @@ export function ContactFields({ values, onChange, fullNameError, fullNameRequire
           label="Title"
           value={values.title}
           placeholder="e.g. Procurement Lead"
+          disabled={disabled}
           onChange={(e) => onChange("title", e.target.value)}
         />
         <TextField
           label="Department"
           value={values.department}
+          disabled={disabled}
           onChange={(e) => onChange("department", e.target.value)}
         />
       </div>
@@ -83,6 +87,7 @@ export function ContactFields({ values, onChange, fullNameError, fullNameRequire
           value={values.roleBuying}
           onChange={(val) => onChange("roleBuying", val)}
           options={ROLE_BUYING_OPTIONS}
+          disabled={disabled}
         />
       </div>
 
@@ -93,20 +98,23 @@ export function ContactFields({ values, onChange, fullNameError, fullNameRequire
           value={values.email}
           error={emailError}
           placeholder="name@company.com"
+          disabled={disabled}
           onChange={(e) => onChange("email", e.target.value)}
         />
-        <PhoneField label="Mobile number" value={values.mobileNo} onChange={(val) => onChange("mobileNo", val)} />
+        <PhoneField label="Mobile number" value={values.mobileNo} disabled={disabled} onChange={(val) => onChange("mobileNo", val)} />
       </div>
 
       <div className="grid grid-cols-2 gap-3.5">
         <TextField
           label="Direct phone number"
           value={values.directPhoneNo}
+          disabled={disabled}
           onChange={(e) => onChange("directPhoneNo", e.target.value)}
         />
         <TextField
           label="LinkedIn"
           value={values.linkedIn}
+          disabled={disabled}
           onChange={(e) => onChange("linkedIn", e.target.value)}
         />
       </div>
@@ -117,10 +125,12 @@ export function ContactFields({ values, onChange, fullNameError, fullNameRequire
           value={values.country}
           onChange={(val) => onChange("country", val)}
           placeholder="Search countries..."
+          disabled={disabled}
         />
         <TextField
           label="Timezone"
           value={values.timezone}
+          disabled={disabled}
           onChange={(e) => onChange("timezone", e.target.value)}
         />
       </div>

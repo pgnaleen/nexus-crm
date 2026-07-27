@@ -44,6 +44,8 @@ type DialogState =
   | { mode: "create-contact" }
   | { mode: "edit-company"; party: RelationshipPartyResponse }
   | { mode: "edit-contact"; party: RelationshipPartyResponse }
+  | { mode: "view-company"; party: RelationshipPartyResponse }
+  | { mode: "view-contact"; party: RelationshipPartyResponse }
   | null;
 
 function formatDate(iso: string): string {
@@ -145,6 +147,10 @@ export function RelationshipViewWidget({
 
   function openEdit(party: RelationshipPartyResponse) {
     setDialogState(party.kind === "company" ? { mode: "edit-company", party } : { mode: "edit-contact", party });
+  }
+
+  function openView(party: RelationshipPartyResponse) {
+    setDialogState(party.kind === "company" ? { mode: "view-company", party } : { mode: "view-contact", party });
   }
 
   return (
@@ -249,11 +255,11 @@ export function RelationshipViewWidget({
                 <tr
                   key={party.id}
                   className={
-                    canUpdate
+                    canView
                       ? "cursor-pointer transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f1f5f9]"
                       : "transition-colors duration-150 [&:last-child>td]:border-b-0 hover:bg-[#f7f8fc]"
                   }
-                  onClick={canUpdate ? () => openEdit(party) : undefined}
+                  onClick={canView ? () => openView(party) : undefined}
                 >
                   <td className="border-b border-[var(--color-border)] p-3 font-medium text-crm-text">
                     <span className="inline-flex items-center gap-2">
@@ -365,6 +371,8 @@ export function RelationshipViewWidget({
           industries={industries}
           employees={employees}
           companies={companies}
+          canUpdate={canUpdate}
+          canDelete={canDelete}
           onClose={() => setDialogState(null)}
           onSaved={handleSaved}
         />
@@ -391,6 +399,8 @@ export function RelationshipViewWidget({
           industries={industries}
           employees={employees}
           companies={companies}
+          canUpdate={canUpdate}
+          canDelete={canDelete}
           onClose={() => setDialogState(null)}
           onSaved={handleSaved}
         />
@@ -399,6 +409,36 @@ export function RelationshipViewWidget({
       {dialogState?.mode === "edit-contact" && dialogState.party.contact && (
         <ContactFormDialog
           mode="edit"
+          relationshipTypeId={relationshipType.id}
+          relationshipTypeName={relationshipType.name}
+          mapId={dialogState.party.id}
+          contact={dialogState.party.contact}
+          companies={companies}
+          onClose={() => setDialogState(null)}
+          onSaved={handleSaved}
+        />
+      )}
+
+      {dialogState?.mode === "view-company" && dialogState.party.company && (
+        <CompanyFormDialog
+          mode="view"
+          relationshipTypeId={relationshipType.id}
+          relationshipTypeName={relationshipType.name}
+          mapId={dialogState.party.id}
+          company={dialogState.party.company}
+          industries={industries}
+          employees={employees}
+          companies={companies}
+          canUpdate={canUpdate}
+          canDelete={canDelete}
+          onClose={() => setDialogState(null)}
+          onSaved={handleSaved}
+        />
+      )}
+
+      {dialogState?.mode === "view-contact" && dialogState.party.contact && (
+        <ContactFormDialog
+          mode="view"
           relationshipTypeId={relationshipType.id}
           relationshipTypeName={relationshipType.name}
           mapId={dialogState.party.id}

@@ -20,7 +20,8 @@ import { memoryStorage } from "multer";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { S3Service } from "../../core/storage/s3.service";
-import { DEAL_DOCUMENTS_PREFIX } from "../../core/storage/storage.constants";
+import { DEAL_DOCUMENTS_PREFIX, tenantKeyPrefix } from "../../core/storage/storage.constants";
+import { TenantContextService } from "../../core/tenant";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
 import { ALLOWED_DEAL_DOCUMENT_MIME_TYPES, MAX_DEAL_DOCUMENT_SIZE_BYTES } from "../uploads/uploads.constants";
@@ -35,6 +36,7 @@ export class DealDocumentsController {
   constructor(
     private readonly dealDocumentsService: DealDocumentsService,
     private readonly s3: S3Service,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
   @UseGuards(PermissionsGuard)
@@ -81,7 +83,13 @@ export class DealDocumentsController {
     }
     try {
       const ext = file.originalname.split(".").pop() ?? "bin";
-      const s3Key = `${DEAL_DOCUMENTS_PREFIX}${dealId}/${randomUUID()}.${ext}`;
+      const tenantId = this.tenantContext.getTenantId();
+      // dealId itself is only ever reachable here after dealsService.findOneOrFail
+      // (inside DealDocumentsService.create) resolves it as belonging to the
+      // current tenant, so s3Key is never client-trusted the way logo/photo/
+      // CV/evidence keys are -- this tenant segment is for consistent physical
+      // layout, not a security boundary that needs its own assertion.
+      const s3Key = `${tenantKeyPrefix(DEAL_DOCUMENTS_PREFIX, tenantId)}${dealId}/${randomUUID()}.${ext}`;
       await this.s3.putObject(s3Key, file.buffer, file.mimetype);
       const document = await this.dealDocumentsService.create(dealId, dto, s3Key, user.sub);
       const response = await this.toResponse(document);

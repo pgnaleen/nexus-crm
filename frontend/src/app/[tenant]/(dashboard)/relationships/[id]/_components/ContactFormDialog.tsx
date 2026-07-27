@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import type { CompanyPickerResponse, ContactResponse } from "@orelia/common";
 import {
   createRelationshipPartyContact,
+  updateCompanyContact,
   updateRelationshipPartyContact,
 } from "@/lib/api/relationship-parties";
 import { ApiError } from "@/lib/api/client";
@@ -34,10 +35,15 @@ function toFormState(contact?: ContactResponse): FormState {
 }
 
 interface ContactFormDialogProps {
-  mode: "create" | "edit";
+  mode: "create" | "edit" | "view";
   relationshipTypeId: string;
   relationshipTypeName: string;
   mapId?: string;
+  // Set when editing a company-owned contact instead of a standalone
+  // relationship party -- these have no party mapId of their own (see
+  // CLAUDE.md/the 2026-07-22 double-counting fix), so they're reached via
+  // the company's own mapId + the contact's own id instead.
+  companyContext?: { companyMapId: string; contactId: string };
   contact?: ContactResponse;
   companies: CompanyPickerResponse[];
   onClose: () => void;
@@ -49,11 +55,13 @@ export function ContactFormDialog({
   relationshipTypeId,
   relationshipTypeName,
   mapId,
+  companyContext,
   contact,
   companies,
   onClose,
   onSaved,
 }: ContactFormDialogProps) {
+  const isViewOnly = mode === "view";
   const [values, setValues] = useState<FormState>(() => toFormState(contact));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -100,7 +108,7 @@ export function ContactFormDialog({
         // PATCH semantics: omitted keys are left untouched, so every field
         // must be sent with its real current value (or null to clear the
         // enum) rather than undefined, or a clear would silently no-op.
-        await updateRelationshipPartyContact(relationshipTypeId, mapId!, {
+        const payload = {
           fullName: values.fullName.trim(),
           title: values.title.trim() || undefined,
           department: values.department.trim() || undefined,
@@ -112,7 +120,12 @@ export function ContactFormDialog({
           country: values.country.trim() || undefined,
           timezone: values.timezone.trim() || undefined,
           companyId: values.companyId || undefined,
-        });
+        };
+        if (companyContext) {
+          await updateCompanyContact(relationshipTypeId, companyContext.companyMapId, companyContext.contactId, payload);
+        } else {
+          await updateRelationshipPartyContact(relationshipTypeId, mapId!, payload);
+        }
       }
       onSaved();
       onClose();
@@ -131,7 +144,13 @@ export function ContactFormDialog({
   return (
     <Dialog
       open
-      title={mode === "create" ? `Add Person (${relationshipTypeName})` : "Edit Person"}
+      title={
+        mode === "create"
+          ? `Add Person (${relationshipTypeName})`
+          : mode === "view"
+            ? "View Person"
+            : "Edit Person"
+      }
       onClose={onClose}
       maxWidth="560px"
     >
@@ -142,30 +161,36 @@ export function ContactFormDialog({
           values={values}
           fullNameError={errors.fullName}
           fullNameRequired
+          disabled={isViewOnly}
           onChange={(field, value) => setField(field, value as never)}
         />
 
-        <div className="mb-[18px]">
-          <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Company</label>
-          <CustomSelect
-            fullWidth
-            label=""
-            value={values.companyId}
-            onChange={(val) => setField("companyId", val)}
-            options={companyOptions}
-          />
-          <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
-            Select a company only if this contact works under an organization. Leave as &quot;None&quot; to list them as an individual standalone person.
-          </p>
-        </div>
+        {!companyContext && (
+          <div className="mb-[18px]">
+            <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Company</label>
+            <CustomSelect
+              fullWidth
+              label=""
+              value={values.companyId}
+              onChange={(val) => setField("companyId", val)}
+              options={companyOptions}
+              disabled={isViewOnly}
+            />
+            <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+              Select a company only if this contact works under an organization. Leave as &quot;None&quot; to list them as an individual standalone person.
+            </p>
+          </div>
+        )}
 
         <div className="mt-2 flex justify-end gap-2.5">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
-            Cancel
+            {isViewOnly ? "Close" : "Cancel"}
           </Button>
-          <Button type="submit" isLoading={isSaving}>
-            {mode === "create" ? "Create person" : "Save changes"}
-          </Button>
+          {!isViewOnly && (
+            <Button type="submit" isLoading={isSaving}>
+              {mode === "create" ? "Create person" : "Save changes"}
+            </Button>
+          )}
         </div>
       </form>
     </Dialog>

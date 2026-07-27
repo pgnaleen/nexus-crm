@@ -3,6 +3,7 @@ import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { S3Service } from "../../core/storage/s3.service";
+import { assertKeyBelongsToTenant, LOGO_PREFIX } from "../../core/storage/storage.constants";
 import { TenantContextService } from "../../core/tenant";
 import { CompaniesRepository } from "../companies/companies.repository";
 import { Company } from "../companies/entities/company.entity";
@@ -68,6 +69,9 @@ export class RelationshipPartiesService {
     await this.relationshipTypesService.findOneOrFail(relationshipTypeId);
     const tenantId = this.tenantContext.getTenantId();
     const { contacts, ...companyFields } = dto;
+    if (companyFields.logo) {
+      assertKeyBelongsToTenant(companyFields.logo, LOGO_PREFIX, tenantId);
+    }
 
     try {
       // The company and every inline contact must land together or not at
@@ -198,6 +202,103 @@ export class RelationshipPartiesService {
     return contacts;
   }
 
+  // Company-owned contacts have no relationship_company_contact_map row of
+  // their own (see addCompany/addContact above), so unlike updateContact/
+  // remove below -- which are keyed by a party's mapId -- these two methods
+  // resolve mapId -> party.companyId first, then scope the Contact lookup to
+  // { id: contactId, companyId: party.companyId }. That companyId check is
+  // what stops someone from touching a contact via the wrong company's mapId.
+  async updateContactForCompany(
+    relationshipTypeId: string,
+    mapId: string,
+    contactId: string,
+    dto: UpdateRelationshipPartyContactDto,
+    userId: string,
+  ): Promise<Contact> {
+    this.logger.debug(`updateContactForCompany called for contact ${contactId} under company party ${mapId} on relationship type ${relationshipTypeId} by ${userId}`);
+    const party = await this.findOneOrFail(relationshipTypeId, mapId);
+    if (!party.companyId) {
+      this.logger.debug(`Blocked: party ${mapId} is not a company`);
+      throw new BadRequestException("This relationship party is not a company");
+    }
+    const contact = await this.contactsRepo.findOneScoped({ where: { id: contactId, companyId: party.companyId } });
+    if (!contact) {
+      throw new NotFoundException("Contact not found for this company");
+    }
+
+    const before: Record<string, unknown> = {};
+    const contactAsRecord = contact as unknown as Record<string, unknown>;
+    for (const key of Object.keys(dto)) {
+      before[key] = contactAsRecord[key];
+    }
+
+    try {
+      Object.assign(contact, dto, { updatedBy: userId });
+      await this.contactsRepo.saveScoped(contact);
+      this.logger.debug(`updateContactForCompany succeeded for contact ${contact.id}`);
+
+      const changes: Record<string, { old: unknown; new: unknown }> = {};
+      const contactAfterAsRecord = contact as unknown as Record<string, unknown>;
+      for (const key of Object.keys(dto)) {
+        const newValue = contactAfterAsRecord[key];
+        if (before[key] !== newValue) {
+          changes[key] = { old: before[key], new: newValue };
+        }
+      }
+      if (Object.keys(changes).length > 0) {
+        await this.auditLogService.record({
+          entityType: "contact",
+          entityId: contact.id,
+          action: "update",
+          actorId: userId,
+          changes,
+        });
+      }
+
+      const updated = await this.contactsRepo.findOneScoped({ where: { id: contactId } });
+      if (!updated) {
+        throw new NotFoundException("Contact not found after update");
+      }
+      return updated;
+    } catch (err) {
+      this.logger.error(`updateContactForCompany failed for contact ${contactId}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  async removeContactForCompany(
+    relationshipTypeId: string,
+    mapId: string,
+    contactId: string,
+    userId: string,
+  ): Promise<void> {
+    this.logger.debug(`removeContactForCompany called for contact ${contactId} under company party ${mapId} on relationship type ${relationshipTypeId} by ${userId}`);
+    const party = await this.findOneOrFail(relationshipTypeId, mapId);
+    if (!party.companyId) {
+      this.logger.debug(`Blocked: party ${mapId} is not a company`);
+      throw new BadRequestException("This relationship party is not a company");
+    }
+    const contact = await this.contactsRepo.findOneScoped({ where: { id: contactId, companyId: party.companyId } });
+    if (!contact) {
+      throw new NotFoundException("Contact not found for this company");
+    }
+
+    try {
+      await this.contactsRepo.softRemoveScoped(contact, userId);
+      this.logger.debug(`removeContactForCompany succeeded for contact ${contactId}`);
+      await this.auditLogService.record({
+        entityType: "contact",
+        entityId: contactId,
+        action: "delete",
+        actorId: userId,
+        changes: { fullName: contact.fullName, companyId: party.companyId },
+      });
+    } catch (err) {
+      this.logger.error(`removeContactForCompany failed for contact ${contactId}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
   async updateCompany(
     relationshipTypeId: string,
     mapId: string,
@@ -205,6 +306,9 @@ export class RelationshipPartiesService {
     userId: string,
   ): Promise<RelationshipCompanyContactMap> {
     this.logger.debug(`updateCompany called for party ${mapId} on relationship type ${relationshipTypeId} by ${userId}`);
+    if (dto.logo) {
+      assertKeyBelongsToTenant(dto.logo, LOGO_PREFIX, this.tenantContext.getTenantId());
+    }
     const party = await this.findOneOrFail(relationshipTypeId, mapId);
     if (!party.companyId) {
       this.logger.debug(`Blocked: party ${mapId} is not a company`);

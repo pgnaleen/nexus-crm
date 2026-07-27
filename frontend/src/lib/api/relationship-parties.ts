@@ -85,6 +85,29 @@ export function listCompanyContacts(
   );
 }
 
+export function updateCompanyContact(
+  relationshipTypeId: string,
+  mapId: string,
+  contactId: string,
+  payload: UpdateContactRequest,
+): Promise<ContactResponse> {
+  return apiFetch<ContactResponse>(
+    `/relationship-types/${relationshipTypeId}/parties/companies/${mapId}/contacts/${contactId}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+  );
+}
+
+export function deleteCompanyContact(
+  relationshipTypeId: string,
+  mapId: string,
+  contactId: string,
+): Promise<{ success: true }> {
+  return apiFetch<{ success: true }>(
+    `/relationship-types/${relationshipTypeId}/parties/companies/${mapId}/contacts/${contactId}`,
+    { method: "DELETE" },
+  );
+}
+
 export function deleteRelationshipParty(
   relationshipTypeId: string,
   mapId: string,

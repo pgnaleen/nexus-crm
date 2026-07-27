@@ -3,6 +3,8 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
 import { IsNull } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { S3Service } from "../../core/storage/s3.service";
+import { assertKeyBelongsToTenant, EMPLOYEE_CV_PREFIX, EMPLOYEE_PHOTO_PREFIX } from "../../core/storage/storage.constants";
+import { TenantContextService } from "../../core/tenant";
 import { CreateEmployeeDto } from "./dto/create-employee.dto";
 import { UpdateEmployeeDto } from "./dto/update-employee.dto";
 import { UpdateOrgChartStructureDto } from "./dto/update-org-chart-structure.dto";
@@ -19,6 +21,7 @@ export class EmployeesService {
     private readonly employeesRepo: EmployeesRepository,
     private readonly auditLogService: AuditLogService,
     private readonly s3: S3Service,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
   async findPicker(): Promise<Employee[]> {
@@ -112,6 +115,14 @@ export class EmployeesService {
   async create(dto: CreateEmployeeDto, userId: string): Promise<Employee> {
     this.logger.debug(`create called by ${userId} (fullName="${dto.fullName}")`);
     try {
+      const tenantId = this.tenantContext.getTenantId();
+      if (dto.profilePhotoUrl) {
+        assertKeyBelongsToTenant(dto.profilePhotoUrl, EMPLOYEE_PHOTO_PREFIX, tenantId);
+      }
+      if (dto.cvUrl) {
+        assertKeyBelongsToTenant(dto.cvUrl, EMPLOYEE_CV_PREFIX, tenantId);
+      }
+
       const { cvUrl, ...employeeFields } = dto;
       const employee = this.employeesRepo.createScoped({
         ...employeeFields,
@@ -146,6 +157,14 @@ export class EmployeesService {
   async update(id: string, dto: UpdateEmployeeDto, userId: string): Promise<Employee> {
     this.logger.debug(`update called for employee ${id} by ${userId} (fields: ${Object.keys(dto).join(", ") || "none"})`);
     try {
+      const tenantId = this.tenantContext.getTenantId();
+      if (dto.profilePhotoUrl) {
+        assertKeyBelongsToTenant(dto.profilePhotoUrl, EMPLOYEE_PHOTO_PREFIX, tenantId);
+      }
+      if (dto.cvUrl) {
+        assertKeyBelongsToTenant(dto.cvUrl, EMPLOYEE_CV_PREFIX, tenantId);
+      }
+
       // Bare load for the actual mutation -- see findOneBareOrFail's comment.
       const employee = await this.findOneBareOrFail(id);
 

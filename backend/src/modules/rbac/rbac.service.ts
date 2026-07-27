@@ -181,9 +181,26 @@ export class RbacService {
     this.logger.debug("findAllResources called");
     const isPlatform = await this.isCurrentTenantPlatform();
     const resources = await this.resourceRepo.find({ order: { name: "ASC" } });
-    const visible = isPlatform ? resources : resources.filter((resource) => !resource.isPlatformOnly);
+    const visible = resources
+      .filter((resource) => isPlatform || !resource.isPlatformOnly)
+      .filter((resource) => !this.isHiddenFromPicker(resource.name));
     this.logger.debug(`findAllResources returning ${visible.length} resource(s) (isPlatform=${isPlatform})`);
     return visible;
+  }
+
+  // Companies/Contacts have no controller anywhere that checks their own
+  // permission keys today -- all real Company/Contact access is gated
+  // exclusively by the four RELATIONSHIP_* permissions on
+  // relationship-parties.controller.ts. Toggling companies:*/contacts:* in
+  // the Roles picker would do nothing but confuse an admin into thinking it
+  // matters. Kept in permissions.ts (not deleted) for a future module (e.g.
+  // Legal) that may need its own genuine Company/Contact access -- hidden
+  // here rather than removed, so no data/rows are lost in the meantime.
+  private static readonly HIDDEN_FROM_PICKER_PREFIXES = ["companies", "contacts"];
+
+  private isHiddenFromPicker(resourceName: string): boolean {
+    const prefix = resourceName.split(":")[0] ?? "";
+    return RbacService.HIDDEN_FROM_PICKER_PREFIXES.includes(prefix);
   }
 
   async getResourceIdsForRole(roleId: string): Promise<string[]> {

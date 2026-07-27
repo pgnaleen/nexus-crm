@@ -18,7 +18,9 @@ import {
   EMPLOYEE_CV_PREFIX,
   EMPLOYEE_PHOTO_PREFIX,
   LOGO_PREFIX,
+  tenantKeyPrefix,
 } from "../../core/storage/storage.constants";
+import { TenantContextService } from "../../core/tenant";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
 import {
@@ -47,10 +49,14 @@ function fileExt(originalname: string): string {
 export class UploadsController {
   private readonly logger = new Logger(UploadsController.name);
 
-  constructor(private readonly s3: S3Service) {}
+  constructor(
+    private readonly s3: S3Service,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
   private async uploadAndRespond(file: Express.Multer.File, prefix: string): Promise<UploadResponse> {
-    const key = `${prefix}${randomUUID()}.${fileExt(file.originalname)}`;
+    const tenantId = this.tenantContext.getTenantId();
+    const key = `${tenantKeyPrefix(prefix, tenantId)}${randomUUID()}.${fileExt(file.originalname)}`;
     this.logger.debug(`uploadAndRespond: putting object at ${key} (${file.size} bytes, ${file.mimetype})`);
     await this.s3.putObject(key, file.buffer, file.mimetype);
     const previewUrl = await this.s3.getSignedGetUrl(key);

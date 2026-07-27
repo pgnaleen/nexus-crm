@@ -272,6 +272,21 @@ a sibling `*DisplayUrl` field (e.g. `CompanyResponse.logoDisplayUrl`,
 never itself a fetchable URL anymore. `resolveUploadUrl()` (frontend, backend-relative-path
 concatenation) is gone — every URL returned now is already absolute.
 
+**Tenant isolation (2026-07-27, same-day follow-up)**: every key is now further namespaced by
+tenant id — `uploads/<type>/{tenantId}/{uuid}.ext` (`core/storage/storage.constants.ts::tenantKeyPrefix`)
+— not just the type-level prefix above. This closes a real gap: `Company.logo`,
+`Employee.profilePhotoUrl`/`s3Key` (cvUrl), and `EmployeeCertification.evidenceFileUrl` are plain
+client-supplied strings on their DTOs (`@IsString()` only, no format check), so without this, a
+tenant could point their own record at any real key string they'd learned of — even another
+tenant's — and get a valid signed URL for it; nothing enforced that a key actually belonged to the
+tenant setting it. `assertKeyBelongsToTenant()` now runs before every such value is persisted
+(`employees.service.ts::create`/`update`, `relationship-parties.service.ts::addCompany`/`updateCompany`,
+`certifications.service.ts::createMine`/`updateMine`), rejecting a mismatched or pre-migration
+flat key with `400 Bad Request`. Deal documents don't need this check — their `s3Key` is always
+computed server-side from the just-uploaded file (see row #2 in the Deal Documents section above),
+never taken from client input, so there's no equivalent trust boundary to guard; the tenant segment
+was still added there too, purely for consistent physical layout in the bucket.
+
 `POST /uploads/logo` is included below now that it's been substantively changed (storage + response
 shape) — previously undocumented per this project's incremental-rollout precedent, but a shape
 change is exactly the trigger for adding registry coverage, not skipping it.

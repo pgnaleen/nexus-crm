@@ -120,6 +120,52 @@ export class RelationshipPartiesController {
     }
   }
 
+  // Company-owned contacts have no party row of their own (see
+  // addCompany/addContact) -- these two routes are keyed by the company's
+  // own mapId plus the contact's own id, not a contact mapId, since none
+  // exists. Same permissions as every other mutation on this controller,
+  // nothing new to configure in Roles admin.
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.RELATIONSHIP_UPDATE])
+  @Patch("companies/:mapId/contacts/:contactId")
+  async updateCompanyContact(
+    @Param("relationshipTypeId", ParseUUIDPipe) relationshipTypeId: string,
+    @Param("mapId", ParseUUIDPipe) mapId: string,
+    @Param("contactId", ParseUUIDPipe) contactId: string,
+    @Body() dto: UpdateRelationshipPartyContactDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ContactResponse> {
+    this.logger.debug(`PATCH .../parties/companies/${mapId}/contacts/${contactId} called by ${user.sub}`);
+    try {
+      const contact = await this.partiesService.updateContactForCompany(relationshipTypeId, mapId, contactId, dto, user.sub);
+      this.logger.debug(`PATCH .../parties/companies/${mapId}/contacts/${contactId} succeeded`);
+      return this.toContactResponse(contact);
+    } catch (err) {
+      this.logger.error(`PATCH .../parties/companies/${mapId}/contacts/${contactId} failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.RELATIONSHIP_DELETE])
+  @Delete("companies/:mapId/contacts/:contactId")
+  async removeCompanyContact(
+    @Param("relationshipTypeId", ParseUUIDPipe) relationshipTypeId: string,
+    @Param("mapId", ParseUUIDPipe) mapId: string,
+    @Param("contactId", ParseUUIDPipe) contactId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ success: true }> {
+    this.logger.debug(`DELETE .../parties/companies/${mapId}/contacts/${contactId} called by ${user.sub}`);
+    try {
+      await this.partiesService.removeContactForCompany(relationshipTypeId, mapId, contactId, user.sub);
+      this.logger.debug(`DELETE .../parties/companies/${mapId}/contacts/${contactId} succeeded`);
+      return { success: true };
+    } catch (err) {
+      this.logger.error(`DELETE .../parties/companies/${mapId}/contacts/${contactId} failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
   @UseGuards(PermissionsGuard)
   @RequirePermission([PERMISSIONS.RELATIONSHIP_UPDATE])
   @Patch("companies/:mapId")
