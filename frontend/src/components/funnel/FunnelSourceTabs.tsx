@@ -168,9 +168,14 @@ export function FunnelSourceTabs({
   const stageIdField = STAGE_ID_FIELD[stageField];
   const canCreateDeals = permissions.includes(PERMISSIONS.DEALS_CREATE);
   const canUpdateDeals = permissions.includes(PERMISSIONS.DEALS_UPDATE);
+  // Deactivated sources don't get their own tab -- "All" still shows every
+  // deal regardless of source, so nothing becomes unreachable, it just stops
+  // being independently filterable once its source is retired. Matches the
+  // Selectable Scope rule (CLAUDE.md) already applied to AddDealDialog's own
+  // activeDealSources for the Deal Source picker.
   const dynamicSources = [
     { id: "all", name: "All" },
-    ...dealSources.map((ds) => ({ id: ds.id, name: ds.name })),
+    ...dealSources.filter((ds) => ds.isActive).map((ds) => ({ id: ds.id, name: ds.name })),
   ];
 
   const sourceColorById = new Map(
