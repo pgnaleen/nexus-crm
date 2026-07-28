@@ -187,15 +187,17 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
           collapsed ? "w-[72px] px-2" : "w-[250px] px-3.5"
         }`}
       >
-        <div className={`flex items-center pt-2 pb-[26px] ${collapsed ? "flex-col gap-2" : "justify-between px-0.5"}`}>
-          {/* Collapsing drops the wordmark, not the size -- both lockups render
-              at the same 26px height so the mark stays put on the same baseline
-              as the sidebar animates between 250px and 72px. */}
-          <NexusLogo variant={collapsed ? "mark" : "horizontal"} tone="light" size={26} />
+        {/* Mark only in both states, centred in the rail. Expanded, the row is
+            `relative` and the collapse chevron is pinned right so it can't pull
+            the mark off centre -- `justify-between` would have. */}
+        <div className={`flex items-center pt-2 pb-[26px] ${collapsed ? "flex-col gap-2" : "relative justify-center px-0.5"}`}>
+          <NexusLogo variant="mark" tone="light" size={40} />
           <button
             type="button"
             onClick={() => setManualOverride(!collapsed)}
-            className="flex h-7 w-7 flex-shrink-0 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-white/50 transition-colors duration-150 hover:bg-white/10 hover:text-white"
+            className={`flex h-7 w-7 flex-shrink-0 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-white/50 transition-colors duration-150 hover:bg-white/10 hover:text-white ${
+              collapsed ? "" : "absolute right-0.5"
+            }`}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >

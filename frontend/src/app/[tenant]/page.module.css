@@ -67,20 +67,23 @@
 
 .cardLogo {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 7px;
+  justify-content: center;
   margin-bottom: 20px;
 }
 
-/* "By Orel IT" -- the vendor line under the product lockup. Muted grey, not
-   the brand red: the design-system rule confines red to primary actions,
-   the active nav item, key badges, and focus rings. */
-.cardTagline {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+/* Vendor attribution, last thing in the card. Sits below the sign-in button
+   with a hairline above it so it reads as a footer rather than as another
+   form element. The "Powered by" words stay muted grey -- only the Orel IT
+   wordmark itself carries colour. */
+.poweredBy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin: 22px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+  font-size: 11px;
   color: var(--color-text-muted);
 }
 

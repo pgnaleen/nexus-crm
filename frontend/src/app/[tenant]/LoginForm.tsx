@@ -5,6 +5,7 @@ import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { login } from "@/lib/api/auth";
 import { NexusLogo } from "@/components/brand/NexusLogo";
+import { OrelItLogo } from "@/components/brand/OrelItLogo";
 import { Button } from "@/components/ui/Button";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { PasswordField } from "@/components/ui/PasswordField";
@@ -62,11 +63,11 @@ export function LoginForm({ tenantSlug, tenantName }: { tenantSlug: string; tena
       <div className={styles.blob2} />
 
       <div className={styles.card}>
-        {/* The new lockups don't carry the vendor tagline, so it rides below
-            as its own line rather than being baked into the SVG. */}
+        {/* Mark only, no wordmark: the card's own heading already names the
+            tenant, so the "NEXUS" lettering was redundant here. Vendor
+            attribution moved to the card footer below. */}
         <div className={styles.cardLogo}>
-          <NexusLogo variant="horizontal" tone="dark" size={30} />
-          <span className={styles.cardTagline}>{t("brand.tagline")}</span>
+          <NexusLogo variant="mark" tone="dark" size={56} />
         </div>
 
         <h1 className={styles.title}>Welcome to {tenantName}</h1>
@@ -97,6 +98,10 @@ export function LoginForm({ tenantSlug, tenantName }: { tenantSlug: string; tena
             Sign in
           </Button>
         </form>
+
+        <p className={styles.poweredBy}>
+          {t("brand.poweredBy")} <OrelItLogo size={12} />
+        </p>
       </div>
 
       {isSubmitting && <LoadingOverlay label="Signing in…" />}
