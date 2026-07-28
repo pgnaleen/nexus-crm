@@ -11,7 +11,7 @@ import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { CustomSelect } from "@/components/ui/CustomSelect";
-import { email as emailValidator, minLength, required, validate } from "@/lib/validation";
+import { email as emailValidator, linkedInUrl, minLength, phoneNumber, required, validate } from "@/lib/validation";
 import { ContactFields, type ContactFieldsValue } from "./ContactFields";
 
 interface FormState extends ContactFieldsValue {
@@ -78,6 +78,18 @@ export function ContactFormDialog({
     if (values.email) {
       const emailError = validate(values.email, [emailValidator()]);
       if (emailError) nextErrors.email = emailError;
+    }
+    if (values.mobileNo) {
+      const mobileError = validate(values.mobileNo, [phoneNumber()]);
+      if (mobileError) nextErrors.mobileNo = mobileError;
+    }
+    if (values.directPhoneNo) {
+      const directPhoneError = validate(values.directPhoneNo, [phoneNumber()]);
+      if (directPhoneError) nextErrors.directPhoneNo = directPhoneError;
+    }
+    if (values.linkedIn) {
+      const linkedInError = validate(values.linkedIn, [linkedInUrl()]);
+      if (linkedInError) nextErrors.linkedIn = linkedInError;
     }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -159,7 +171,7 @@ export function ContactFormDialog({
 
         <ContactFields
           values={values}
-          fullNameError={errors.fullName}
+          errors={errors}
           fullNameRequired
           disabled={isViewOnly}
           onChange={(field, value) => setField(field, value as never)}

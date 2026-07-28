@@ -68,6 +68,9 @@ importers:
       joi:
         specifier: ^17.13.3
         version: 17.13.4
+      libphonenumber-js:
+        specifier: ^1.13.8
+        version: 1.13.8
       multer:
         specifier: ^1.4.5-lts.1
         version: 1.4.5-lts.2
@@ -171,6 +174,9 @@ importers:
       html-to-image:
         specifier: ^1.11.13
         version: 1.11.13
+      libphonenumber-js:
+        specifier: ^1.13.8
+        version: 1.13.8
       next:
         specifier: ^14.2.18
         version: 14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)

@@ -1,5 +1,7 @@
 import { RoleBuying, UpdateContactRequest } from "@orelia/common";
-import { IsEmail, IsEnum, IsOptional, IsString, IsUUID, MaxLength, MinLength } from "class-validator";
+import { IsEmail, IsEnum, IsIn, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength } from "class-validator";
+import { IsValidPhoneNumber } from "../../../core/validators/is-valid-phone-number.decorator";
+import { LINKEDIN_URL_REGEX, VALID_TIMEZONES } from "./contact-field-validation";
 
 export class UpdateRelationshipPartyContactDto implements UpdateContactRequest {
   @IsOptional()
@@ -31,15 +33,15 @@ export class UpdateRelationshipPartyContactDto implements UpdateContactRequest {
   email?: string;
 
   @IsOptional()
-  @IsString()
+  @IsValidPhoneNumber()
   mobileNo?: string;
 
   @IsOptional()
-  @IsString()
+  @IsValidPhoneNumber()
   directPhoneNo?: string;
 
   @IsOptional()
-  @IsString()
+  @Matches(LINKEDIN_URL_REGEX, { message: "linkedIn must be a valid linkedin.com URL" })
   linkedIn?: string;
 
   @IsOptional()
@@ -47,7 +49,7 @@ export class UpdateRelationshipPartyContactDto implements UpdateContactRequest {
   country?: string;
 
   @IsOptional()
-  @IsString()
+  @IsIn(VALID_TIMEZONES, { message: "timezone must be a valid IANA timezone name" })
   timezone?: string;
 
   @IsOptional()

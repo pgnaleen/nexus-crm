@@ -4,8 +4,9 @@ import { RoleBuying } from "@orelia/common";
 import { TextField } from "@/components/ui/TextField";
 import { PhoneField } from "@/components/ui/PhoneField";
 import { CountrySelect } from "@/components/ui/CountrySelect";
+import { TimezoneSelect } from "@/components/ui/TimezoneSelect";
 import { CustomSelect } from "@/components/ui/CustomSelect";
-import { email as emailValidator, validate } from "@/lib/validation";
+import { email as emailValidator, linkedInUrl, validate } from "@/lib/validation";
 
 const ROLE_BUYING_LABELS: Record<RoleBuying, string> = {
   [RoleBuying.EconomicBuyer]: "Economic Buyer",
@@ -41,7 +42,7 @@ export interface ContactFieldsValue {
 interface ContactFieldsProps {
   values: ContactFieldsValue;
   onChange: (field: keyof ContactFieldsValue, value: string) => void;
-  fullNameError?: string;
+  errors?: Partial<Record<keyof ContactFieldsValue, string>>;
   // Standalone Add Contact requires a name outright; a draft row under Add
   // Company is simply skipped on submit if left blank, so it isn't marked
   // required there.
@@ -49,15 +50,16 @@ interface ContactFieldsProps {
   disabled?: boolean;
 }
 
-export function ContactFields({ values, onChange, fullNameError, fullNameRequired, disabled }: ContactFieldsProps) {
+export function ContactFields({ values, onChange, errors, fullNameRequired, disabled }: ContactFieldsProps) {
   const emailError = values.email ? validate(values.email, [emailValidator()]) : undefined;
+  const linkedInError = errors?.linkedIn ?? (values.linkedIn ? validate(values.linkedIn, [linkedInUrl()]) : undefined);
 
   return (
     <>
       <TextField
         label={fullNameRequired ? "Full name *" : "Full name"}
         value={values.fullName}
-        error={fullNameError}
+        error={errors?.fullName}
         placeholder="e.g. Jane Doe"
         disabled={disabled}
         onChange={(e) => onChange("fullName", e.target.value)}
@@ -101,19 +103,28 @@ export function ContactFields({ values, onChange, fullNameError, fullNameRequire
           disabled={disabled}
           onChange={(e) => onChange("email", e.target.value)}
         />
-        <PhoneField label="Mobile number" value={values.mobileNo} disabled={disabled} onChange={(val) => onChange("mobileNo", val)} />
+        <PhoneField
+          label="Mobile number"
+          value={values.mobileNo}
+          error={errors?.mobileNo}
+          disabled={disabled}
+          onChange={(val) => onChange("mobileNo", val)}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-3.5">
-        <TextField
+        <PhoneField
           label="Direct phone number"
           value={values.directPhoneNo}
+          error={errors?.directPhoneNo}
           disabled={disabled}
-          onChange={(e) => onChange("directPhoneNo", e.target.value)}
+          onChange={(val) => onChange("directPhoneNo", val)}
         />
         <TextField
           label="LinkedIn"
           value={values.linkedIn}
+          error={linkedInError}
+          placeholder="https://www.linkedin.com/in/..."
           disabled={disabled}
           onChange={(e) => onChange("linkedIn", e.target.value)}
         />
@@ -127,11 +138,11 @@ export function ContactFields({ values, onChange, fullNameError, fullNameRequire
           placeholder="Search countries..."
           disabled={disabled}
         />
-        <TextField
+        <TimezoneSelect
           label="Timezone"
           value={values.timezone}
+          onChange={(val) => onChange("timezone", val)}
           disabled={disabled}
-          onChange={(e) => onChange("timezone", e.target.value)}
         />
       </div>
     </>

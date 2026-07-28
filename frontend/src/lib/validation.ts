@@ -1,3 +1,5 @@
+import { isValidPhoneNumber } from "libphonenumber-js";
+
 export type Validator = (value: string) => string | undefined;
 
 export function required(message = "This field is required"): Validator {
@@ -37,6 +39,22 @@ export function strongPassword(
   message = "Must include an uppercase letter, a lowercase letter, a number, and a special character"
 ): Validator {
   return (value) => (value.length > 0 && !PASSWORD_STRENGTH_REGEX.test(value) ? message : undefined);
+}
+
+// PhoneField stores E.164 (react-phone-number-input's `international` mode),
+// so this is checking a format our own input already produces -- catches an
+// incomplete number (e.g. too few digits) the widget doesn't block on its own.
+export function phoneNumber(message = "Must be a valid phone number"): Validator {
+  return (value) => (value.length > 0 && !isValidPhoneNumber(value) ? message : undefined);
+}
+
+// Deliberately scoped to linkedin.com rather than a generic URL check --
+// this field is specifically "LinkedIn", not "any link". Protocol optional
+// (accepts "linkedin.com/in/jane" as well as "https://www.linkedin.com/in/jane").
+const LINKEDIN_URL_REGEX = /^(https?:\/\/)?([\w-]+\.)?linkedin\.com\/.+/i;
+
+export function linkedInUrl(message = "Must be a valid LinkedIn URL"): Validator {
+  return (value) => (value.length > 0 && !LINKEDIN_URL_REGEX.test(value) ? message : undefined);
 }
 
 export function validate(value: string, validators: Validator[]): string | undefined {
