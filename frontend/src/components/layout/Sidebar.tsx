@@ -190,12 +190,14 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
         {/* Expanded shows the full lockup (mark + NEXUS); collapsing drops the
             wordmark and leaves the mark alone. Centred in the rail either way:
             the row is `relative` with the collapse chevron pinned right, since
-            `justify-between` would drag the lockup off centre. The two sizes
-            aren't a typo -- the mark inside the horizontal lockup is only ~63%
-            of its height, so 38 there and 40 standalone keep the N's own
-            rendered size roughly steady across the transition. */}
+            `justify-between` would drag the lockup off centre.
+
+            The two sizes aren't a typo. `size` is the whole lockup's height,
+            and the N occupies only ~63% of the horizontal one -- so 38 there
+            renders an N about 24px tall, and 30 standalone keeps the collapsed
+            mark close to that rather than ballooning. */}
         <div className={`flex items-center pt-2 pb-[26px] ${collapsed ? "flex-col gap-2" : "relative justify-center px-0.5"}`}>
-          <NexusLogo variant={collapsed ? "mark" : "horizontal"} tone="light" size={collapsed ? 40 : 38} />
+          <NexusLogo variant={collapsed ? "mark" : "horizontal"} tone="light" size={collapsed ? 30 : 38} />
           <button
             type="button"
             onClick={() => setManualOverride(!collapsed)}
