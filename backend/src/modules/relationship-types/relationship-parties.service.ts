@@ -290,6 +290,46 @@ export class RelationshipPartiesService {
     return { asContact, asPrimaryContact, asPartner };
   }
 
+  // Same reasoning as countActiveDeals above, for a Company rather than a
+  // Contact -- used before letting remove() cascade-delete a Company, so an
+  // active Deal never ends up silently pointing at a soft-deleted company.
+  async countActiveDealsForCompany(companyId: string): Promise<{ asCompany: number; asPartner: number }> {
+    const dealsRepo = this.dataSource.getRepository(Deal);
+    const partnersRepo = this.dataSource.getRepository(DealPartnersMap);
+    const [asCompany, asPartner] = await Promise.all([
+      dealsRepo.count({ where: { companyId } }),
+      partnersRepo.count({ where: { companyId } }),
+    ]);
+    return { asCompany, asPartner };
+  }
+
+  private async assertContactDeletable(contactId: string, label: string): Promise<void> {
+    const { asContact, asPrimaryContact, asPartner } = await this.countActiveDeals(contactId);
+    const parts: string[] = [];
+    if (asContact > 0) parts.push(`${asContact} deal(s) as customer contact`);
+    if (asPrimaryContact > 0) parts.push(`${asPrimaryContact} deal(s) as primary contact`);
+    if (asPartner > 0) parts.push(`${asPartner} deal(s) as partner`);
+    if (parts.length > 0) {
+      this.logger.debug(`Blocked: contact ${contactId} still used by deals (${parts.join(", ")})`);
+      throw new ConflictException(
+        `Cannot delete ${label}: currently used by ${parts.join(", ")}. Update those deals first.`,
+      );
+    }
+  }
+
+  private async assertCompanyDeletable(companyId: string): Promise<void> {
+    const { asCompany, asPartner } = await this.countActiveDealsForCompany(companyId);
+    const parts: string[] = [];
+    if (asCompany > 0) parts.push(`${asCompany} deal(s) as the company`);
+    if (asPartner > 0) parts.push(`${asPartner} deal(s) as partner`);
+    if (parts.length > 0) {
+      this.logger.debug(`Blocked: company ${companyId} still used by deals (${parts.join(", ")})`);
+      throw new ConflictException(
+        `Cannot delete this company: currently used by ${parts.join(", ")}. Update those deals first.`,
+      );
+    }
+  }
+
   async removeContactForCompany(
     relationshipTypeId: string,
     mapId: string,
@@ -310,17 +350,7 @@ export class RelationshipPartiesService {
     // A ConflictException here is an expected business-rule rejection, not a
     // system failure -- thrown before the try/catch below so it isn't logged
     // as an error, same as NotFoundException elsewhere.
-    const { asContact, asPrimaryContact, asPartner } = await this.countActiveDeals(contactId);
-    const parts: string[] = [];
-    if (asContact > 0) parts.push(`${asContact} deal(s) as customer contact`);
-    if (asPrimaryContact > 0) parts.push(`${asPrimaryContact} deal(s) as primary contact`);
-    if (asPartner > 0) parts.push(`${asPartner} deal(s) as partner`);
-    if (parts.length > 0) {
-      this.logger.debug(`Blocked: contact ${contactId} still used by deals (${parts.join(", ")})`);
-      throw new ConflictException(
-        `Cannot delete this contact: currently used by ${parts.join(", ")}. Update those deals first.`,
-      );
-    }
+    await this.assertContactDeletable(contactId, "this contact");
 
     try {
       await this.contactsRepo.softRemoveScoped(contact, userId);
@@ -499,12 +529,71 @@ export class RelationshipPartiesService {
     }
   }
 
+  // Previously this only soft-deleted the relationship_company_contact_map
+  // row itself, leaving the Company/Contact it tagged fully active --
+  // still returned by every picker, still visible under any other
+  // relationship type it was also tagged to, effectively undeletable by a
+  // normal user from then on. Now cascades all the way to the real entity,
+  // per CLAUDE.md's "cascade must reach the real leaf entity" rule.
   async remove(relationshipTypeId: string, mapId: string, userId: string): Promise<void> {
     this.logger.debug(`remove called for party ${mapId} on relationship type ${relationshipTypeId} by ${userId}`);
     const party = await this.findOneOrFail(relationshipTypeId, mapId);
+    const companyName = party.company?.name ?? null;
+    const contactName = party.contact?.fullName ?? null;
+
+    // A ConflictException here is an expected business-rule rejection, not a
+    // system failure -- checked before the try/catch below so it isn't
+    // logged as an error, same as NotFoundException elsewhere.
+    let ownedContacts: Contact[] = [];
+    if (party.companyId) {
+      await this.assertCompanyDeletable(party.companyId);
+      ownedContacts = await this.contactsRepo.findScoped({ where: { companyId: party.companyId } });
+      for (const contact of ownedContacts) {
+        await this.assertContactDeletable(contact.id, `its contact "${contact.fullName}"`);
+      }
+    } else if (party.contactId) {
+      await this.assertContactDeletable(party.contactId, "this contact");
+    }
+
     try {
-      await this.partiesRepo.softRemoveScoped(party, userId);
+      const tenantId = this.tenantContext.getTenantId();
+      // Bare re-fetch for the mutation target -- `party` above was loaded
+      // with relations (company, company.territoryOwner, contact) for
+      // display, and CLAUDE.md's TypeORM rule says never save()/softRemove()
+      // an entity that was loaded with relations.
+      const bareParty = await this.partiesRepo.findOneScoped({ where: { id: mapId } });
+      if (!bareParty) {
+        throw new NotFoundException("Relationship party not found");
+      }
+
+      await this.dataSource.transaction(async (manager) => {
+        const partyRepo = manager.getRepository(RelationshipCompanyContactMap);
+        const companyRepo = manager.getRepository(Company);
+        const contactRepo = manager.getRepository(Contact);
+
+        await partyRepo.softRemove(bareParty);
+        await partyRepo.update(bareParty.id, { deletedBy: userId });
+
+        if (party.companyId) {
+          const bareCompany = await companyRepo.findOne({ where: { id: party.companyId, tenantId } });
+          if (bareCompany) {
+            await companyRepo.softRemove(bareCompany);
+            await companyRepo.update(bareCompany.id, { deletedBy: userId });
+          }
+          if (ownedContacts.length > 0) {
+            await contactRepo.softRemove(ownedContacts);
+            await contactRepo.update(ownedContacts.map((c) => c.id), { deletedBy: userId });
+          }
+        } else if (party.contactId) {
+          const bareContact = await contactRepo.findOne({ where: { id: party.contactId, tenantId } });
+          if (bareContact) {
+            await contactRepo.softRemove(bareContact);
+            await contactRepo.update(bareContact.id, { deletedBy: userId });
+          }
+        }
+      });
       this.logger.debug(`remove succeeded for party ${mapId}`);
+
       await this.auditLogService.record({
         entityType: "relationship_party",
         entityId: mapId,
@@ -512,6 +601,32 @@ export class RelationshipPartiesService {
         actorId: userId,
         changes: { relationshipTypeId, companyId: party.companyId ?? null, contactId: party.contactId ?? null },
       });
+      if (party.companyId) {
+        await this.auditLogService.record({
+          entityType: "company",
+          entityId: party.companyId,
+          action: "delete",
+          actorId: userId,
+          changes: { name: companyName, cascadedContactCount: ownedContacts.length },
+        });
+        for (const contact of ownedContacts) {
+          await this.auditLogService.record({
+            entityType: "contact",
+            entityId: contact.id,
+            action: "delete",
+            actorId: userId,
+            changes: { fullName: contact.fullName, companyId: party.companyId, cascadeReason: "company deleted" },
+          });
+        }
+      } else if (party.contactId) {
+        await this.auditLogService.record({
+          entityType: "contact",
+          entityId: party.contactId,
+          action: "delete",
+          actorId: userId,
+          changes: { fullName: contactName },
+        });
+      }
     } catch (err) {
       this.logger.error(`remove failed for party ${mapId}: ${(err as Error).message}`, (err as Error).stack);
       throw err;

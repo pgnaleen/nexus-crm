@@ -1,8 +1,12 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { SystemRole } from "@orelia/common";
 import { DataSource } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
+import { Company } from "../companies/entities/company.entity";
+import { Contact } from "../contacts/entities/contact.entity";
+import { DealPartnersMap } from "../deals/entities/deal-partners-map.entity";
+import { Deal } from "../deals/entities/deal.entity";
 import { CreateRelationshipTypeDto } from "./dto/create-relationship-type.dto";
 import { UpdateRelationshipTypeDto } from "./dto/update-relationship-type.dto";
 import { RelationshipCompanyContactMap } from "./entities/relationship-company-contact-map.entity";
@@ -123,32 +127,127 @@ export class RelationshipTypesService {
     }
   }
 
-  // Cascades to every tagged Company/Contact map row, per CLAUDE.md's
-  // cascade-delete rule -- done explicitly here, in one transaction, rather
-  // than relying on the map table's raw DB-level ON DELETE CASCADE (which
-  // only fires on a hard DELETE and would never run for our soft-deletes).
-  // No special-casing for a flagged (systemRole) row: deleting it just frees
-  // that role's slot, exactly like deleting any other row.
+  // Cascades to every tagged Company/Contact map row, AND the real
+  // Company/Contact each one points at (plus a company's own owned
+  // contacts) -- per CLAUDE.md's "cascade must reach the real leaf entity"
+  // rule. Previously this only cascaded to the map row, leaving every
+  // tagged Company/Contact fully active underneath. Done explicitly here,
+  // in one transaction, rather than relying on the map table's raw DB-level
+  // ON DELETE CASCADE (which only fires on a hard DELETE and would never
+  // run for our soft-deletes). No special-casing for a flagged (systemRole)
+  // row: deleting it just frees that role's slot, exactly like deleting any
+  // other row.
   async remove(id: string, userId: string): Promise<void> {
     const type = await this.findOneOrFail(id);
     this.logger.debug(`remove called for relationship type ${id}`);
-    let cascadedCount = 0;
+
+    const dependents = await this.partiesRepo.findScoped({ where: { relationshipTypeId: id } });
+    this.logger.debug(`Found ${dependents.length} tagged part(y/ies) under this type`);
+
+    // Blocked entirely (not partially cascaded) if any tagged Company/
+    // Contact -- or a tagged company's own owned contacts -- is still
+    // referenced by an active Deal, same "block, don't cascade past a live
+    // reference" standard as MainStagesService.remove() and
+    // RelationshipPartiesService.remove(). Checked before the try/catch
+    // below so it isn't logged as an error, same as NotFoundException
+    // elsewhere.
+    const dealsRepo = this.dataSource.getRepository(Deal);
+    const partnersRepo = this.dataSource.getRepository(DealPartnersMap);
+    const contactsRepo = this.dataSource.getRepository(Contact);
+    const companiesRepo = this.dataSource.getRepository(Company);
+
+    const ownedContactsByCompany = new Map<string, Contact[]>();
+    const blockers: string[] = [];
+
+    for (const party of dependents) {
+      if (party.companyId) {
+        const [asCompany, asPartner] = await Promise.all([
+          dealsRepo.count({ where: { companyId: party.companyId } }),
+          partnersRepo.count({ where: { companyId: party.companyId } }),
+        ]);
+        if (asCompany + asPartner > 0) {
+          const company = await companiesRepo.findOne({ where: { id: party.companyId } });
+          blockers.push(`"${company?.name ?? party.companyId}" (${asCompany + asPartner} active deal reference(s))`);
+        }
+        const owned = await contactsRepo.find({ where: { companyId: party.companyId } });
+        ownedContactsByCompany.set(party.companyId, owned);
+        for (const contact of owned) {
+          const [asContact, asPrimaryContact, asPartnerContact] = await Promise.all([
+            dealsRepo.count({ where: { contactId: contact.id } }),
+            dealsRepo.count({ where: { primaryContactId: contact.id } }),
+            partnersRepo.count({ where: { contactId: contact.id } }),
+          ]);
+          if (asContact + asPrimaryContact + asPartnerContact > 0) {
+            blockers.push(`"${contact.fullName}" (${asContact + asPrimaryContact + asPartnerContact} active deal reference(s))`);
+          }
+        }
+      } else if (party.contactId) {
+        const [asContact, asPrimaryContact, asPartnerContact] = await Promise.all([
+          dealsRepo.count({ where: { contactId: party.contactId } }),
+          dealsRepo.count({ where: { primaryContactId: party.contactId } }),
+          partnersRepo.count({ where: { contactId: party.contactId } }),
+        ]);
+        if (asContact + asPrimaryContact + asPartnerContact > 0) {
+          const contact = await contactsRepo.findOne({ where: { id: party.contactId } });
+          blockers.push(`"${contact?.fullName ?? party.contactId}" (${asContact + asPrimaryContact + asPartnerContact} active deal reference(s))`);
+        }
+      }
+    }
+
+    if (blockers.length > 0) {
+      this.logger.debug(`Blocked: ${blockers.length} tagged record(s) still referenced by active deals`);
+      throw new ConflictException(
+        `Cannot delete this relationship type: ${blockers.join(", ")} still referenced by active deal(s). Update those deals first.`,
+      );
+    }
+
+    let cascadedPartyCount = 0;
+    // Individual { entityType, entityId, name } records for each Company/
+    // Contact actually cascaded -- collected inside the transaction, written
+    // to audit_logs after it commits, so each deleted record gets its own
+    // audit trail entry (not just a count folded into the type's own entry).
+    const cascadedCompanies: Array<{ id: string; name: string | null }> = [];
+    const cascadedContacts: Array<{ id: string; fullName: string | null; companyId: string | null }> = [];
     try {
       await this.dataSource.transaction(async (manager) => {
         const partyRepo = manager.getRepository(RelationshipCompanyContactMap);
         const typeRepo = manager.getRepository(RelationshipType);
+        const companyRepoTx = manager.getRepository(Company);
+        const contactRepoTx = manager.getRepository(Contact);
 
-        const dependents = await partyRepo.find({
-          where: { relationshipTypeId: id, tenantId: type.tenantId },
-        });
-        cascadedCount = dependents.length;
-
+        cascadedPartyCount = dependents.length;
         if (dependents.length > 0) {
           this.logger.debug(`Cascading soft-delete to ${dependents.length} tagged party row(s)`);
           await partyRepo.softRemove(dependents);
           await partyRepo.update(dependents.map((party) => party.id), { deletedBy: userId });
         } else {
           this.logger.debug("No tagged parties to cascade -- deleting the type alone");
+        }
+
+        for (const party of dependents) {
+          if (party.companyId) {
+            const company = await companyRepoTx.findOne({ where: { id: party.companyId } });
+            if (company) {
+              await companyRepoTx.softRemove(company);
+              await companyRepoTx.update(company.id, { deletedBy: userId });
+              cascadedCompanies.push({ id: company.id, name: company.name });
+            }
+            const owned = ownedContactsByCompany.get(party.companyId) ?? [];
+            if (owned.length > 0) {
+              await contactRepoTx.softRemove(owned);
+              await contactRepoTx.update(owned.map((c) => c.id), { deletedBy: userId });
+              for (const contact of owned) {
+                cascadedContacts.push({ id: contact.id, fullName: contact.fullName, companyId: party.companyId });
+              }
+            }
+          } else if (party.contactId) {
+            const contact = await contactRepoTx.findOne({ where: { id: party.contactId } });
+            if (contact) {
+              await contactRepoTx.softRemove(contact);
+              await contactRepoTx.update(contact.id, { deletedBy: userId });
+              cascadedContacts.push({ id: contact.id, fullName: contact.fullName, companyId: null });
+            }
+          }
         }
 
         await typeRepo.softRemove(type);
@@ -160,8 +259,31 @@ export class RelationshipTypesService {
         entityId: id,
         action: "delete",
         actorId: userId,
-        changes: { name: type.name, cascadedPartyCount: cascadedCount },
+        changes: {
+          name: type.name,
+          cascadedPartyCount,
+          cascadedCompanyCount: cascadedCompanies.length,
+          cascadedContactCount: cascadedContacts.length,
+        },
       });
+      for (const company of cascadedCompanies) {
+        await this.auditLogService.record({
+          entityType: "company",
+          entityId: company.id,
+          action: "delete",
+          actorId: userId,
+          changes: { name: company.name, cascadeReason: `relationship type "${type.name}" deleted` },
+        });
+      }
+      for (const contact of cascadedContacts) {
+        await this.auditLogService.record({
+          entityType: "contact",
+          entityId: contact.id,
+          action: "delete",
+          actorId: userId,
+          changes: { fullName: contact.fullName, companyId: contact.companyId, cascadeReason: `relationship type "${type.name}" deleted` },
+        });
+      }
     } catch (err) {
       this.logger.error(`remove failed for relationship type ${id}: ${(err as Error).message}`, (err as Error).stack);
       throw err;

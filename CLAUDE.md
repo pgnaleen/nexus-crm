@@ -235,6 +235,36 @@ own `deletedAt`/`deletedBy` set correctly, same as if it were deleted directly.
 roughly how many records are affected, and must re-enter their account password to confirm. No
 silent or one-click cascading deletes.
 
+**Rule — a cascade must reach the real leaf entity, not stop at a join/tag table.** Discovered
+2026-07-28 during a full audit prompted by the client: `RelationshipTypesService.remove()` (and
+the single-party `RelationshipPartiesService.remove()` used by the "Delete Company/Person" button)
+both only soft-delete the `relationship_company_contact_map` row — the tag linking a Company or
+Contact to a Relationship Type. Neither ever touches the underlying `Company`/`Contact` row's own
+`deletedAt`/`deletedBy`. The visible symptom: delete a Relationship Type (or a single Company/
+Person card under one), the confirm dialog correctly warns "this will also delete N tagged
+companies/contacts," but those Companies/Contacts stay fully active underneath — still returned by
+every picker (e.g. still selectable when creating a new Deal), still visible to any other
+Relationship Type they also happen to be tagged under, effectively un-deletable by a normal user
+ever again. **Fixed 2026-07-28** — both `RelationshipPartiesService.remove()` and
+`RelationshipTypesService.remove()` now cascade the real soft-delete down to the Company/Contact
+(and a deleted company's own owned Contacts), each getting its own `audit_logs` row (not just a
+count folded into the parent's entry), and each blocked with a `ConflictException` naming the
+still-referenced records if any of them has an active Deal reference — mirroring the guard
+`removeContactForCompany()` already had. Verified live: booted the app, ran both delete paths
+against real throwaway rows, confirmed `companies`/`contacts` rows actually got
+`deletedAt`/`deletedBy` set and each produced its own `audit_logs` delete row. The rule going
+forward, for any *new* cascade: when a cascade's warning dialog tells the user N records will be
+deleted, the code must actually soft-delete all N of those records (each with its own audit log
+row), not just the association row that pointed at them. Before shipping any new cascade, trace it
+all the way to the leaf entity and confirm via a real DB query that the leaf row's `deletedAt`
+actually changed, not just the join table's.
+
+**Known residual data issue:** this bug shipped before the fix above, so 6 Companies and 1 Contact
+in the live database are still soft-orphaned from it (a `relationship_company_contact_map` row
+that's deleted, pointing at a Company/Contact that isn't) — found via direct query during the same
+audit. Not backfilled automatically; needs an explicit one-time cleanup decision (which rows,
+confirmed with the client) rather than a silent bulk soft-delete.
+
 ### Deeper audit trail
 
 Beyond the per-row `createdBy`/`updatedBy`/`deletedBy` (which only ever show the *last* actor),
@@ -251,9 +281,13 @@ actually changed).
 one deliberate exception to the "never swallow, always rethrow" rule elsewhere in this doc: it
 logs the failure as an error and returns, it does not rethrow.
 
-**Rollout is table-by-table**, not all at once — `relationship_type` (create/update/delete) is
-done; every other table's services still need this added the same way, one at a time, tracked in
-`todo-audit-infrastructure.md`.
+**Rollout status (audited + completed 2026-07-28):** `AuditLogService.record()` is now wired into
+create/update/delete for every table with its own service: `relationship_type`,
+`relationship_party` (company/contact tagging), `department`, `deal_source`, `user`, `rbac_role`
+(+ role-resource/role-user assignment), `team`, `tenant`, `deal`, `deal_partner`, `deal_document`,
+`deal_note`, `deal_tender_detail`, `employee`, `certification`, `priority_task` (+
+`priority_task_share`), and — added in this pass, previously the one real gap — `main_stage` and
+`sub_stage` (`backend/src/modules/deal-stages/`).
 
 ### Terminal logging
 
