@@ -538,7 +538,7 @@ export function CompanyFormDialog({
 
         {/* ── Tab 1: Company Details ─────────────────────── */}
         {activeTab === "details" && (
-          <div className="h-[620px] overflow-y-auto pr-1">
+          <div className="h-[min(620px,calc(100vh-250px))] overflow-y-auto pr-1">
             <TextField
               label="Company name *"
               name="name"
@@ -650,7 +650,7 @@ export function CompanyFormDialog({
 
         {/* ── Tab 2: Business Details ────────────────────── */}
         {activeTab === "business" && (
-          <div className="h-[620px] overflow-y-auto pr-1">
+          <div className="h-[min(620px,calc(100vh-250px))] overflow-y-auto pr-1">
             <div className="mb-[18px]">
               <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Logo</label>
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -823,7 +823,7 @@ export function CompanyFormDialog({
 
         {/* ── Tab 3: Contacts ─────────────────────────────── */}
         {activeTab === "contacts" && (
-          <div className="h-[620px] overflow-y-auto pr-1">
+          <div className="h-[min(620px,calc(100vh-250px))] overflow-y-auto pr-1">
             {mode !== "create" && (
               <div className="mb-5">
                 <p className="mb-2 text-[13.5px] font-semibold text-crm-text">Existing contacts</p>
