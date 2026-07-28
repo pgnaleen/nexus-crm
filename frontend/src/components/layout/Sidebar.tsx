@@ -48,6 +48,34 @@ function chevronClasses(isOpen: boolean): string {
   return isOpen ? "flex rotate-180 transition-transform duration-150" : "flex transition-transform duration-150";
 }
 
+// A group's sub-items (Main Stage names, Relationship Type names, admin
+// resource names, ...) have no icons of their own, so the collapsed rail
+// represents each one as a short uppercase abbreviation instead: 2 letters
+// of a single word, or the initial of each of up to the first 3 words.
+// Deterministic and label-driven (not a hand-maintained map), so a renamed
+// tenant Relationship Type or Main Stage is abbreviated correctly with no
+// code change. Two different names can land on the same abbreviation --
+// the badge's `title` tooltip disambiguates on hover.
+function abbreviateLabel(label: string): string {
+  const words = label.trim().split(/\s+/).filter(Boolean);
+  const [first, ...rest] = words;
+  if (!first) return "?";
+  if (rest.length === 0) return first.slice(0, 2).toUpperCase();
+  return [first, ...rest]
+    .slice(0, 3)
+    .map((word) => word.charAt(0))
+    .join("")
+    .toUpperCase();
+}
+
+const BADGE_LINK_BASE =
+  "flex h-7 w-7 items-center justify-center rounded-md text-[10.5px] font-semibold uppercase tracking-tight text-white/60 no-underline transition-colors duration-150 hover:bg-white/10 hover:text-white";
+const BADGE_LINK_ACTIVE = "bg-crm-primary text-white hover:bg-crm-primary hover:text-white";
+
+function badgeClasses(isActive: boolean): string {
+  return isActive ? `${BADGE_LINK_BASE} ${BADGE_LINK_ACTIVE}` : BADGE_LINK_BASE;
+}
+
 const CRM_CONFIG_ITEMS: { label: string; segment: string; prefix?: string; isRoot?: boolean }[] = [
   { label: "Teams", segment: "teams", prefix: "teams" },
   { label: "Relationship Types", segment: "relationship-types", prefix: "relationship_type" },
@@ -108,17 +136,12 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
 
   const collapsed = manualOverride !== null ? manualOverride : isNarrow;
 
-  // Shared by every group toggle (Deals/Relationships/HR/Config/Admin): while
-  // collapsed, a group's sub-items have no icons of their own, so clicking
-  // its icon expands the sidebar (persisting that choice) and opens that
-  // group, rather than toggling an open state nothing can render yet.
+  // Shared by every group toggle (Deals/Relationships/HR/Config/Admin). Same
+  // open/closed toggle whether collapsed or not -- while collapsed, "open"
+  // reveals that group's sub-items as abbreviated badges in place, rather
+  // than forcing the sidebar to expand.
   function handleGroupToggle(isOpen: boolean, setIsOpen: (value: boolean) => void) {
-    if (collapsed) {
-      setManualOverride(false);
-      setIsOpen(true);
-    } else {
-      setIsOpen(!isOpen);
-    }
+    setIsOpen(!isOpen);
   }
 
   const dashboardHref = `/${tenantSlug}/dashboard`;
@@ -252,6 +275,26 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
                 })}
               </div>
             )}
+
+            {collapsed && isDealsOpen && (
+              <div className="mt-0.5 mb-1.5 flex flex-col items-center gap-1">
+                {mainStages.map((stage) => {
+                  const href = `/${tenantSlug}/deals/${stage.id}`;
+                  const isActive = pathname === href;
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      className={badgeClasses(isActive)}
+                      onClick={() => handleLinkClick(isActive)}
+                      title={stage.name}
+                    >
+                      {abbreviateLabel(stage.name)}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
           </>
         )}
 
@@ -285,6 +328,26 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
                   onClick={() => handleLinkClick(isActive)}
                 >
                   {type.name}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
+        {collapsed && isRelationshipsOpen && (
+          <div className="mt-0.5 mb-1.5 flex flex-col items-center gap-1">
+            {relationshipTypes.map((type) => {
+              const href = `/${tenantSlug}/relationships/${type.id}`;
+              const isActive = pathname === href;
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={badgeClasses(isActive)}
+                  onClick={() => handleLinkClick(isActive)}
+                  title={type.name}
+                >
+                  {abbreviateLabel(type.name)}
                 </Link>
               );
             })}
@@ -346,6 +409,47 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
                 )}
               </div>
             )}
+
+            {collapsed && isHROpen && (
+              <div className="mt-0.5 mb-1.5 flex flex-col items-center gap-1">
+                <Link
+                  href={hrHref}
+                  className={badgeClasses(isHrActive)}
+                  onClick={() => handleLinkClick(isHrActive)}
+                  title="Employees"
+                >
+                  {abbreviateLabel("Employees")}
+                </Link>
+                <Link
+                  href={orgChartHref}
+                  className={badgeClasses(isOrgChartActive)}
+                  onClick={() => handleLinkClick(isOrgChartActive)}
+                  title="Organization Chart"
+                >
+                  {abbreviateLabel("Organization Chart")}
+                </Link>
+                {canViewEmployees && (
+                  <Link
+                    href={certifiedHref}
+                    className={badgeClasses(isCertifiedActive)}
+                    onClick={() => handleLinkClick(isCertifiedActive)}
+                    title="Certified Employees"
+                  >
+                    {abbreviateLabel("Certified Employees")}
+                  </Link>
+                )}
+                {canReviewCertifications && (
+                  <Link
+                    href={certReviewHref}
+                    className={badgeClasses(isCertReviewActive)}
+                    onClick={() => handleLinkClick(isCertReviewActive)}
+                    title="Certification Review"
+                  >
+                    {abbreviateLabel("Certification Review")}
+                  </Link>
+                )}
+              </div>
+            )}
           </>
         )}
         {/* CRM CONFIGURATION GROUP */}
@@ -386,6 +490,26 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
           </div>
         )}
 
+        {collapsed && isConfigOpen && visibleConfigItems.length > 0 && (
+          <div className="mt-0.5 mb-1.5 flex flex-col items-center gap-1">
+            {visibleConfigItems.map(({ label, segment, isRoot }) => {
+              const href = isRoot ? `/${tenantSlug}/${segment}` : `${adminBasePath}${segment}`;
+              const isActive = pathname === href;
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={badgeClasses(isActive)}
+                  onClick={() => handleLinkClick(isActive)}
+                  title={label}
+                >
+                  {abbreviateLabel(label)}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
         {/* SYSTEM ADMINISTRATION GROUP */}
         {visibleAdminItems.length > 0 && (
           <button
@@ -418,6 +542,26 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
                   onClick={() => handleLinkClick(isActive)}
                 >
                   {label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
+        {collapsed && isAdminOpen && visibleAdminItems.length > 0 && (
+          <div className="mt-0.5 mb-1.5 flex flex-col items-center gap-1">
+            {visibleAdminItems.map(({ label, segment, isRoot }) => {
+              const href = isRoot ? `/${tenantSlug}/${segment}` : `${adminBasePath}${segment}`;
+              const isActive = pathname === href;
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={badgeClasses(isActive)}
+                  onClick={() => handleLinkClick(isActive)}
+                  title={label}
+                >
+                  {abbreviateLabel(label)}
                 </Link>
               );
             })}
