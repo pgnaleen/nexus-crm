@@ -1,5 +1,5 @@
 import { DocumentOwnerType } from "@orelia/common";
-import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
@@ -9,6 +9,8 @@ import { CompaniesRepository } from "../companies/companies.repository";
 import { Company } from "../companies/entities/company.entity";
 import { ContactsRepository } from "../contacts/contacts.repository";
 import { Contact } from "../contacts/entities/contact.entity";
+import { DealPartnersMap } from "../deals/entities/deal-partners-map.entity";
+import { Deal } from "../deals/entities/deal.entity";
 import { DocumentsService } from "../documents/documents.service";
 import { CreateRelationshipPartyCompanyDto } from "./dto/create-relationship-party-company.dto";
 import { CreateRelationshipPartyContactDto } from "./dto/create-relationship-party-contact.dto";
@@ -271,6 +273,23 @@ export class RelationshipPartiesService {
     }
   }
 
+  // Deal.contactId/primaryContactId have DB-level ON DELETE SET NULL, and
+  // deal_partners_map.contactId has ON DELETE CASCADE, but neither fires on
+  // a soft-delete. Without this check, deleting a company-owned contact who
+  // is a deal's Customer/primary contact or a Partner would leave that deal
+  // silently pointing at (or, for the partner map, quietly losing) a
+  // now-hidden, soft-deleted Contact.
+  async countActiveDeals(contactId: string): Promise<{ asContact: number; asPrimaryContact: number; asPartner: number }> {
+    const dealsRepo = this.dataSource.getRepository(Deal);
+    const partnersRepo = this.dataSource.getRepository(DealPartnersMap);
+    const [asContact, asPrimaryContact, asPartner] = await Promise.all([
+      dealsRepo.count({ where: { contactId } }),
+      dealsRepo.count({ where: { primaryContactId: contactId } }),
+      partnersRepo.count({ where: { contactId } }),
+    ]);
+    return { asContact, asPrimaryContact, asPartner };
+  }
+
   async removeContactForCompany(
     relationshipTypeId: string,
     mapId: string,
@@ -286,6 +305,21 @@ export class RelationshipPartiesService {
     const contact = await this.contactsRepo.findOneScoped({ where: { id: contactId, companyId: party.companyId } });
     if (!contact) {
       throw new NotFoundException("Contact not found for this company");
+    }
+
+    // A ConflictException here is an expected business-rule rejection, not a
+    // system failure -- thrown before the try/catch below so it isn't logged
+    // as an error, same as NotFoundException elsewhere.
+    const { asContact, asPrimaryContact, asPartner } = await this.countActiveDeals(contactId);
+    const parts: string[] = [];
+    if (asContact > 0) parts.push(`${asContact} deal(s) as customer contact`);
+    if (asPrimaryContact > 0) parts.push(`${asPrimaryContact} deal(s) as primary contact`);
+    if (asPartner > 0) parts.push(`${asPartner} deal(s) as partner`);
+    if (parts.length > 0) {
+      this.logger.debug(`Blocked: contact ${contactId} still used by deals (${parts.join(", ")})`);
+      throw new ConflictException(
+        `Cannot delete this contact: currently used by ${parts.join(", ")}. Update those deals first.`,
+      );
     }
 
     try {
