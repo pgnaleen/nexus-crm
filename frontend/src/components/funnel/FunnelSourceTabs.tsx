@@ -481,8 +481,12 @@ export function FunnelSourceTabs({
       </div>
 
       {/* ── Filters ──────────────────────── */}
-      <div className="mb-6 flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[#f8fafc] px-4 py-3">
-        <div className="flex items-center gap-4">
+      {/* flex-wrap at every level below: on a narrower screen, controls wrap
+          onto additional rows inside this same bordered box instead of
+          overflowing past the page edge -- nothing is ever cut off or
+          unreachable, it just takes more vertical space. */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-y-3 rounded-xl border border-[var(--color-border)] bg-[#f8fafc] px-4 py-3">
+        <div className="flex flex-wrap items-center gap-4">
           <div className="relative w-[280px]">
             <span className="pointer-events-none absolute left-[10px] top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]">
               <SearchIcon />
@@ -495,7 +499,7 @@ export function FunnelSourceTabs({
               className="w-full rounded-lg border border-[var(--color-border)] bg-white py-2 pl-8 pr-3 font-[inherit] text-[13px] transition-colors duration-150 focus:border-[var(--color-crm-primary)] focus:outline-none"
             />
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <CustomSelect
               label="Department"
               value={department}
