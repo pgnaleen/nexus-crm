@@ -9,6 +9,7 @@ import { PermissionsGuard } from "../rbac/guards/permissions.guard";
 import { RbacService } from "../rbac/rbac.service";
 import { CreateEmployeeDto } from "./dto/create-employee.dto";
 import { UpdateEmployeeDto } from "./dto/update-employee.dto";
+import { UpdateMyPhotoDto } from "./dto/update-my-photo.dto";
 import { UpdateOrgChartStructureDto } from "./dto/update-org-chart-structure.dto";
 import { Employee } from "./entities/employee.entity";
 import { EmployeesService } from "./employees.service";
@@ -88,6 +89,34 @@ export class EmployeesController {
       return this.toDetailResponse(employee, false);
     } catch (err) {
       this.logger.error(`GET /employees/me failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Self-service profile photo. Auth-only (no RequirePermission, global
+  // JwtAuthGuard still applies): the target row is resolved from the caller's
+  // own token rather than a path param, so there is no id to tamper with --
+  // same posture as POST /users/me/change-password and the certifications
+  // routes. The photo is the single exception to My Profile's otherwise
+  // read-only, HR-controlled employee record. Declared before the ":id"
+  // routes, or "me" would be captured as :id and rejected by ParseUUIDPipe.
+  @Patch("me/photo")
+  async updateMyPhoto(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateMyPhotoDto,
+  ): Promise<EmployeeDetailResponse> {
+    this.logger.debug(
+      `PATCH /employees/me/photo called by ${user.sub} (action=${dto.profilePhotoUrl ? "set" : "clear"})`,
+    );
+    try {
+      const employee = await this.employeesService.updateMyPhoto(user.sub, dto.profilePhotoUrl);
+      this.logger.debug(`PATCH /employees/me/photo succeeded (employee ${employee.id})`);
+      // hasSensitiveAccess=false: this is the caller's own record, but "it's
+      // mine" never bypasses EMPLOYEES_VIEW_SENSITIVE -- identical to GET
+      // /employees/me above.
+      return this.toDetailResponse(employee, false);
+    } catch (err) {
+      this.logger.error(`PATCH /employees/me/photo failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }

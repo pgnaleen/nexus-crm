@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/auth/session";
 import { listRelationshipTypes } from "@/lib/relationship-types/server";
 import { listMainStages } from "@/lib/main-stages/server";
+import { fetchMyEmployeeRecord } from "@/lib/employees/server";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { DialogProvider } from "@/components/providers/DialogProvider";
@@ -25,10 +26,16 @@ export default async function DashboardLayout({
   children: ReactNode;
   params: { tenant: string };
 }) {
-  const [session, relationshipTypes, mainStages] = await Promise.all([
+  // The employee record is fetched only for its profile photo, so the top-bar
+  // avatar shows the same image as My Profile instead of falling back to
+  // initials everywhere else in the app. Parallel with the other three, and
+  // null for logins with no linked employee record -- which is the initials
+  // case anyway, so nothing else has to branch.
+  const [session, relationshipTypes, mainStages, employeeRecord] = await Promise.all([
     getServerSession(params.tenant),
     listRelationshipTypes(),
     listMainStages(),
+    fetchMyEmployeeRecord(),
   ]);
 
   if (!session) {
@@ -53,6 +60,7 @@ export default async function DashboardLayout({
               tenantName={session.tenant.name}
               userDisplayName={session.user.displayName}
               tenantSlug={params.tenant}
+              userPhotoUrl={employeeRecord?.profilePhotoDisplayUrl ?? null}
             />
             <main className="flex-1 overflow-y-auto bg-crm-bg p-6">{children}</main>
           </div>

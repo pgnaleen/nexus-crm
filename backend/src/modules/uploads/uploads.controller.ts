@@ -195,6 +195,45 @@ export class UploadsController {
     }
   }
 
+  // Self-service profile photo from My Profile. Auth-only, and deliberately
+  // NOT a relaxation of /uploads/employee-photo above: that one is gated on
+  // EMPLOYEES_CREATE/UPDATE because it feeds a form that can target *any*
+  // employee, and a self-service user holds neither permission. Same segment,
+  // same mime/size limits -- only the guard differs. The key this returns is
+  // useless on its own; PATCH /employees/me/photo is what attaches it, and
+  // that route resolves the employee from the caller's own token.
+  @Post("my-photo")
+  @UseInterceptors(
+    FileInterceptor("file", {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_EMPLOYEE_PHOTO_SIZE_BYTES },
+      fileFilter: (_req: Request, file: Express.Multer.File, callback: (error: Error | null, acceptFile: boolean) => void) => {
+        if (!ALLOWED_EMPLOYEE_PHOTO_MIME_TYPES.includes(file.mimetype)) {
+          callback(new BadRequestException("Profile photo must be a PNG, JPEG, or WebP image"), false);
+          return;
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  async uploadMyPhoto(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: UploadDisplayNameDto,
+  ): Promise<UploadResponse> {
+    this.logger.debug(`POST /uploads/my-photo called (file=${file?.originalname ?? "none"})`);
+    if (!file) {
+      throw new BadRequestException("No file uploaded");
+    }
+    try {
+      const result = await this.uploadAndRespond(file, EMPLOYEE_PHOTO_SEGMENT, dto.displayName, "employee-photo");
+      this.logger.debug(`POST /uploads/my-photo succeeded`);
+      return result;
+    } catch (err) {
+      this.logger.error(`POST /uploads/my-photo failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
   // Story 1.12 (Self-Report a Certification) -- evidence file for a
   // certification claim. Auth-only (no RequirePermission): any employee
   // uploads their own evidence from My Profile, same self-service posture as

@@ -30,6 +30,14 @@ export async function uploadCertification(file: File, displayName?: string): Pro
   return uploadFile(file, "certification", "Failed to upload certificate", displayName);
 }
 
+// Own profile photo, uploaded from My Profile. Distinct from
+// uploadEmployeePhoto above: that route is gated on EMPLOYEES_CREATE/UPDATE
+// because the Employee form can target anyone, and a self-service user holds
+// neither. Same limits, different guard.
+export async function uploadMyPhoto(file: File, displayName?: string): Promise<UploadResponse> {
+  return uploadFile(file, "my-photo", "Failed to upload photo", displayName);
+}
+
 async function uploadFile(
   file: File,
   route: string,

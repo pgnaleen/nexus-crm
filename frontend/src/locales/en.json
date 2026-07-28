@@ -281,6 +281,19 @@
     "header": {
       "noEmployeeRecord": "This login isn't linked to an employee record yet, so there's nothing from HR to show. Ask HR to link your account if you expect one here."
     },
+    "avatar": {
+      "add": "Add a profile photo",
+      "change": "Change profile photo",
+      "remove": "Remove photo",
+      "working": "Saving…",
+      "uploadFailed": "Failed to upload photo",
+      "removeFailed": "Failed to remove photo",
+      "removeConfirm": {
+        "title": "Remove Profile Photo",
+        "message": "Remove your profile photo? Your initials will be shown instead. You can upload a new one at any time.",
+        "confirmLabel": "Remove"
+      }
+    },
     "account": {
       "hint": "Your login account. Contact an administrator to change your username, email, or roles.",
       "displayName": "Display Name",

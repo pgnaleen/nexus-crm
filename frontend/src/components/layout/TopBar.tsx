@@ -9,9 +9,11 @@ interface TopBarProps {
   tenantName: string;
   userDisplayName: string;
   tenantSlug: string;
+  /** Signed URL of the user's employee photo; null falls back to initials. */
+  userPhotoUrl?: string | null;
 }
 
-export function TopBar({ tenantName, userDisplayName, tenantSlug }: TopBarProps) {
+export function TopBar({ tenantName, userDisplayName, tenantSlug, userPhotoUrl = null }: TopBarProps) {
   const [time, setTime] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -59,7 +61,12 @@ export function TopBar({ tenantName, userDisplayName, tenantSlug }: TopBarProps)
 
         <NotificationPanel />
 
-        <AccountMenu tenantName={tenantName} userDisplayName={userDisplayName} tenantSlug={tenantSlug} />
+        <AccountMenu
+          tenantName={tenantName}
+          userDisplayName={userDisplayName}
+          tenantSlug={tenantSlug}
+          userPhotoUrl={userPhotoUrl}
+        />
       </div>
     </header>
   );

@@ -133,6 +133,18 @@ export interface UpdateOrgChartStructureRequest {
   changes: OrgChartStructureChange[];
 }
 
+// Self-service profile photo (PATCH /employees/me/photo). The employee record
+// is otherwise HR-controlled and read-only from My Profile -- the photo is the
+// single field its own owner may set, so it gets its own narrow request shape
+// rather than going through UpdateEmployeeRequest (which carries every other
+// column and is gated on EMPLOYEES_UPDATE).
+//
+// profilePhotoUrl is an S3 key returned by POST /uploads/my-photo; null clears
+// the current photo.
+export interface UpdateMyPhotoRequest {
+  profilePhotoUrl: string | null;
+}
+
 // Story 1.6 (Grant Login Access) -- options for User Management's "link to
 // Employee" picker: employees in the caller's tenant not yet linked to any
 // User account (plus, when editing an existing user, the employee currently

@@ -417,6 +417,75 @@ export class EmployeesService {
     return this.employeesRepo.findOneScoped({ where: { userId } });
   }
 
+  // Self-service profile photo. The employee record is otherwise HR-controlled
+  // and read-only from My Profile; the photo is the one field its own owner may
+  // set, so it needs a path that does NOT go through update() -- that method
+  // requires EMPLOYEES_UPDATE and accepts every other column.
+  //
+  // There is no id parameter by design: the target row is resolved from the
+  // caller's own user id, so one user physically cannot touch another's photo.
+  async updateMyPhoto(userId: string, profilePhotoUrl: string | null): Promise<Employee> {
+    this.logger.debug(`updateMyPhoto called by ${userId} (action=${profilePhotoUrl ? "set" : "clear"})`);
+    try {
+      // Bare load -- no `relations`. This object gets saved below, and saving a
+      // relations-loaded entity would null every relation-backed FK on the row
+      // (department_id, user_id, reporting_manager_id). See CLAUDE.md's
+      // "TypeORM Gotcha" and findOneBareOrFail's comment above.
+      const employee = await this.employeesRepo.findOneScoped({ where: { userId } });
+      if (!employee) {
+        this.logger.debug(`updateMyPhoto: no employee linked to user ${userId}, rejecting`);
+        throw new NotFoundException("Your account isn't linked to an employee record");
+      }
+
+      if (profilePhotoUrl) {
+        // Same tenant-prefix assertion create()/update() apply -- stops a
+        // caller pointing their photo at another tenant's object key.
+        this.logger.debug(`updateMyPhoto: verifying key ownership for employee ${employee.id}`);
+        assertKeyBelongsToTenant(profilePhotoUrl, EMPLOYEE_PHOTO_SEGMENT, this.tenantContext.getTenantSlug());
+      }
+
+      // Captured before the swap so the audit row records what was replaced.
+      const oldPhotoDoc = await this.documentsService.findCurrentScoped(
+        DocumentOwnerType.EmployeePhoto,
+        employee.id,
+      );
+
+      if (profilePhotoUrl) {
+        this.logger.debug(`updateMyPhoto: replacing photo document for employee ${employee.id}`);
+        await this.documentsService.replaceSingle(
+          DocumentOwnerType.EmployeePhoto,
+          employee.id,
+          profilePhotoUrl,
+          userId,
+        );
+      } else {
+        this.logger.debug(`updateMyPhoto: clearing photo document for employee ${employee.id}`);
+        await this.documentsService.clearSingle(DocumentOwnerType.EmployeePhoto, employee.id);
+      }
+
+      // The photo itself lives in `documents`, but this is still an edit to the
+      // employee -- updatedBy must reflect who made it, per the audit rules.
+      employee.updatedBy = userId;
+      await this.employeesRepo.saveScoped(employee);
+
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: employee.id,
+        action: "update",
+        actorId: userId,
+        changes: {
+          profilePhotoUrl: { old: oldPhotoDoc?.s3Key ?? null, new: profilePhotoUrl },
+        },
+      });
+
+      this.logger.debug(`updateMyPhoto succeeded for employee ${employee.id}`);
+      return this.findOneOrFail(employee.id);
+    } catch (err) {
+      this.logger.error(`updateMyPhoto failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
   // Options for the "link to Employee" picker: unlinked employees, plus (when
   // editing) the one already linked to `forUserId` so the current selection
   // stays displayable. Two queries, not an OR-array `where` --

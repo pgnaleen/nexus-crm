@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import type { AuthSessionResponse, EmployeeDetailResponse } from "@orelia/common";
 import { UserStatusBadge } from "@/components/ui/UserStatusBadge";
-import { getInitials } from "@/lib/deals/deal-display";
 import { t } from "@/lib/i18n";
+import { ProfileAvatar } from "./ProfileAvatar";
 
 // Identity band above the tabs: who you are, at a glance, without having to
 // pick a tab first. Server component -- pure display.
@@ -36,18 +36,10 @@ export function ProfileHeader({
   return (
     <div className="content-card">
       <div className="flex flex-wrap items-center gap-5">
-        {photo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={photo}
-            alt=""
-            className="h-[72px] w-[72px] shrink-0 rounded-full border border-[var(--color-border)] object-cover"
-          />
-        ) : (
-          <div className="flex h-[72px] w-[72px] shrink-0 items-center justify-center rounded-full bg-crm-primary-tint text-2xl font-bold text-crm-primary">
-            {getInitials(user.displayName)}
-          </div>
-        )}
+        {/* Editable only when there's a linked employee record -- the photo
+            hangs off that record, so there's nothing to attach it to without
+            one. Unlinked accounts still get the initials circle, just inert. */}
+        <ProfileAvatar displayName={user.displayName} photoUrl={photo ?? null} editable={Boolean(record)} />
 
         <div className="min-w-0 flex-1">
           <h1 className="m-0 truncate text-[26px] leading-tight font-bold text-crm-text">

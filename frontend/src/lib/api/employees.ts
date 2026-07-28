@@ -5,9 +5,20 @@ import type {
   EmployeeListItemResponse,
   OrgChartEmployeeResponse,
   UpdateEmployeeRequest,
+  UpdateMyPhotoRequest,
   UpdateOrgChartStructureRequest,
 } from "@orelia/common";
 import { apiFetch } from "./client";
+
+// Self-service profile photo. No id: the backend resolves the caller's own
+// employee record from their token. Pass null to clear the photo.
+export function updateMyPhoto(profilePhotoUrl: string | null): Promise<EmployeeDetailResponse> {
+  const payload: UpdateMyPhotoRequest = { profilePhotoUrl };
+  return apiFetch<EmployeeDetailResponse>("/employees/me/photo", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
 
 export function createEmployee(payload: CreateEmployeeRequest): Promise<EmployeeListItemResponse> {
   return apiFetch<EmployeeListItemResponse>("/employees", {
