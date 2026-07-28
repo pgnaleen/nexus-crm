@@ -1,4 +1,3 @@
-import { randomUUID } from "crypto";
 import { DealDocumentResponse, PERMISSIONS } from "@orelia/common";
 import {
   BadRequestException,
@@ -20,6 +19,7 @@ import { memoryStorage } from "multer";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { S3Service } from "../../core/storage/s3.service";
+import { sanitizeKeySegment, withUniqueSuffix } from "../../core/storage/key-sanitizer.util";
 import { DEAL_DOCUMENTS_SEGMENT, tenantKeyPrefix } from "../../core/storage/storage.constants";
 import { TenantContextService } from "../../core/tenant";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
@@ -84,12 +84,14 @@ export class DealDocumentsController {
     try {
       const ext = file.originalname.split(".").pop() ?? "bin";
       const tenantSlug = this.tenantContext.getTenantSlug();
-      // dealId itself is only ever reachable here after dealsService.findOneOrFail
-      // (inside DealDocumentsService.create) resolves it as belonging to the
-      // current tenant, so s3Key is never client-trusted the way logo/photo/
-      // CV/evidence keys are -- this tenant segment is for consistent physical
-      // layout, not a security boundary that needs its own assertion.
-      const s3Key = `${tenantKeyPrefix(tenantSlug, DEAL_DOCUMENTS_SEGMENT)}${dealId}/${randomUUID()}.${ext}`;
+      // Naming-only fetch (no relations) -- resolves dealId as belonging to
+      // the current tenant same as before, just via the lightweight lookup
+      // since that's all this needs. The real, relations-loaded fetch still
+      // happens below inside dealDocumentsService.create().
+      const { dealCode, name } = await this.dealDocumentsService.getDealNaming(dealId);
+      const folder = sanitizeKeySegment(name) ? `${dealCode}-${sanitizeKeySegment(name)}` : dealCode;
+      const filename = `${withUniqueSuffix(sanitizeKeySegment(dto.title), "document")}.${ext}`;
+      const s3Key = `${tenantKeyPrefix(tenantSlug, DEAL_DOCUMENTS_SEGMENT)}${folder}/${filename}`;
       await this.s3.putObject(s3Key, file.buffer, file.mimetype);
       const document = await this.dealDocumentsService.create(dealId, dto, s3Key, user.sub);
       const response = await this.toResponse(document);

@@ -33,6 +33,16 @@ export class DealDocumentsService {
     return documents;
   }
 
+  // Naming inputs for the S3 key -- called by the controller before it
+  // builds the key/uploads the file, so this deliberately uses the
+  // lightweight findBasicOrFail (no relations) rather than the full
+  // findOneOrFail create() below already pays for.
+  async getDealNaming(dealId: string): Promise<{ dealCode: string; name: string }> {
+    this.logger.debug(`getDealNaming called for deal ${dealId}`);
+    const deal = await this.dealsService.findBasicOrFail(dealId);
+    return { dealCode: deal.dealCode, name: deal.name };
+  }
+
   async create(
     dealId: string,
     dto: CreateDealDocumentDto,

@@ -59,7 +59,7 @@ export function CertificationFormDialog({ initial, onClose, onSaved }: Certifica
     setFormError(null);
     setIsUploading(true);
     try {
-      const { key } = await uploadCertification(file);
+      const { key } = await uploadCertification(file, values.name);
       setField("evidenceFileUrl", key);
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : t("profile.certifications.errors.uploadFailed"));

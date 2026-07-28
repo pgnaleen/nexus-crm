@@ -98,6 +98,17 @@ export class DealsService {
     return deal;
   }
 
+  // Naming-only lookup (S3 folder naming for deal documents) -- public,
+  // unlike findOneBareOrFail below, since DealDocumentsService needs it and
+  // deliberately doesn't hold its own DealsRepository.
+  async findBasicOrFail(id: string): Promise<Pick<Deal, "id" | "dealCode" | "name">> {
+    const deal = await this.dealsRepo.findBasicScoped(id);
+    if (!deal) {
+      throw new NotFoundException("Deal not found");
+    }
+    return deal;
+  }
+
   // For mutation only, never for a response -- see the comment on
   // DealsRepository.findOneWithRelations for why saving a relations-loaded
   // Deal instance corrupts every relation-backed column on the row.

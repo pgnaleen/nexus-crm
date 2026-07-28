@@ -1,7 +1,7 @@
-import { randomUUID } from "crypto";
 import { PERMISSIONS, UploadResponse } from "@orelia/common";
 import {
   BadRequestException,
+  Body,
   Controller,
   Logger,
   Post,
@@ -13,6 +13,7 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import type { Request } from "express";
 import { memoryStorage } from "multer";
 import { S3Service } from "../../core/storage/s3.service";
+import { sanitizeKeySegment, withUniqueSuffix } from "../../core/storage/key-sanitizer.util";
 import {
   CERTIFICATION_SEGMENT,
   EMPLOYEE_CV_SEGMENT,
@@ -23,6 +24,7 @@ import {
 import { TenantContextService } from "../../core/tenant";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
+import { UploadDisplayNameDto } from "./dto/upload-display-name.dto";
 import {
   ALLOWED_CERTIFICATION_MIME_TYPES,
   ALLOWED_EMPLOYEE_CV_MIME_TYPES,
@@ -41,8 +43,10 @@ const ANY_RELATIONSHIP_PERMISSION = [
   PERMISSIONS.RELATIONSHIP_DELETE,
 ];
 
-function fileExt(originalname: string): string {
-  return originalname.split(".").pop() ?? "bin";
+function splitExt(originalname: string): { base: string; ext: string } {
+  const dot = originalname.lastIndexOf(".");
+  if (dot <= 0) return { base: originalname, ext: "bin" };
+  return { base: originalname.slice(0, dot), ext: originalname.slice(dot + 1) };
 }
 
 @Controller("uploads")
@@ -54,9 +58,23 @@ export class UploadsController {
     private readonly tenantContext: TenantContextService,
   ) {}
 
-  private async uploadAndRespond(file: Express.Multer.File, typeSegment: string): Promise<UploadResponse> {
+  // Falls back through displayName -> the original filename -> a generic
+  // per-type label, always through withUniqueSuffix so two uploads sharing a
+  // name never collide. None of these 4 owner types have a real record yet
+  // at upload time (see the DTO's own comment), so displayName -- whatever
+  // the caller's form already had typed in -- is the only source of a
+  // meaningful name available here.
+  private async uploadAndRespond(
+    file: Express.Multer.File,
+    typeSegment: string,
+    displayName: string | undefined,
+    fallbackLabel: string,
+  ): Promise<UploadResponse> {
     const tenantSlug = this.tenantContext.getTenantSlug();
-    const key = `${tenantKeyPrefix(tenantSlug, typeSegment)}${randomUUID()}.${fileExt(file.originalname)}`;
+    const { base, ext } = splitExt(file.originalname);
+    const nameBase = sanitizeKeySegment(displayName ?? "") || sanitizeKeySegment(base);
+    const filename = `${withUniqueSuffix(nameBase, fallbackLabel)}.${ext}`;
+    const key = `${tenantKeyPrefix(tenantSlug, typeSegment)}${filename}`;
     this.logger.debug(`uploadAndRespond: putting object at ${key} (${file.size} bytes, ${file.mimetype})`);
     await this.s3.putObject(key, file.buffer, file.mimetype);
     const previewUrl = await this.s3.getSignedGetUrl(key);
@@ -87,13 +105,16 @@ export class UploadsController {
       },
     }),
   )
-  async uploadLogo(@UploadedFile() file: Express.Multer.File): Promise<UploadResponse> {
+  async uploadLogo(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: UploadDisplayNameDto,
+  ): Promise<UploadResponse> {
     this.logger.debug(`POST /uploads/logo called (file=${file?.originalname ?? "none"})`);
     if (!file) {
       throw new BadRequestException("No file uploaded");
     }
     try {
-      const result = await this.uploadAndRespond(file, LOGO_SEGMENT);
+      const result = await this.uploadAndRespond(file, LOGO_SEGMENT, dto.displayName, "logo");
       this.logger.debug(`POST /uploads/logo succeeded`);
       return result;
     } catch (err) {
@@ -120,13 +141,16 @@ export class UploadsController {
       },
     }),
   )
-  async uploadEmployeePhoto(@UploadedFile() file: Express.Multer.File): Promise<UploadResponse> {
+  async uploadEmployeePhoto(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: UploadDisplayNameDto,
+  ): Promise<UploadResponse> {
     this.logger.debug(`POST /uploads/employee-photo called (file=${file?.originalname ?? "none"})`);
     if (!file) {
       throw new BadRequestException("No file uploaded");
     }
     try {
-      const result = await this.uploadAndRespond(file, EMPLOYEE_PHOTO_SEGMENT);
+      const result = await this.uploadAndRespond(file, EMPLOYEE_PHOTO_SEGMENT, dto.displayName, "employee-photo");
       this.logger.debug(`POST /uploads/employee-photo succeeded`);
       return result;
     } catch (err) {
@@ -153,13 +177,16 @@ export class UploadsController {
       },
     }),
   )
-  async uploadEmployeeCv(@UploadedFile() file: Express.Multer.File): Promise<UploadResponse> {
+  async uploadEmployeeCv(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: UploadDisplayNameDto,
+  ): Promise<UploadResponse> {
     this.logger.debug(`POST /uploads/employee-cv called (file=${file?.originalname ?? "none"})`);
     if (!file) {
       throw new BadRequestException("No file uploaded");
     }
     try {
-      const result = await this.uploadAndRespond(file, EMPLOYEE_CV_SEGMENT);
+      const result = await this.uploadAndRespond(file, EMPLOYEE_CV_SEGMENT, dto.displayName, "cv");
       this.logger.debug(`POST /uploads/employee-cv succeeded`);
       return result;
     } catch (err) {
@@ -187,13 +214,16 @@ export class UploadsController {
       },
     }),
   )
-  async uploadCertification(@UploadedFile() file: Express.Multer.File): Promise<UploadResponse> {
+  async uploadCertification(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: UploadDisplayNameDto,
+  ): Promise<UploadResponse> {
     this.logger.debug(`POST /uploads/certification called (file=${file?.originalname ?? "none"})`);
     if (!file) {
       throw new BadRequestException("No file uploaded");
     }
     try {
-      const result = await this.uploadAndRespond(file, CERTIFICATION_SEGMENT);
+      const result = await this.uploadAndRespond(file, CERTIFICATION_SEGMENT, dto.displayName, "certificate");
       this.logger.debug(`POST /uploads/certification succeeded`);
       return result;
     } catch (err) {

@@ -60,6 +60,14 @@ export class DealsRepository extends BaseTenantRepository<Deal> {
     });
   }
 
+  // Lightweight lookup for naming purposes only (S3 folder naming for deal
+  // documents) -- no relations, no joins, just the three columns needed.
+  // Deliberately not findOneWithRelations()'s 10-join query, which would be
+  // real, avoidable overhead paid on every single document upload.
+  findBasicScoped(id: string): Promise<Pick<Deal, "id" | "dealCode" | "name"> | null> {
+    return this.findOneScoped({ where: { id }, select: ["id", "dealCode", "name"] });
+  }
+
   // Deal codes are a per-tenant running count, including soft-deleted deals,
   // so a code is never reused after a deal is deleted.
   async countAllScoped(): Promise<number> {
