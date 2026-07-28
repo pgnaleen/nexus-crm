@@ -1,33 +1,69 @@
+import { t } from "@/lib/i18n";
+
 interface OrelItLogoProps {
-  /** Cap height of the wordmark in px. */
+  /** Rendered height in px. Width is derived from the logo's 108:24 ratio. */
   size?: number;
   className?: string;
 }
 
+// Native viewBox of the supplied file.
+const VIEWBOX = { w: 108, h: 24 };
+
+// "OREL" -- the O ring, then R, E, L -- plus the rounded tile the "IT" sits in.
+// Copied verbatim from brand-assets/orel-it.svg.
+const RED_PATHS: readonly string[] = [
+  "M25.801 7.84396V16.0375C25.801 21.5203 17.0678 23.8815 12.9342 23.8815H12.8668C8.73322 23.8815 0 21.5203 0 16.0375V7.84396C0 2.36116 8.73322 0 12.8668 0C12.879 0 12.8913 0 12.9036 0C17.0433 0.0183986 25.801 2.37342 25.801 7.84396ZM20.3489 8.32844C20.3489 6.12061 15.2095 4.83884 12.9036 4.82658H12.8668C10.6099 4.82658 5.41534 6.10835 5.41534 8.32844V15.553C5.41534 17.7731 10.6099 19.0548 12.8668 19.0548H12.9342C15.1911 19.0548 20.3489 17.7731 20.3489 15.553V8.32844Z",
+  "M41.4215 22.6423L36.5336 15.5282C38.6801 14.7923 41.354 11.9405 41.354 8.29757C41.354 6.07134 40.6304 3.7715 39.3424 2.52039C37.8828 1.06077 36.2147 0.300293 32.4307 0.300293H22.3175C25.0774 1.26929 27.3465 2.86384 28.248 5.16366H32.7434C34.5526 5.16366 35.9387 6.62942 35.9387 8.43249C35.9387 10.0638 34.3442 11.5664 32.6453 11.5664H31.9461C31.1489 11.5664 30.9404 11.9466 30.9404 12.5722V15.3504C30.9404 16.3255 31.0139 16.7058 31.3207 17.1228L35.0739 22.7099C35.5585 23.4397 35.9755 23.7524 36.8096 23.7524H40.9001C41.5626 23.7524 41.7342 23.1269 41.4215 22.6423Z",
+  "M61.2184 19.7967V22.7159C61.2184 23.36 61.0037 23.7524 60.1881 23.7524H44.218C43.4024 23.7524 43.1877 23.36 43.1877 22.7159V1.33062C43.1877 0.692796 43.4024 0.300293 44.218 0.300293H59.581C60.4027 0.300293 60.6174 0.692796 60.6174 1.33062V4.29281C60.6174 4.93675 60.4027 5.32313 59.581 5.32313H48.8176V9.21138H58.3728C59.1884 9.21138 59.4031 9.60387 59.4031 10.2417V13.0199C59.4031 13.6638 59.1884 14.0563 58.3728 14.0563H48.8176V18.7602H60.1881C61.0037 18.7602 61.2184 19.1528 61.2184 19.7967Z",
+  "M79.9973 19.7967V22.7159C79.9973 23.36 79.7826 23.7524 78.9669 23.7524H64.1377C63.322 23.7524 63.1073 23.36 63.1073 22.7159V1.33062C63.1073 0.514943 63.4999 0.300293 64.1377 0.300293H67.6701C68.3079 0.300293 68.7005 0.514943 68.7005 1.33062V18.7602H78.9669C79.7826 18.7602 79.9973 19.1528 79.9973 19.7967Z",
+  "M95.3295 0.331328C95.3213 0.327239 95.3111 0.325195 95.2987 0.325195C91.2388 0.325195 82.665 2.64342 82.665 8.02808V12.0513V16.0744C82.665 21.4591 91.2388 23.7772 95.2987 23.7772C95.3111 23.7772 95.3213 23.7772 95.3295 23.7772C95.3418 23.7772 95.354 23.7772 95.3663 23.7772C99.4202 23.7772 108 21.4591 108 16.0744V12.0513V8.02808C108 2.66182 99.4018 0.343593 95.3295 0.331328Z",
+];
+
+// The "I" and "T", knocked out of the red tile. These stay literally white --
+// they are a knockout, not a themeable colour.
+const KNOCKOUT_PATHS: readonly string[] = [
+  "M88.9881 6.07178H91.9013V18.037H88.9881V6.07178Z",
+  "M93.3669 6.07178H102.622V8.40228H99.4507V18.037H96.5377V8.40228H93.3669V6.07178Z",
+];
+
 /**
- * The Orel IT vendor wordmark — "OREL" in brand red, "IT" in near-black.
+ * The Orel IT vendor logo, inlined from brand-assets/orel-it.svg.
  *
- * Unlike NexusLogo this is set as styled text, not traced vector paths: the
- * logo was supplied as a raster image, so there was no vector data to inline.
- * It is a close match (the mark is a two-colour wordmark and nothing else),
- * but it is an approximation, and the letterforms follow the system font
- * stack rather than the real typeface.
- *
- * If the true SVG turns up, drop it in `brand-assets/` and swap this
- * component's body for inlined paths the way NexusLogo does — the call sites
- * and the props below don't need to change.
+ * The red reads from --color-crm-primary rather than the file's own #E91C2D.
+ * That is deliberate: #E91C2D is this app's *previous* brand red, and pinning
+ * it literally would put a third, subtly-different red on the login card next
+ * to the Nexus mark and the Sign in button -- the exact mismatch the 2026-07-28
+ * token decision existed to remove. Change this to a literal fill only if
+ * exact vendor-logo fidelity is judged to matter more than page consistency.
  */
-export function OrelItLogo({ size = 13, className }: OrelItLogoProps) {
+export function OrelItLogo({ size = 14, className }: OrelItLogoProps) {
+  const width = (size * VIEWBOX.w) / VIEWBOX.h;
+
   return (
-    <span
-      className={`inline-flex items-baseline font-bold leading-none ${className ?? ""}`}
-      style={{ fontSize: size, letterSpacing: "-0.01em" }}
+    <svg
+      width={width}
+      height={size}
+      viewBox={`0 0 ${VIEWBOX.w} ${VIEWBOX.h}`}
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label={t("brand.orelItLogoAlt")}
+      className={`shrink-0 ${className ?? ""}`}
     >
-      {/* Red here is a logo, not UI chrome, so it is exempt from the rule that
-          confines the primary to buttons/nav/badges/focus rings -- but it still
-          reads from the token so a re-brand reaches it. */}
-      <span style={{ color: "var(--color-crm-primary)" }}>OREL</span>
-      <span style={{ color: "#252525", marginLeft: size * 0.16 }}>IT</span>
-    </span>
+      {RED_PATHS.map((d, i) => (
+        <path
+          key={`red-${i}`}
+          d={d}
+          fill="var(--color-crm-primary)"
+          // Only the O ring is a compound path needing even-odd; the rest are
+          // solid glyphs, and applying it to them would punch false holes.
+          fillRule={i === 0 ? "evenodd" : undefined}
+          clipRule={i === 0 ? "evenodd" : undefined}
+        />
+      ))}
+      {KNOCKOUT_PATHS.map((d, i) => (
+        <path key={`knockout-${i}`} d={d} fill="#ffffff" />
+      ))}
+    </svg>
   );
 }

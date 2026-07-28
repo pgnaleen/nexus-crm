@@ -100,7 +100,7 @@ export function LoginForm({ tenantSlug, tenantName }: { tenantSlug: string; tena
         </form>
 
         <p className={styles.poweredBy}>
-          {t("brand.poweredBy")} <OrelItLogo size={12} />
+          {t("brand.poweredBy")} <OrelItLogo size={15} />
         </p>
       </div>
 

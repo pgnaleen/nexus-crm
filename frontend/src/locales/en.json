@@ -1,7 +1,8 @@
 {
   "brand": {
     "logoAlt": "Nexus",
-    "poweredBy": "Powered by"
+    "poweredBy": "Powered by",
+    "orelItLogoAlt": "Orel IT"
   },
   "common": {
     "actions": {

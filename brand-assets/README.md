@@ -24,14 +24,22 @@ automatically.** The path data must be re-copied by hand.
 | `nexus-horizontal-dark.svg` | 830×228 | mark + wordmark, side by side | red mark, `#252525` wordmark |
 | `nexus-stacked-white.svg` | 320×442 | mark above wordmark | all white |
 | `nexus-stacked-dark.svg` | 320×442 | mark above wordmark | red mark, `#252525` wordmark |
+| `orel-it.svg` | 108×24 | Orel IT vendor logo | red, white knockout "IT" |
 
 White lockups are for the navy app shell; dark lockups are for white/light
-backgrounds.
+backgrounds. The Orel IT logo is the vendor attribution in the login card
+footer, rendered by `frontend/src/components/brand/OrelItLogo.tsx`.
 
 ## Colour note
 
-The supplied files use `#ED1B24`. On 2026-07-28 this was adopted as the app-wide
+The supplied Nexus files use `#ED1B24`. On 2026-07-28 this was adopted as the app-wide
 `--color-crm-primary` token so the logo and every other red surface (buttons,
 active sidebar item, status badges, focus rings) match exactly. Two other
 near-identical reds were considered and rejected: `#E91C2D` (the app's previous
 token) and `#EA0A2A` (orelit.com's live accent). See CLAUDE.md § Color tokens.
+
+`orel-it.svg` was supplied at `#E91C2D` — the *rejected* value. Both logo components
+render their red from `var(--color-crm-primary)` rather than the literal in the file,
+so the login card doesn't show two near-identical reds side by side. If exact
+vendor-logo fidelity ever outranks page consistency, pin the fill in `OrelItLogo.tsx`
+back to a literal; the component documents this.
