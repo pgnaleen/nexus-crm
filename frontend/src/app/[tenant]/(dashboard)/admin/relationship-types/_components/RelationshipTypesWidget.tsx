@@ -135,8 +135,8 @@ export function RelationshipTypesWidget({
         )}
       </div>
 
-      <div className="mb-6 flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[#f8fafc] px-4 py-3">
-        <div className="flex items-center gap-4">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-y-3 rounded-xl border border-[var(--color-border)] bg-[#f8fafc] px-4 py-3">
+        <div className="flex flex-wrap items-center gap-4">
           <div className="relative w-[280px]">
             <span className="pointer-events-none absolute top-1/2 left-[10px] -translate-y-1/2 text-[var(--color-text-muted)]">
               <SearchIcon />
@@ -181,6 +181,7 @@ export function RelationshipTypesWidget({
             </p>
           </div>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full border-collapse text-[13px]">
             <thead>
               <tr>
@@ -248,6 +249,7 @@ export function RelationshipTypesWidget({
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

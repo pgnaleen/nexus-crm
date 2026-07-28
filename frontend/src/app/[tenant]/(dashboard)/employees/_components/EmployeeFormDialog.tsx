@@ -178,7 +178,7 @@ export function EmployeeFormDialog({
     setFormError(null);
     setIsUploadingPhoto(true);
     try {
-      const { key, previewUrl } = await uploadEmployeePhoto(file);
+      const { key, previewUrl } = await uploadEmployeePhoto(file, values.fullName);
       setField("profilePhotoUrl", key);
       setPhotoPreviewUrl(previewUrl);
     } catch (err) {
@@ -195,7 +195,7 @@ export function EmployeeFormDialog({
     setFormError(null);
     setIsUploadingCv(true);
     try {
-      const { key, previewUrl } = await uploadEmployeeCv(file);
+      const { key, previewUrl } = await uploadEmployeeCv(file, values.fullName);
       setField("cvUrl", key);
       setCvPreviewUrl(previewUrl);
     } catch (err) {
@@ -357,7 +357,7 @@ export function EmployeeFormDialog({
               onChange={(e) => setField("fullName", e.target.value)}
             />
 
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <TextField
                 label={t("employees.dialog.personal.dateOfBirth")}
                 name="dateOfBirth"
@@ -450,7 +450,7 @@ export function EmployeeFormDialog({
         {/* ── Tab 2: Employment ──────────────────────────── */}
         {activeTab === "employment" && (
           <div className="h-[480px] overflow-y-auto pr-1">
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <TextField
                 label={t("employees.dialog.employment.employeeCode")}
                 name="employeeCode"
@@ -471,7 +471,7 @@ export function EmployeeFormDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <TextField
                 label={t("employees.dialog.employment.designation")}
                 name="currentDesignation"
@@ -492,7 +492,7 @@ export function EmployeeFormDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <div className="mb-[18px]">
                 <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
                   {t("employees.dialog.employment.employmentType")}
@@ -519,7 +519,7 @@ export function EmployeeFormDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <TextField
                 label={t("employees.dialog.employment.dateOfJoined")}
                 name="dateOfJoined"
@@ -541,7 +541,7 @@ export function EmployeeFormDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <TextField
                 label={t("employees.dialog.employment.primaryLocation")}
                 name="primaryLocation"

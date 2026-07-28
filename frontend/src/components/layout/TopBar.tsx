@@ -37,7 +37,7 @@ export function TopBar({ tenantName, userDisplayName, tenantSlug }: TopBarProps)
     : "";
 
   return (
-    <header className="flex flex-shrink-0 items-center gap-4 border-b border-[var(--color-border)] bg-white px-6 py-3.5">
+    <header className="flex flex-shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-[var(--color-border)] bg-white px-6 py-3.5">
       <div className="relative w-80 transition-[width] duration-200 focus-within:w-[400px]">
         <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-[var(--color-text-muted)]">
           <SearchIcon />

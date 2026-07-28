@@ -88,6 +88,7 @@ export function CertifiedSearchWidget({ canView }: { canView: boolean }) {
             <p className="empty-state-message">{t("certifiedSearch.noMatchMessage")}</p>
           </div>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full border-collapse text-[13px]">
             <thead>
               <tr>
@@ -127,6 +128,7 @@ export function CertifiedSearchWidget({ canView }: { canView: boolean }) {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

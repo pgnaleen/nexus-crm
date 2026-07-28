@@ -99,8 +99,8 @@ export function TenantsTableWidget({
         )}
       </div>
 
-      <div className="mb-6 flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[#f8fafc] px-4 py-3">
-        <div className="flex items-center gap-4">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-y-3 rounded-xl border border-[var(--color-border)] bg-[#f8fafc] px-4 py-3">
+        <div className="flex flex-wrap items-center gap-4">
           <div className="relative w-[280px]">
             <span className="pointer-events-none absolute top-1/2 left-[10px] -translate-y-1/2 text-[var(--color-text-muted)]">
               <SearchIcon />
@@ -113,7 +113,7 @@ export function TenantsTableWidget({
               className="w-full rounded-lg border border-[var(--color-border)] bg-white py-2 pl-8 pr-3 font-[inherit] text-[13px] transition-colors duration-150 focus:border-crm-primary focus:outline-none"
             />
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <CustomSelect
               label="Plan"
               value={planFilter}
@@ -161,6 +161,7 @@ export function TenantsTableWidget({
           <p className="empty-state-message">No tenants match the current filters.</p>
         </div>
       ) : (
+        <div className="overflow-x-auto">
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr>
@@ -251,6 +252,7 @@ export function TenantsTableWidget({
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       </div>

@@ -1634,6 +1634,7 @@ body {
 
 .permissions-controls {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   margin: 16px 0;
@@ -1674,6 +1675,7 @@ body {
 
 .permissions-filters-right {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
 }

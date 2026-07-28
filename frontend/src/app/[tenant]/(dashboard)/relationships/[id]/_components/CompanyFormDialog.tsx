@@ -335,7 +335,7 @@ export function CompanyFormDialog({
     setFormError(null);
     setIsUploadingLogo(true);
     try {
-      const { key, previewUrl } = await uploadLogo(file);
+      const { key, previewUrl } = await uploadLogo(file, values.name);
       setField("logo", key);
       setLogoPreviewUrl(previewUrl);
     } catch (err) {
@@ -558,7 +558,7 @@ export function CompanyFormDialog({
               onChange={(e) => setField("url", e.target.value)}
             />
 
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <div className="mb-[18px]">
                 <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Industry</label>
                 <CustomSelect
@@ -579,7 +579,7 @@ export function CompanyFormDialog({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <div className="mb-[18px]">
                 <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Sector</label>
                 <CustomSelect
@@ -604,7 +604,7 @@ export function CompanyFormDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <div className="mb-[18px]">
                 <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Employee count</label>
                 <CustomSelect
@@ -629,7 +629,7 @@ export function CompanyFormDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <CountrySelect
                 label="Country"
                 value={values.country}
@@ -704,7 +704,7 @@ export function CompanyFormDialog({
               onChange={(e) => setField("brands", e.target.value)}
             />
 
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <TextField
                 label="Stock ticker"
                 name="stockTicker"
@@ -725,7 +725,7 @@ export function CompanyFormDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <div className="mb-[18px]">
                 <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Region</label>
                 <CustomSelect
@@ -759,7 +759,7 @@ export function CompanyFormDialog({
               onChange={(e) => setField("branches", e.target.value)}
             />
 
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <div className="mb-[18px]">
                 <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Parent company (existing)</label>
                 <CustomSelect
@@ -781,7 +781,7 @@ export function CompanyFormDialog({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <div className="mb-[18px]">
                 <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Credit status</label>
                 <CustomSelect
@@ -836,11 +836,11 @@ export function CompanyFormDialog({
                     {existingContacts.map((existing) => (
                       <div key={existing.id} className="deal-contact-row">
                         <div className="deal-contact-fields">
-                          <div className="grid grid-cols-2 gap-3.5">
+                          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
                             <TextField label="Full name" value={existing.fullName} disabled />
                             <TextField label="Title" value={existing.title || "—"} disabled />
                           </div>
-                          <div className="grid grid-cols-2 gap-3.5">
+                          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
                             <TextField label="Email" value={existing.email || "—"} disabled />
                             <TextField label="Mobile number" value={existing.mobileNo || "—"} disabled />
                           </div>
