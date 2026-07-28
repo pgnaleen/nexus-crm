@@ -30,27 +30,43 @@ real CSS custom properties too (Tailwind exposes every `@theme` value at `:root`
 
 | Token | Hex | Usage |
 |---|---|---|
-| `--color-crm-primary` | `#E91C2D` | Primary action buttons, active sidebar item, key badges/status indicators, form focus rings — never the shell background |
-| `--color-crm-primary-hover` | `#C4101F` | Hover / pressed state for primary actions |
-| `--color-crm-primary-tint` | `#FDECED` | Alert backgrounds, row highlights (light tint of primary) |
+| `--color-crm-primary` | `#ED1B24` | Primary action buttons, active sidebar item, key badges/status indicators, form focus rings — never the shell background |
+| `--color-crm-primary-hover` | `#C70F19` | Hover / pressed state for primary actions |
+| `--color-crm-primary-tint` | `#FDEBEC` | Alert backgrounds, row highlights (light tint of primary) |
+| `--color-crm-primary-glow` | `rgba(237,27,36,0.15)` | The form focus-ring glow only. Exists because `box-shadow` needs the primary at 15% alpha and Tailwind can't derive that from `--color-crm-primary` inside a composite shadow value — see the note below |
 | `--color-crm-shell` | `#022B5D` | Sidebar/header/app-shell background — the navy base of the shell's dot+gradient treatment (see below) |
 | `--color-crm-shell-gradient-start` | `#04162E` | Same shell gradient's darker navy starting point (0% stop) |
 | `--color-crm-shell-gradient-end` | `#1A5FA8` | Same shell gradient's lighter navy corner-glow endpoint (100% stop); `--color-crm-shell` itself is the 55% midpoint |
 | `--color-crm-bg` | `#F8FAFC` | Page and card background |
 | `--color-crm-text` | `#0F172A` | Body copy and headings |
 
-**Rule:** the primary red (`#E91C2D`) must stay confined to primary action buttons, the active
+**Rule:** the primary red (`#ED1B24`) must stay confined to primary action buttons, the active
 sidebar menu item, key badges/status indicators, and form focus rings. **Never** use it as a
 large solid surface fill, and never in the shell's background gradient — the shell background is
 navy only. If red starts showing up elsewhere, replace it with the navy shell color or a neutral
 grey.
 
-**Brand color note.** The client's real brand accent is `#EA0A2A` (confirmed directly from
-`orelit.com`'s own theme CSS: `--wp--preset--color--accent: #ea0a2a`), which is effectively
-identical to `--color-crm-primary` above — genuinely red, not orange, despite how it can read on
-some displays. This does **not** change where red is allowed to appear (see the rule above) — the
-client separately confirmed the shell background should stay navy (matching this section's
-original `#022B5D` value) with no red in it at all; red stays confined to the four usages listed.
+**Brand color note.** Three near-identical reds have been in play. `#ED1B24` is the value the
+delivered Nexus logo SVGs were exported with, and on 2026-07-28 the client chose it as the
+app-wide `--color-crm-primary` so the logo and every other red surface match exactly. The two
+rejected candidates, recorded so this isn't re-litigated: `#E91C2D` (the token's own earlier
+value) and `#EA0A2A` (confirmed directly from `orelit.com`'s theme CSS,
+`--wp--preset--color--accent: #ea0a2a`). All three are genuinely red, not orange, despite how
+they can read on some displays, and the differences are a few points in the blue channel —
+imperceptible side by side. Which one is *correct* was a brand-authority call, not a visual one.
+This does **not** change where red is allowed to appear (see the rule above) — the client
+separately confirmed the shell background should stay navy (matching this section's original
+`#022B5D` value) with no red in it at all; red stays confined to the four usages listed.
+
+**The glow token is the one deliberate duplicate.** `--color-crm-primary-glow` restates the
+primary as `rgba()` at 15% alpha because Tailwind cannot derive an alpha variant of a custom
+property inside a composite `box-shadow` value. **When the brand red changes, both must be
+edited.** This is the single exception to the one-line-rebrand rule below, and it exists because
+the alternative was worse: before 2026-07-28 there was no glow token and ten separate components
+each hardcoded `rgba(233,28,45,0.15)` inline — so changing `--color-crm-primary` left every form
+focus ring glowing the *previous* brand red, with nothing to catch it. If a future Tailwind
+version can express `color-mix()` or an alpha modifier here, collapse this token back into
+`--color-crm-primary` and delete this paragraph.
 
 **Shell background technique.** The dashboard/sidebar shell (`frontend/src/app/[tenant]/
 (dashboard)/layout.tsx`) uses the same dot+gradient+blur-blob technique as the login page
@@ -66,8 +82,17 @@ for anything that represents one of the tokens above — reference the token ins
 plain Tailwind utility (`bg-crm-primary`, `hover:bg-crm-shell/30` for opacity variants) or, for
 complex arbitrary properties Tailwind can't express as a simple utility (e.g. a multi-stop
 `background-image` gradient), via `var(--color-crm-primary)` inside the arbitrary-value bracket
-syntax. The point: changing the brand color should only ever require editing the six lines in
+syntax. The point: changing the brand color should only ever require editing the token lines in
 `globals.css`'s `@theme` block, never hunting through component files for hardcoded hex strings.
+The primary red spans two of those lines, not one — `--color-crm-primary` and its `-glow` alpha
+restatement (see the glow-token note above); everything else is a single line.
+
+**This rule extends to the logo.** `NexusLogo` inlines the brand SVG as React paths *specifically*
+so its red can be `var(--color-crm-primary)` rather than a baked-in `#ED1B24`. Do not "simplify"
+it into an `<img>` pointing at a static file — that trades a one-line rebrand for hand-editing
+every SVG. The one place the hex is unavoidably literal is `frontend/src/app/icon.tsx`, which
+renders the tab icon outside the document via Satori and so has no access to CSS custom
+properties; it is commented as such.
 
 ### Typography
 
