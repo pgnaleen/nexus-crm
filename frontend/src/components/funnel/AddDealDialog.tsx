@@ -791,26 +791,27 @@ export function AddDealDialog({
     icon: <UserIcon size={14} />,
   }));
 
-  const employeeOptions: SearchSelectOption[] = employees.map((e) => ({ value: e.id, label: e.fullName }));
+  const baseEmployeeOptions: SearchSelectOption[] = employees.map((e) => ({ value: e.id, label: e.fullName }));
   // The picker excludes exited (terminated/resigned) employees. When editing a
   // deal whose Sales Person / Pre-Sales / PMO has since been made inactive, that
-  // person is no longer in `employees` -- append them from the deal's own
-  // resolved names so the field keeps showing its current value instead of
-  // going blank. (They can't be re-selected once cleared -- that's intended.)
-  if (deal) {
-    const known = new Set(employeeOptions.map((o) => o.value));
-    const currentAssignees: Array<[string | null | undefined, string | null | undefined]> = [
-      [deal.ownerId, deal.ownerName],
-      [deal.preSalesPersonId, deal.preSalesPersonName],
-      [deal.pmoId, deal.pmoName],
-    ];
-    for (const [id, name] of currentAssignees) {
-      if (id && !known.has(id)) {
-        employeeOptions.push({ value: id, label: name ?? "Unknown" });
-        known.add(id);
-      }
+  // person is no longer in `employees` -- append them so their own field keeps
+  // showing its current value instead of going blank. Each of the three roles
+  // gets its own options list (not one shared list) so a terminated ex-Sales
+  // Person re-appended for the Sales Person field doesn't leak into the
+  // Pre-Sales/PMO dropdowns as a newly pickable option -- they were never
+  // assigned to those roles, so they must not appear there at all. (Within its
+  // own field, the re-appended entry can't be re-selected once cleared --
+  // that's intended.)
+  function withCurrentValueFallback(currentId: string | null | undefined, currentName: string | null | undefined): SearchSelectOption[] {
+    if (!currentId || baseEmployeeOptions.some((o) => o.value === currentId)) {
+      return baseEmployeeOptions;
     }
+    return [...baseEmployeeOptions, { value: currentId, label: currentName ?? "Unknown" }];
   }
+
+  const salesPersonOptions = deal ? withCurrentValueFallback(deal.ownerId, deal.ownerName) : baseEmployeeOptions;
+  const preSalesPersonOptions = deal ? withCurrentValueFallback(deal.preSalesPersonId, deal.preSalesPersonName) : baseEmployeeOptions;
+  const pmoOptions = deal ? withCurrentValueFallback(deal.pmoId, deal.pmoName) : baseEmployeeOptions;
   const departmentOptions: SearchSelectOption[] = departments.map((d) => ({ value: d.id, label: d.name }));
   const costing = computeCosting(values.projectValue, values.internalCosts, values.externalCosts);
   // Only active deal sources are selectable. When editing a deal whose source
@@ -1368,7 +1369,7 @@ export function AddDealDialog({
               <SearchSelect
                 value={values.salesPersonId}
                 onChange={(val) => setField("salesPersonId", val)}
-                options={employeeOptions}
+                options={salesPersonOptions}
                 placeholder="Search employees..."
                 searchPlaceholder="Search by name..."
               />
@@ -1384,7 +1385,7 @@ export function AddDealDialog({
               <SearchSelect
                 value={values.preSalesPersonId}
                 onChange={(val) => setField("preSalesPersonId", val)}
-                options={employeeOptions}
+                options={preSalesPersonOptions}
                 placeholder="Search employees..."
                 searchPlaceholder="Search by name..."
               />
@@ -1395,7 +1396,7 @@ export function AddDealDialog({
               <SearchSelect
                 value={values.pmoId}
                 onChange={(val) => setField("pmoId", val)}
-                options={employeeOptions}
+                options={pmoOptions}
                 placeholder="Search employees..."
                 searchPlaceholder="Search by name..."
               />
