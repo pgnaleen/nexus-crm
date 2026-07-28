@@ -1,12 +1,15 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
+import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { Deal } from "../deals/entities/deal.entity";
 import { CreateSubStageDto } from "./dto/create-sub-stage.dto";
 import { UpdateSubStageDto } from "./dto/update-sub-stage.dto";
 import { SubStage } from "./entities/sub-stage.entity";
 import { MainStagesService } from "./main-stages.service";
 import { SubStagesRepository } from "./sub-stages.repository";
+
+const AUDIT_ENTITY_TYPE = "sub_stage";
 
 @Injectable()
 export class SubStagesService {
@@ -15,6 +18,7 @@ export class SubStagesService {
   constructor(
     private readonly subStagesRepo: SubStagesRepository,
     private readonly mainStagesService: MainStagesService,
+    private readonly auditLogService: AuditLogService,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
@@ -45,15 +49,31 @@ export class SubStagesService {
   }
 
   async create(dto: CreateSubStageDto, userId: string): Promise<SubStage> {
+    this.logger.debug(`create called by ${userId} (name="${dto.name}", mainStageId=${dto.mainStageId})`);
     // Ensures mainStageId genuinely belongs to the current tenant, not just
     // any UUID that happens to exist in main_stages across all tenants.
     await this.mainStagesService.findOneOrFail(dto.mainStageId);
     await this.assertSortOrderAvailable(dto.mainStageId, dto.sortOrder);
-    const subStage = this.subStagesRepo.createScoped({ ...dto, createdBy: userId });
-    return this.subStagesRepo.saveScoped(subStage);
+    try {
+      const subStage = this.subStagesRepo.createScoped({ ...dto, createdBy: userId });
+      const saved = await this.subStagesRepo.saveScoped(subStage);
+      this.logger.debug(`create succeeded for sub stage ${saved.id}`);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: saved.id,
+        action: "insert",
+        actorId: userId,
+        changes: { ...dto },
+      });
+      return saved;
+    } catch (err) {
+      this.logger.error(`create failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   async update(id: string, dto: UpdateSubStageDto, userId: string): Promise<SubStage> {
+    this.logger.debug(`update called for sub stage ${id} by ${userId}`);
     const subStage = await this.findOneOrFail(id);
     if (dto.mainStageId) {
       await this.mainStagesService.findOneOrFail(dto.mainStageId);
@@ -65,12 +85,44 @@ export class SubStagesService {
         id,
       );
     }
-    Object.assign(subStage, dto, { updatedBy: userId });
-    await this.subStagesRepo.saveScoped(subStage);
-    // Re-fetch rather than return the in-memory object -- Object.assign copies
-    // omitted dto fields as explicit `undefined`, which would misreport
-    // untouched columns as missing in the API response.
-    return this.findOneOrFail(id);
+
+    const before: Record<string, unknown> = {};
+    const subStageAsRecord = subStage as unknown as Record<string, unknown>;
+    for (const key of Object.keys(dto)) {
+      before[key] = subStageAsRecord[key];
+    }
+
+    try {
+      Object.assign(subStage, dto, { updatedBy: userId });
+      await this.subStagesRepo.saveScoped(subStage);
+      // Re-fetch rather than return the in-memory object -- Object.assign copies
+      // omitted dto fields as explicit `undefined`, which would misreport
+      // untouched columns as missing in the API response.
+      const updated = await this.findOneOrFail(id);
+      this.logger.debug(`update succeeded for sub stage ${id}`);
+
+      const changes: Record<string, { old: unknown; new: unknown }> = {};
+      const updatedAsRecord = updated as unknown as Record<string, unknown>;
+      for (const key of Object.keys(dto)) {
+        const newValue = updatedAsRecord[key];
+        if (before[key] !== newValue) {
+          changes[key] = { old: before[key], new: newValue };
+        }
+      }
+      if (Object.keys(changes).length > 0) {
+        await this.auditLogService.record({
+          entityType: AUDIT_ENTITY_TYPE,
+          entityId: id,
+          action: "update",
+          actorId: userId,
+          changes,
+        });
+      }
+      return updated;
+    } catch (err) {
+      this.logger.error(`update failed for sub stage ${id}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   // Not a "records get deleted" cascade -- Deal.currentStageId is a required
@@ -100,6 +152,13 @@ export class SubStagesService {
     try {
       await this.subStagesRepo.softRemoveScoped(subStage, userId);
       this.logger.debug(`remove succeeded for sub stage ${id}`);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: id,
+        action: "delete",
+        actorId: userId,
+        changes: { name: subStage.name, mainStageId: subStage.mainStageId },
+      });
     } catch (err) {
       this.logger.error(`remove failed for sub stage ${id}: ${(err as Error).message}`, (err as Error).stack);
       throw err;

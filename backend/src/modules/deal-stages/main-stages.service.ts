@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource, In, IsNull } from "typeorm";
+import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { Deal } from "../deals/entities/deal.entity";
 import { CreateMainStageDto } from "./dto/create-main-stage.dto";
 import { UpdateMainStageDto } from "./dto/update-main-stage.dto";
@@ -9,6 +10,8 @@ import { SubStage } from "./entities/sub-stage.entity";
 import { MainStagesRepository } from "./main-stages.repository";
 import { SubStagesRepository } from "./sub-stages.repository";
 
+const AUDIT_ENTITY_TYPE = "main_stage";
+
 @Injectable()
 export class MainStagesService {
   private readonly logger = new Logger(MainStagesService.name);
@@ -16,6 +19,7 @@ export class MainStagesService {
   constructor(
     private readonly mainStagesRepo: MainStagesRepository,
     private readonly subStagesRepo: SubStagesRepository,
+    private readonly auditLogService: AuditLogService,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
@@ -55,22 +59,70 @@ export class MainStagesService {
   }
 
   async create(dto: CreateMainStageDto, userId: string): Promise<MainStage> {
+    this.logger.debug(`create called by ${userId} (name="${dto.name}")`);
     await this.assertPositionAvailable(dto.position);
-    const stage = this.mainStagesRepo.createScoped({ ...dto, createdBy: userId });
-    return this.mainStagesRepo.saveScoped(stage);
+    try {
+      const stage = this.mainStagesRepo.createScoped({ ...dto, createdBy: userId });
+      const saved = await this.mainStagesRepo.saveScoped(stage);
+      this.logger.debug(`create succeeded for main stage ${saved.id}`);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: saved.id,
+        action: "insert",
+        actorId: userId,
+        changes: { ...dto },
+      });
+      return saved;
+    } catch (err) {
+      this.logger.error(`create failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   async update(id: string, dto: UpdateMainStageDto, userId: string): Promise<MainStage> {
+    this.logger.debug(`update called for main stage ${id} by ${userId}`);
     const stage = await this.findOneOrFail(id);
     if (dto.position !== undefined) {
       await this.assertPositionAvailable(dto.position, id);
     }
-    Object.assign(stage, dto, { updatedBy: userId });
-    await this.mainStagesRepo.saveScoped(stage);
-    // Re-fetch rather than return the in-memory object -- Object.assign copies
-    // omitted dto fields as explicit `undefined`, which would misreport
-    // untouched columns as missing in the API response (see rbac.service.ts).
-    return this.findOneOrFail(id);
+
+    const before: Record<string, unknown> = {};
+    const stageAsRecord = stage as unknown as Record<string, unknown>;
+    for (const key of Object.keys(dto)) {
+      before[key] = stageAsRecord[key];
+    }
+
+    try {
+      Object.assign(stage, dto, { updatedBy: userId });
+      await this.mainStagesRepo.saveScoped(stage);
+      // Re-fetch rather than return the in-memory object -- Object.assign copies
+      // omitted dto fields as explicit `undefined`, which would misreport
+      // untouched columns as missing in the API response (see rbac.service.ts).
+      const updated = await this.findOneOrFail(id);
+      this.logger.debug(`update succeeded for main stage ${id}`);
+
+      const changes: Record<string, { old: unknown; new: unknown }> = {};
+      const updatedAsRecord = updated as unknown as Record<string, unknown>;
+      for (const key of Object.keys(dto)) {
+        const newValue = updatedAsRecord[key];
+        if (before[key] !== newValue) {
+          changes[key] = { old: before[key], new: newValue };
+        }
+      }
+      if (Object.keys(changes).length > 0) {
+        await this.auditLogService.record({
+          entityType: AUDIT_ENTITY_TYPE,
+          entityId: id,
+          action: "update",
+          actorId: userId,
+          changes,
+        });
+      }
+      return updated;
+    } catch (err) {
+      this.logger.error(`update failed for main stage ${id}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
   }
 
   // Cascades to every Sub Stage under this Main Stage, per CLAUDE.md's
@@ -128,6 +180,13 @@ export class MainStagesService {
         await mainStageRepo.update(stage.id, { deletedBy: userId });
       });
       this.logger.debug(`remove succeeded for main stage ${id}`);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: id,
+        action: "delete",
+        actorId: userId,
+        changes: { name: stage.name, cascadedSubStageCount: subStageIds.length },
+      });
     } catch (err) {
       this.logger.error(`remove failed for main stage ${id}: ${(err as Error).message}`, (err as Error).stack);
       throw err;
