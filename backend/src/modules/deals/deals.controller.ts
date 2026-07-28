@@ -145,6 +145,7 @@ export class DealsController {
       currentStageId: deal.currentStageId ?? null,
       currentStageName: deal.currentStage?.name,
       status: deal.status,
+      currency: deal.currency,
       departmentId: deal.departmentId ?? null,
       departmentName: deal.department?.name ?? null,
       dealCountry: deal.dealCountry ?? null,

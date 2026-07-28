@@ -60,6 +60,8 @@ export interface IDeal {
   mainStageId: string;
   currentStageId?: string | null;
   status: DealStatus;
+  // ISO 4217 code -- never null, every deal has some currency.
+  currency: string;
   departmentId?: string | null;
   dealCountry?: string | null;
   customerPainPoint?: string | null;

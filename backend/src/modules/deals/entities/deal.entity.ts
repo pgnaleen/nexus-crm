@@ -108,6 +108,14 @@ export class Deal extends AuditedTenantEntity {
   @Column({ type: "enum", enum: DealStatus, default: DealStatus.Open })
   status!: DealStatus;
 
+  // ISO 4217 code (e.g. "USD", "LKR") -- never null, every deal has some
+  // currency. Not a DB enum: the valid set is the ~180-entry ISO 4217 list,
+  // which the frontend already sources from Intl.supportedValuesOf at
+  // runtime rather than a hand-maintained list -- a Postgres enum would just
+  // be a second copy of that list to keep in sync for no benefit.
+  @Column({ type: "varchar", length: 3, default: "USD" })
+  currency!: string;
+
   @Column({ type: "uuid", nullable: true })
   departmentId?: string;
 

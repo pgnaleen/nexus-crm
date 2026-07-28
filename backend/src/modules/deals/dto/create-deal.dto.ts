@@ -5,6 +5,8 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  Length,
+  Matches,
   IsNumber,
   IsOptional,
   IsString,
@@ -24,6 +26,16 @@ export class CreateDealDto implements CreateDealRequest {
 
   @IsEnum(DealType)
   dealType!: DealType;
+
+  // ISO 4217 code -- shape-checked here (3 uppercase letters), not validated
+  // against the full ~180-entry list server-side. The frontend's
+  // Intl.supportedValuesOf("currency") is the source of truth for which
+  // codes are offered; duplicating that list here would just be a second
+  // copy to keep in sync for no real safety benefit.
+  @IsString()
+  @Length(3, 3)
+  @Matches(/^[A-Z]{3}$/)
+  currency!: string;
 
   @IsOptional()
   @IsUUID()

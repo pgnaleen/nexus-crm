@@ -38,6 +38,7 @@ export interface FunnelLead {
   code?: string;
   country?: string;
   status?: DealStatus;
+  currency?: string;
 }
 
 export interface FunnelSource {

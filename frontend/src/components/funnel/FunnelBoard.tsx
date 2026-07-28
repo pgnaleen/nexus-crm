@@ -50,10 +50,10 @@ function colorForIndex(index: number): { accent: string; bg: string } {
 }
 
 /* ── Helpers ────────────────────────────────────────────────── */
-function fmt(v: number) {
+function fmt(v: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency,
     maximumFractionDigits: 0,
   }).format(v);
 }
@@ -133,7 +133,7 @@ function DealCard({
       </div>
       <div className="flex items-center justify-between">
         <span className="text-[13px] font-bold tabular-nums text-[var(--color-text)]">
-          {fmt(lead.value)}
+          {fmt(lead.value, lead.currency ?? "USD")}
         </span>
         <span className="text-[10.5px] text-[var(--color-text-muted)]">{lead.date}</span>
         {onShowHistory && (

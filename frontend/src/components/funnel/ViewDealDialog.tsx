@@ -264,11 +264,12 @@ export function ViewDealDialog({
 
       {activeTab === "costing" && (
         <div className="min-h-[420px]">
-          <Field label="Project Value without Tax (LKR)" value={formatLkr(deal.estimatedValue ?? 0)} />
-          <Field label="Internal Costs (LKR)" value={formatLkr(deal.internalCosts ?? 0)} />
-          <Field label="External Costs (LKR)" value={formatLkr(deal.externalCosts ?? 0)} />
-          <Field label="Total Cost (LKR)" value={formatLkr(costing.totalCost)} />
-          <Field label="Profit (LKR)" value={formatLkr(costing.profit)} />
+          <Field label="Currency" value={deal.currency} />
+          <Field label={`Project Value without Tax (${deal.currency})`} value={formatLkr(deal.estimatedValue ?? 0)} />
+          <Field label={`Internal Costs (${deal.currency})`} value={formatLkr(deal.internalCosts ?? 0)} />
+          <Field label={`External Costs (${deal.currency})`} value={formatLkr(deal.externalCosts ?? 0)} />
+          <Field label={`Total Cost (${deal.currency})`} value={formatLkr(costing.totalCost)} />
+          <Field label={`Profit (${deal.currency})`} value={formatLkr(costing.profit)} />
           <Field label="Project Profit Markup" value={formatPercent(costing.markupPercent)} />
           <Field label="Project Profit Margin" value={formatPercent(costing.marginPercent)} />
         </div>

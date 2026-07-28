@@ -9,6 +9,9 @@ export interface CompetitorEntryRequest {
 export interface CreateDealRequest {
   name: string;
   dealType: DealType;
+  // ISO 4217 code (e.g. "USD", "LKR") -- a deliberate choice made in the
+  // form, same treatment as dealType, not optional.
+  currency: string;
   // The customer: exactly one of companyId (company customer) or contactId
   // (bare contact, no company) must be provided.
   companyId?: string;

@@ -5,6 +5,8 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  Length,
+  Matches,
   IsNumber,
   IsOptional,
   IsString,
@@ -26,6 +28,12 @@ export class UpdateDealDto implements UpdateDealRequest {
   @IsOptional()
   @IsEnum(DealType)
   dealType?: DealType;
+
+  @IsOptional()
+  @IsString()
+  @Length(3, 3)
+  @Matches(/^[A-Z]{3}$/)
+  currency?: string;
 
   @IsOptional()
   @IsUUID()

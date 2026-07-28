@@ -46,6 +46,7 @@ import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { CountrySelect } from "@/components/ui/CountrySelect";
+import { CurrencySelect } from "@/components/ui/CurrencySelect";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 import { SearchSelect, type SearchSelectOption } from "@/components/ui/SearchSelect";
 import { BuildingIcon, EditIcon, FileIcon, TrashIcon, UploadCloudIcon, UserIcon } from "@/components/ui/icons";
@@ -137,6 +138,7 @@ interface DetailsFormState {
   // Margin are all derived from these at render time (see computeCosting
   // below), never stored directly, so they can never drift out of sync with
   // the numbers that produced them.
+  currency: string;
   projectValue: string;
   internalCosts: string;
   externalCosts: string;
@@ -303,6 +305,7 @@ export function AddDealDialog({
     expectedCloseDate: deal?.expectedCloseDate ?? "",
     product: deal?.product ?? "",
     services: deal?.services ?? "",
+    currency: deal?.currency ?? "USD",
     projectValue: deal?.estimatedValue != null ? String(deal.estimatedValue) : "",
     internalCosts: deal?.internalCosts != null ? String(deal.internalCosts) : "",
     externalCosts: deal?.externalCosts != null ? String(deal.externalCosts) : "",
@@ -613,6 +616,7 @@ export function AddDealDialog({
         const updated = await updateDeal(deal.id, {
           name: values.name.trim(),
           isTender: values.isTender,
+          currency: values.currency,
           // Customer itself is locked, but which contact-at-that-company is
           // primary is still a legitimate, editable field.
           primaryContactId: otherParty?.kind === "company" ? values.primaryContactId || undefined : undefined,
@@ -689,6 +693,7 @@ export function AddDealDialog({
         name: values.name.trim(),
         isTender: values.isTender,
         dealType: DEFAULT_DEAL_TYPE,
+        currency: values.currency,
         companyId,
         contactId,
         primaryContactId,
@@ -1217,8 +1222,14 @@ export function AddDealDialog({
         {/* ── Costing ───────────────────────────────────── */}
         {activeTab === "costing" && (
           <div className="h-[620px] overflow-y-auto pr-1">
+            <CurrencySelect
+              label="Currency"
+              value={values.currency}
+              onChange={(val) => setField("currency", val)}
+            />
+
             <TextField
-              label="Project Value without Tax (LKR)"
+              label={`Project Value without Tax (${values.currency})`}
               name="projectValue"
               type="number"
               min="0"
@@ -1228,7 +1239,7 @@ export function AddDealDialog({
             />
 
             <TextField
-              label="Internal Costs (LKR)"
+              label={`Internal Costs (${values.currency})`}
               name="internalCosts"
               type="number"
               min="0"
@@ -1238,7 +1249,7 @@ export function AddDealDialog({
             />
 
             <TextField
-              label="External Costs (LKR)"
+              label={`External Costs (${values.currency})`}
               name="externalCosts"
               type="number"
               min="0"
@@ -1249,7 +1260,7 @@ export function AddDealDialog({
 
             <div className="mb-[18px]">
               <label htmlFor="totalCost" className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                Total Cost (LKR)
+                Total Cost ({values.currency})
               </label>
               <input
                 id="totalCost"
@@ -1261,7 +1272,7 @@ export function AddDealDialog({
 
             <div className="mb-[18px]">
               <label htmlFor="profit" className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                Profit (LKR)
+                Profit ({values.currency})
               </label>
               <input
                 id="profit"

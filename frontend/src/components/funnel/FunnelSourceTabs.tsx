@@ -80,6 +80,7 @@ function dealToFunnelLead(deal: DealResponse, stageIdField: StageIdField): Funne
     code: deal.dealCode,
     country: deal.dealCountry ?? undefined,
     status: deal.status,
+    currency: deal.currency,
   };
 }
 
