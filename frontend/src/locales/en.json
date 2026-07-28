@@ -1,4 +1,8 @@
 {
+  "brand": {
+    "logoAlt": "Nexus",
+    "tagline": "By Orel IT"
+  },
   "common": {
     "actions": {
       "cancel": "Cancel",

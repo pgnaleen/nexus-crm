@@ -67,8 +67,21 @@
 
 .cardLogo {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
   margin-bottom: 20px;
+}
+
+/* "By Orel IT" -- the vendor line under the product lockup. Muted grey, not
+   the brand red: the design-system rule confines red to primary actions,
+   the active nav item, key badges, and focus rings. */
+.cardTagline {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
 }
 
 .title {

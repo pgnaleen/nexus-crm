@@ -22,7 +22,7 @@ export function PasswordField({ label, error, id, name, ...inputProps }: Passwor
           id={fieldId}
           name={name}
           type={visible ? "text" : "password"}
-          className={`w-full rounded-lg border py-2.5 pr-[42px] pl-3 text-sm text-crm-text transition-colors duration-150 focus:outline-none focus:shadow-[0_0_0_3px_rgba(233,28,45,0.15)] ${
+          className={`w-full rounded-lg border py-2.5 pr-[42px] pl-3 text-sm text-crm-text transition-colors duration-150 focus:outline-none focus:shadow-[0_0_0_3px_var(--color-crm-primary-glow)] ${
             error ? "border-[var(--color-danger)]" : "border-[var(--color-border)] focus:border-crm-primary"
           }`}
           {...inputProps}

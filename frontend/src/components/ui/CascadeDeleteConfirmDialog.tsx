@@ -56,7 +56,7 @@ export function CascadeDeleteConfirmDialog({
             if (event.key === "Enter" && canConfirm) onConfirm();
           }}
           placeholder="Current password"
-          className="mt-1.5 w-full rounded-lg border border-[var(--color-border)] px-3 py-2.5 text-sm transition-colors duration-150 focus:outline-none focus:border-[var(--color-crm-primary)] focus:shadow-[0_0_0_3px_rgba(233,28,45,0.15)]"
+          className="mt-1.5 w-full rounded-lg border border-[var(--color-border)] px-3 py-2.5 text-sm transition-colors duration-150 focus:outline-none focus:border-[var(--color-crm-primary)] focus:shadow-[0_0_0_3px_var(--color-crm-primary-glow)]"
         />
         {error && <p className="mt-2 text-sm font-medium text-[var(--color-crm-primary)]">{error}</p>}
       </div>

@@ -32,7 +32,7 @@ export function EmailField({ label, error, id, name, value, onChange, ...inputPr
           type="email"
           value={value}
           onChange={onChange}
-          className={`w-full rounded-lg border py-2.5 pr-3 pl-9 text-sm text-crm-text transition-colors duration-150 focus:outline-none focus:shadow-[0_0_0_3px_rgba(233,28,45,0.15)] ${
+          className={`w-full rounded-lg border py-2.5 pr-3 pl-9 text-sm text-crm-text transition-colors duration-150 focus:outline-none focus:shadow-[0_0_0_3px_var(--color-crm-primary-glow)] ${
             displayError ? "border-[var(--color-danger)]" : "border-[var(--color-border)] focus:border-crm-primary"
           }`}
           {...inputProps}

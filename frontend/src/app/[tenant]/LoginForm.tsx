@@ -4,11 +4,12 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { login } from "@/lib/api/auth";
-import { OreliaLogo } from "@/components/brand/OreliaLogo";
+import { NexusLogo } from "@/components/brand/NexusLogo";
 import { Button } from "@/components/ui/Button";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { PasswordField } from "@/components/ui/PasswordField";
 import { TextField } from "@/components/ui/TextField";
+import { t } from "@/lib/i18n";
 import { required, validate } from "@/lib/validation";
 import styles from "./page.module.css";
 
@@ -61,8 +62,11 @@ export function LoginForm({ tenantSlug, tenantName }: { tenantSlug: string; tena
       <div className={styles.blob2} />
 
       <div className={styles.card}>
+        {/* The new lockups don't carry the vendor tagline, so it rides below
+            as its own line rather than being baked into the SVG. */}
         <div className={styles.cardLogo}>
-          <OreliaLogo size={34} showTagline={false} />
+          <NexusLogo variant="horizontal" tone="dark" size={30} />
+          <span className={styles.cardTagline}>{t("brand.tagline")}</span>
         </div>
 
         <h1 className={styles.title}>Welcome to {tenantName}</h1>

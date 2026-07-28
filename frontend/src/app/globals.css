@@ -6,9 +6,20 @@
    unaffected until each is migrated in its own phase, per CLAUDE.md. */
 @import "tailwindcss/theme.css";
 @theme {
-  --color-crm-primary: #e91c2d;
-  --color-crm-primary-hover: #c4101f;
-  --color-crm-primary-tint: #fdeced;
+  /* #ed1b24 is the red the delivered Nexus logo files were exported with (see
+     brand-assets/README.md). Adopted 2026-07-28 as the single app-wide red so
+     the logo and every other red surface match exactly; -hover and -tint are
+     re-derived from it at the same ratios the previous #e91c2d pair used. */
+  --color-crm-primary: #ed1b24;
+  --color-crm-primary-hover: #c70f19;
+  --color-crm-primary-tint: #fdebec;
+  /* The focus-ring glow. Exists as a token because box-shadow needs the red at
+     15% alpha, and Tailwind can't express that from --color-crm-primary inside
+     a composite shadow value. Before this, ten components each hardcoded the
+     red at 15% alpha inline -- which silently kept the OLD red when the token
+     above changed. Keep these two in sync: it is the one place a re-brand
+     needs a second edit. */
+  --color-crm-primary-glow: rgba(237, 27, 36, 0.15);
   --color-crm-shell: #022b5d;
   --color-crm-shell-gradient-start: #04162e;
   --color-crm-shell-gradient-end: #1a5fa8;

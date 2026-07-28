@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { OreliaLogo } from "@/components/brand/OreliaLogo";
+import { NexusLogo } from "@/components/brand/NexusLogo";
 import { ChevronDownIcon, ChevronRightIcon, DashboardIcon, FunnelIcon, PriorityIcon, SettingsIcon, SlidersIcon, UsersGroupIcon, UserIcon, ActivityIcon } from "@/components/ui/icons";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { PERMISSIONS } from "@orelia/common";
@@ -188,7 +188,10 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
         }`}
       >
         <div className={`flex items-center pt-2 pb-[26px] ${collapsed ? "flex-col gap-2" : "justify-between px-0.5"}`}>
-          <OreliaLogo dark size={26} showTagline={false} iconOnly={collapsed} />
+          {/* Collapsing drops the wordmark, not the size -- both lockups render
+              at the same 26px height so the mark stays put on the same baseline
+              as the sidebar animates between 250px and 72px. */}
+          <NexusLogo variant={collapsed ? "mark" : "horizontal"} tone="light" size={26} />
           <button
             type="button"
             onClick={() => setManualOverride(!collapsed)}

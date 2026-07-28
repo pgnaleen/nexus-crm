@@ -810,7 +810,7 @@ export function CompanyFormDialog({
               <label htmlFor="territoryNotes" className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Territory notes</label>
               <textarea
                 id="territoryNotes"
-                className="w-full resize-y rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5 font-[inherit] text-sm text-crm-text transition-colors duration-150 focus:border-crm-primary focus:shadow-[0_0_0_3px_rgba(233,28,45,0.15)] focus:outline-none"
+                className="w-full resize-y rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5 font-[inherit] text-sm text-crm-text transition-colors duration-150 focus:border-crm-primary focus:shadow-[0_0_0_3px_var(--color-crm-primary-glow)] focus:outline-none"
                 rows={3}
                 value={values.territoryNotes}
                 placeholder="Any additional context about this account's territory..."
