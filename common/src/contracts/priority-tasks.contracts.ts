@@ -48,6 +48,23 @@ export interface PriorityTaskResponse {
   // else is still fully "owned" by its real owner from the owner's own
   // point of view).
   ownership: "owned" | "received";
+  // Story 2.3 -- drives the card's "Mine" vs "Assigned to me" pill.
+  // `ownership` can't answer this: it's ownerId-vs-viewer, so a task I
+  // created AND a task I accepted from someone else are both "owned". This
+  // is createdBy-vs-viewer, the orthogonal axis -- true only if I'm the one
+  // who originally made it.
+  isCreator: boolean;
+  // Story 2.4 -- may this viewer actually change the task (notes, progress,
+  // shares, complete, archive)? Deliberately NOT the same as
+  // `ownership === "owned"`: while a delegation is pending, the delegator is
+  // still `ownerId` (ownership only transfers on accept) but has handed the
+  // work off, so they are a tracker, not an actor. `ownership` answers "whose
+  // record is this", this answers "whose turn is it".
+  canEdit: boolean;
+  // Story 2.3 -- how many people I've shared this task with, driving the
+  // card's "Shared" pill without a second round-trip per card. Always 0 for
+  // a viewer who isn't the owner (only an owner can share -- Story 1.5).
+  shareCount: number;
   createdAt: string;
   // Only resolved by GET /priority-tasks/:id (the detail view's "who created
   // this" history entry) -- undefined on the bulk list response, which
@@ -86,6 +103,12 @@ export interface IncomingTaskResponse {
   status: PriorityTaskStatus;
   progress: number;
   createdAt: string;
+  // Story 2.9 -- the drawer shows a short notes preview so an item can be
+  // triaged without opening it. Sent in full and truncated for display: the
+  // recipient can open the task and read all of it anyway (they're either the
+  // pending delegate or a share recipient), so a server-side truncation would
+  // buy nothing and hard-code a UI decision into the contract.
+  notes: string | null;
 }
 
 // Story 1.8 -- accepting a delegated task: the acceptor picks which quadrant

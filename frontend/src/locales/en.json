@@ -393,20 +393,50 @@
   "priorityTracker": {
     "title": "Priority Tracker",
     "subtitle": "Your personal Eisenhower board — see what's urgent and important at a glance",
-    "quadrants": {
-      "do": { "label": "Do", "sublabel": "Urgent & Important" },
-      "decide": { "label": "Decide", "sublabel": "Not Urgent & Important" },
-      "delegate": { "label": "Delegate", "sublabel": "Urgent & Not Important" },
-      "delete": { "label": "Delete", "sublabel": "Not Urgent & Not Important" }
+    "axes": {
+      "urgent": "Urgent",
+      "notUrgent": "Not urgent",
+      "important": "Important",
+      "notImportant": "Not important"
     },
+    "quadrants": {
+      "do": { "number": "Q1", "label": "Do", "sublabel": "Urgent & Important" },
+      "decide": { "number": "Q2", "label": "Decide", "sublabel": "Not Urgent & Important" },
+      "delegate": { "number": "Q3", "label": "Delegate", "sublabel": "Urgent & Not Important" },
+      "delete": { "number": "Q4", "label": "Delete", "sublabel": "Not Urgent & Not Important" }
+    },
+    "quadrantCountAriaLabel": "{count} tasks in {quadrant}",
     "badge": {
       "owned": "Owned",
       "received": "Received",
-      "delegatedTo": "Delegated to {name}"
+      "delegatedTo": "{name}",
+      "delegatedToPending": "{name} · pending",
+      "delegatedToSr": "Delegated to {name}",
+      "delegatedToPendingSr": "Delegated to {name}, pending acceptance",
+      "mine": "Mine",
+      "assignedToMe": "Assigned to me",
+      "shared": "Shared",
+      "note": "Note",
+      "done": "Done"
     },
+    "cardProgressAriaLabel": "{value}% complete",
+    "openTaskAriaLabel": "Open {title}",
     "emptyState": {
-      "title": "No tasks here yet",
-      "message": "Tasks placed in this quadrant will show up here."
+      "do": "Drop or add a task",
+      "decide": "Drop or add a task",
+      "delegate": "Delegated tasks appear here",
+      "delete": "Drop or add a task"
+    },
+    "toast": {
+      "created": "Task added to {quadrant}",
+      "shared": "Shared with {name}",
+      "delegated": "Delegated to {name} — tracking in Delegate",
+      "redelegated": "Re-delegated to {name}",
+      "accepted": "Added to your {quadrant}",
+      "completed": "Task completed",
+      "archived": "Moved to archive",
+      "restored": "Restored to your board",
+      "deleted": "Task deleted"
     },
     "newTaskButton": "New Task",
     "addToQuadrantAriaLabel": "Add a task to {quadrant}",
@@ -416,12 +446,24 @@
       "loading": "Loading...",
       "emptyTitle": "Nothing archived",
       "emptyMessage": "Completed tasks you archive will appear here.",
-      "finalProgress": "Final progress {value}%",
+      "byCreator": "by {name}",
+      "unknownCreator": "someone who has left",
       "restoreButton": "Restore",
+      "deleteButton": "Delete",
+      "deleteConfirm": {
+        "title": "Delete Archived Task",
+        "message": "Permanently remove \"{title}\" from your archive? It will disappear from every view. Anyone it was shared or delegated to is unaffected."
+      },
       "errors": {
         "loadFailed": "Failed to load archived tasks",
-        "restoreFailed": "Failed to restore task"
+        "restoreFailed": "Failed to restore task",
+        "deleteFailed": "Failed to delete task"
       }
+    },
+    "accept": {
+      "title": "Add to your board",
+      "quadrantLabel": "Which quadrant?",
+      "confirmButton": "Add task"
     },
     "incoming": {
       "button": "Incoming",
@@ -433,8 +475,10 @@
       "sharedBadge": "Shared",
       "delegatedBadge": "Delegated",
       "sharedHint": "Shared with you for visibility — open it from the board to read it.",
-      "placeInLabel": "Place in",
-      "acceptButton": "Accept",
+      "subtitle": "Shared & delegated to you",
+      "waitingCount": "{count} waiting for you",
+      "acceptButton": "Add to board",
+      "openButton": "Open",
       "redelegateButton": "Re-delegate",
       "errors": {
         "loadFailed": "Failed to load incoming tasks",
@@ -463,37 +507,46 @@
       "loading": "Loading…",
       "loadingTitle": "…",
       "quadrantLabel": "Quadrant",
-      "statusLabel": "Status",
       "progressLabel": "Progress",
-      "updateProgressLabel": "Update progress",
+      "lifecycleLabel": "Lifecycle",
+      "lifecycle": {
+        "created": "Created",
+        "placed": "Placed",
+        "delegated": "Delegated",
+        "accepted": "Accepted",
+        "inProgress": "In progress",
+        "completed": "Completed",
+        "archived": "Archived",
+        "stageAriaLabel": "Lifecycle stage: {stage}"
+      },
       "readyToClose": "Ready to close",
+      "segmentHint": "Click a block to set completion in 10% steps. 100% closes the task.",
+      "setProgressAriaLabel": "Set progress to {value}%",
       "notesLabel": "Notes",
       "notesPlaceholder": "Optional details or context...",
       "notesReadOnlyHint": "Only the current owner can edit notes.",
       "saveNotesButton": "Save Notes",
       "historyLabel": "History",
       "historyEmpty": "No history yet.",
-      "completeHint": "Mark this task done once the work is finished.",
+      "time": {
+        "justNow": "just now",
+        "minutesAgo": "{value}m ago",
+        "hoursAgo": "{value}h ago"
+      },
       "completeButton": "Mark Complete",
-      "archiveHint": "Archive this completed task to clear it from your board.",
       "archiveButton": "Archive",
+      "redelegateButton": "Re-delegate",
       "history": {
         "someone": "Someone",
-        "created": "Created by {actor}",
-        "delegated": "{actor} delegated it to {name}",
-        "redelegated": "{actor} re-delegated it to {name}",
-        "accepted": "{actor} accepted it",
-        "progress": "{actor} set progress to {value}%",
-        "completed": "{actor} marked it complete",
-        "archived": "{actor} archived it",
-        "restored": "{actor} restored it"
-      },
-      "status": {
-        "placed": "Placed",
-        "delegated": "Delegated",
+        "created": "Created",
+        "delegated": "Delegated to {name}",
+        "redelegated": "Re-delegated to {name}",
         "accepted": "Accepted",
+        "progress": "Progress {value}%",
         "completed": "Completed",
-        "archived": "Archived"
+        "archived": "Archived",
+        "restored": "Restored from archive",
+        "meta": "{actor} · {time}"
       },
       "errors": {
         "saveFailed": "Failed to save notes",
@@ -508,7 +561,7 @@
       "sharedEmpty": "Not shared with anyone yet.",
       "removeShareAriaLabel": "Stop sharing with {name}",
       "delegateButton": "Delegate",
-      "delegateHint": "Hand this task off to someone else to work on.",
+      "delegateHint": "Sharing lets someone see this task. Delegating hands it to one person to own — it leaves your board and you track it from Delegate.",
       "delegatedNotice": "Delegated to {name} — this task now sits in your Delegate quadrant. Only {name} can update its progress until they hand it back."
     },
     "shareDialog": {

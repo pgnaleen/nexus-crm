@@ -25,6 +25,82 @@
   --color-crm-shell-gradient-end: #1a5fa8;
   --color-crm-bg: #f8fafc;
   --color-crm-text: #0f172a;
+
+  /* Priority Deck (pd-*) -- the Eisenhower board's four quadrant palettes,
+     taken verbatim from the client's orel-tasks_2.html prototype. A
+     deliberate, scoped exception to the CRM-wide "no blue anywhere" rule:
+     four quadrants need four mutually distinguishable hues, and these are
+     content-area fills, never app chrome. See CLAUDE.md's Design System
+     section. Declared here (not as raw hex in components) so Tailwind v4
+     generates real utilities -- bg-pd-do-fill, text-pd-de-acc, etc.
+
+     Per quadrant: -soft = top of the panel gradient, -fill = bottom of it,
+     -acc = rank chip / dot / drop-target accent, -word = watermark tint. */
+  --color-pd-do-soft: #fff1f3;
+  --color-pd-do-fill: #ffe3e8;
+  --color-pd-do-acc: #ff6f87;
+  --color-pd-do-word: #ffc3cd;
+
+  --color-pd-de-soft: #f0f6ff;
+  --color-pd-de-fill: #dfecff;
+  --color-pd-de-acc: #4f8cf6;
+  --color-pd-de-word: #bcd6ff;
+
+  --color-pd-dg-soft: #fffaeb;
+  --color-pd-dg-fill: #fff2d3;
+  --color-pd-dg-acc: #e39a1f;
+  --color-pd-dg-word: #ffe1a0;
+
+  --color-pd-dl-soft: #effbf4;
+  --color-pd-dl-fill: #d9f4e6;
+  --color-pd-dl-acc: #2fa377;
+  --color-pd-dl-word: #b6e9cf;
+
+  /* Story 2.3 -- task-card status pills. Deliberately their own scale rather
+     than reusing the quadrant accents above: a pill means the same thing in
+     every quadrant ("Done" is Done whether it sits in DO or DELETE), so it
+     must not recolour with its surroundings. Values are the prototype's. */
+  --color-pd-pill-mine-bg: #efeaff;
+  --color-pd-pill-mine-fg: #5b4be6;
+  --color-pd-pill-track-bg: #fff0d6;
+  --color-pd-pill-track-fg: #b7791f;
+  --color-pd-pill-shared-bg: #e6f4ff;
+  --color-pd-pill-shared-fg: #2b7fd4;
+  --color-pd-pill-recv-bg: #ffe6ec;
+  --color-pd-pill-recv-fg: #e0466b;
+  --color-pd-pill-note-bg: #eef0f5;
+  --color-pd-pill-note-fg: #6a6790;
+  --color-pd-pill-done-bg: #dcf5e8;
+  --color-pd-pill-done-fg: #2fa377;
+
+  /* Story 2.3 -- the inline card progress bar. Its fill is a left-to-right
+     gradient from --color-pd-dg-acc to -prog-end. */
+  --color-pd-prog-track: #eceaf5;
+  --color-pd-prog-end: #f6c453;
+
+  /* Story 2.3 -- the card's trailing "open me" chevron. */
+  --color-pd-chevron: #bdb8d6;
+
+  /* Story 2.5 -- the detail dialog's lifecycle stepper. The "done" dot
+     deliberately reuses --color-pd-pill-done-fg rather than declaring a
+     second green: a completed step and a Done pill mean the same thing, so
+     they must never drift apart. Only the states with no existing token get
+     one here. */
+  --color-pd-accent: #5b4be6;
+  --color-pd-step-idle: #e9e6f5;
+  --color-pd-step-idle-fg: #a7a2c4;
+  --color-pd-step-done-rail: #8fd8bd;
+
+  /* Story 2.6 -- the segmented 10%-step progress control. Its own idle grey,
+     one shade off --color-pd-prog-track (#eceaf5) above; the prototype uses
+     two distinct values, and the two controls sit on different surfaces (a
+     white card vs. a dialog body) so they aren't interchangeable. The filled
+     block reuses the card bar's two gradient stops, just vertically. */
+  --color-pd-seg-idle: #edeaf6;
+
+  /* Story 2.7 -- the history timeline's connector rail. The dots reuse
+     --color-pd-accent above. */
+  --color-pd-timeline-rail: #e7e4f4;
 }
 @import "tailwindcss/utilities.css";
 @plugin "flyonui";

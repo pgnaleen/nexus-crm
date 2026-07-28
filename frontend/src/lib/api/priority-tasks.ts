@@ -57,6 +57,13 @@ export function restorePriorityTask(id: string): Promise<PriorityTaskResponse> {
   return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}/restore`, { method: "PATCH" });
 }
 
+// Story 2.10 -- clears an archived task out of the Archive for good. Soft
+// delete server-side: the row persists with deletedAt/deletedBy set and an
+// audit_logs entry, it just stops being returned anywhere.
+export function deletePriorityTask(id: string): Promise<{ success: true }> {
+  return apiFetch<{ success: true }>(`/priority-tasks/${id}`, { method: "DELETE" });
+}
+
 export function movePriorityTask(id: string, payload: MovePriorityTaskRequest): Promise<PriorityTaskResponse> {
   return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}/move`, {
     method: "PATCH",

@@ -4,6 +4,9 @@ import { useEffect, useState, type ReactNode } from "react";
 
 interface SidePanelProps {
   title: string;
+  // Optional muted line under the title -- e.g. a live count of what's in
+  // the panel. Omit it and the header renders exactly as before.
+  subtitle?: string;
   onClose: () => void;
   children: ReactNode;
   // Panel width; defaults to a comfortable reading column.
@@ -15,7 +18,7 @@ interface SidePanelProps {
 // panels) that read better anchored to the edge than floating mid-screen.
 // Deliberately separate from Dialog so its centered-modal consumers are
 // untouched.
-export function SidePanel({ title, onClose, children, width = "420px" }: SidePanelProps) {
+export function SidePanel({ title, subtitle, onClose, children, width = "420px" }: SidePanelProps) {
   // Off-canvas on first paint, then slide in -- gives the enter transition
   // something to animate from.
   const [shown, setShown] = useState(false);
@@ -50,7 +53,10 @@ export function SidePanel({ title, onClose, children, width = "420px" }: SidePan
         }`}
       >
         <div className="flex flex-shrink-0 items-center justify-between border-b border-[var(--color-border)] px-5 py-4">
-          <h3 className="m-0 text-[16px] font-bold text-crm-text">{title}</h3>
+          <div className="min-w-0">
+            <h3 className="m-0 text-[16px] font-bold text-crm-text">{title}</h3>
+            {subtitle && <p className="m-0 mt-0.5 text-[11.5px] font-semibold text-[var(--color-text-muted)]">{subtitle}</p>}
+          </div>
           <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>
             ✕
           </button>

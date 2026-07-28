@@ -63,6 +63,47 @@ export class PriorityTasksService {
     }
   }
 
+  // Story 2.3 -- the board card shows a "Shared" pill whenever the owner has
+  // shared a task with anyone. Batched so rendering N cards costs one query
+  // rather than N. No deletedAt filter: priority_task_shares is a bare join
+  // table with no soft-delete (an unshare hard-removes the row) -- see the
+  // entity's own comment and CLAUDE.md's join-table exemption.
+  async countSharesByTaskIds(taskIds: string[]): Promise<Map<string, number>> {
+    this.logger.debug(`countSharesByTaskIds called (${taskIds.length} task id(s))`);
+    if (taskIds.length === 0) {
+      this.logger.debug("No task ids supplied, skipping the query and returning an empty map");
+      return new Map();
+    }
+    try {
+      const rows = await this.sharesRepo
+        .createQueryBuilder("share")
+        .select("share.taskId", "taskId")
+        .addSelect("COUNT(*)", "count")
+        .where("share.taskId IN (:...taskIds)", { taskIds })
+        .groupBy("share.taskId")
+        .getRawMany<{ taskId: string; count: string }>();
+      this.logger.debug(`countSharesByTaskIds found shares on ${rows.length} of ${taskIds.length} task(s)`);
+      return new Map(rows.map((row) => [row.taskId, Number(row.count)]));
+    } catch (err) {
+      this.logger.error(`countSharesByTaskIds failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Single-task variant, for the response mappers that only ever hold one
+  // task (create/update/move/complete/...).
+  async countSharesForTask(taskId: string): Promise<number> {
+    this.logger.debug(`countSharesForTask called (taskId=${taskId})`);
+    try {
+      const count = await this.sharesRepo.count({ where: { taskId } });
+      this.logger.debug(`countSharesForTask found ${count} share(s) on task ${taskId}`);
+      return count;
+    } catch (err) {
+      this.logger.error(`countSharesForTask failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
   // Story 1.4/1.5 -- single-task detail view. Readable by the owner OR
   // anyone the task has been shared with (Story 1.5) -- sharing is
   // read-only visibility, never a write right, so this is deliberately the
@@ -81,12 +122,38 @@ export class PriorityTasksService {
     }
 
     const sharedWithCaller = await this.sharesRepo.exists({ where: { taskId, sharedWithUserId: userId } });
-    if (!sharedWithCaller) {
-      this.logger.debug(`Blocked: task ${taskId} not owned by or shared with ${userId}`);
-      throw new NotFoundException("Task not found");
+    if (sharedWithCaller) {
+      this.logger.debug(`Read access to task ${taskId} granted to ${userId} via share`);
+      return task;
     }
-    this.logger.debug(`Read access to task ${taskId} granted to ${userId} via share`);
-    return task;
+
+    // Story 2.4 -- a delegator holding a tracking card must be able to open
+    // it. Once the recipient accepts, ownerId transfers to them and the
+    // delegator is neither owner nor share-recipient, so the two checks above
+    // would 404 them out of their own tracking card. Read-only regardless:
+    // the response's `canEdit` stays false for them, and every mutation still
+    // goes through findOneOwnedOrFail, which this does not widen.
+    const tracksCaller = await this.delegationTrackersRepo.exists({ where: { taskId, delegatorId: userId } });
+    if (tracksCaller) {
+      this.logger.debug(`Read access to task ${taskId} granted to ${userId} via delegation tracker`);
+      return task;
+    }
+
+    // Story 2.9 -- a pending delegation recipient must be able to read the
+    // task before deciding to accept or pass it on. Until they accept, they
+    // are not the owner, not a share recipient, and hold no tracker, so every
+    // check above turns them away from an item sitting in their own Incoming
+    // panel. Read-only: `canEdit` is false for them (ownerId is still the
+    // delegator's), and accept/redelegate keep their own separate guards.
+    if (task.delegatedToUserId === userId) {
+      this.logger.debug(`Read access to task ${taskId} granted to ${userId} as the pending delegate`);
+      return task;
+    }
+
+    this.logger.debug(
+      `Blocked: task ${taskId} not owned by, shared with, delegated by, or delegated to ${userId}`,
+    );
+    throw new NotFoundException("Task not found");
   }
 
   // Story 1.6 -- the delegator's own board rendering pulls this instead of
@@ -101,8 +168,19 @@ export class PriorityTasksService {
         relations: ["task"],
         order: { rank: "ASC" },
       });
-      this.logger.debug(`findDelegationTrackersForUser returning ${trackers.length} row(s)`);
-      return trackers;
+      // Story 2.10 -- drop any tracker whose task no longer resolves. This
+      // used to be treated as impossible (the FK is ON DELETE CASCADE), and
+      // the controller threw on it. Soft-delete broke that invariant: a
+      // soft-deleted task never fires the cascade, and TypeORM filters it out
+      // of this join, so `task` comes back undefined. remove() clears the
+      // trackers itself; this is the belt-and-braces half, because the cost
+      // of being wrong is a 500 on the delegator's entire board.
+      const live = trackers.filter((tracker) => Boolean(tracker.task));
+      if (live.length !== trackers.length) {
+        this.logger.debug(`Skipped ${trackers.length - live.length} tracker(s) whose task is gone`);
+      }
+      this.logger.debug(`findDelegationTrackersForUser returning ${live.length} row(s)`);
+      return live;
     } catch (err) {
       this.logger.error(`findDelegationTrackersForUser failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -201,6 +279,77 @@ export class PriorityTasksService {
       return { kind: "progress", detail: String(progressChange.new) };
     }
     return null;
+  }
+
+  // Story 2.10 -- permanently clear an archived task out of the Archive.
+  // SOFT delete (deletedAt/deletedBy + an audit row), never a hard DELETE:
+  // the row stays in the table and simply stops being returned anywhere, per
+  // CLAUDE.md's audit rules.
+  //
+  // Restricted to Archived tasks on purpose. A live task can be pending
+  // delegation or shared, and soft-deleting one would yank it out of another
+  // user's Incoming panel -- a cross-user side effect that Story 1.10's
+  // "archiving is scoped to my own perspective" rule exists to prevent. An
+  // archived task has already left every board, so there is nothing to yank.
+  async remove(taskId: string, userId: string): Promise<void> {
+    this.logger.debug(`remove called for task ${taskId} by ${userId}`);
+    const task = await this.findOneOwnedOrFail(taskId, userId);
+    if (task.status !== PriorityTaskStatus.Archived) {
+      this.logger.debug(`Blocked: task ${taskId} is ${task.status}, only an archived task can be deleted`);
+      throw new ConflictException("Only an archived task can be deleted");
+    }
+
+    let removedTrackers = 0;
+    let removedShares = 0;
+    try {
+      await this.dataSource.transaction(async (manager) => {
+        const taskRepo = manager.getRepository(PriorityTask);
+        const trackerRepo = manager.getRepository(PriorityTaskDelegationTracker);
+        const shareRepo = manager.getRepository(PriorityTaskShare);
+
+        // Both FKs are ON DELETE CASCADE, which a soft-delete never fires --
+        // so these must be cleared explicitly. Leaving a tracker behind is
+        // not cosmetic: findDelegationTrackersForUser eager-loads `task`, and
+        // an orphaned tracker would 500 the delegator's whole board.
+        const trackers = await trackerRepo.find({ where: { taskId } });
+        if (trackers.length > 0) {
+          this.logger.debug(`Cascading hard-delete to ${trackers.length} delegation tracker(s)`);
+          await trackerRepo.remove(trackers);
+          removedTrackers = trackers.length;
+        }
+
+        const shares = await shareRepo.find({ where: { taskId } });
+        if (shares.length > 0) {
+          this.logger.debug(`Cascading hard-delete to ${shares.length} share row(s)`);
+          await shareRepo.remove(shares);
+          removedShares = shares.length;
+        }
+
+        // Two steps because softRemove() sets deletedAt but not deletedBy --
+        // same pattern as deals.service.ts's own remove().
+        await taskRepo.softRemove(task);
+        await taskRepo.update(task.id, { deletedBy: userId });
+      });
+      this.logger.debug(`remove succeeded for task ${taskId}`);
+    } catch (err) {
+      this.logger.error(`remove failed for task ${taskId}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+
+    await this.auditLogService.record({
+      entityType: AUDIT_ENTITY_TYPE,
+      entityId: taskId,
+      action: "delete",
+      actorId: userId,
+      changes: {
+        title: task.title,
+        quadrant: task.quadrant,
+        status: task.status,
+        progress: task.progress,
+        removedDelegationTrackers: removedTrackers,
+        removedShares,
+      },
+    });
   }
 
   // Story 1.10 -- the owner's archived tasks, for the Archive view. Off the
@@ -351,6 +500,7 @@ export class PriorityTasksService {
           status: task.status,
           progress: task.progress,
           createdAt: task.createdAt.toISOString(),
+          notes: task.notes ?? null,
         });
       }
       for (const share of shares) {
@@ -363,6 +513,7 @@ export class PriorityTasksService {
           status: share.task.status,
           progress: share.task.progress,
           createdAt: share.createdAt.toISOString(),
+          notes: share.task.notes ?? null,
         });
       }
       this.logger.debug(`findIncomingForUser returning ${items.length} item(s)`);

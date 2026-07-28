@@ -1,22 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PriorityTaskQuadrant } from "@orelia/common";
 import type { IncomingTaskResponse, PriorityTaskResponse, UserPickerResponse } from "@orelia/common";
 import { SidePanel } from "@/components/ui/SidePanel";
 import { Button } from "@/components/ui/Button";
-import { CustomSelect } from "@/components/ui/CustomSelect";
-import { acceptPriorityTask, listIncomingPriorityTasks, redelegatePriorityTask } from "@/lib/api/priority-tasks";
+import { listIncomingPriorityTasks, redelegatePriorityTask } from "@/lib/api/priority-tasks";
 import { ApiError } from "@/lib/api/client";
 import { useAlert } from "@/components/providers/DialogProvider";
+import { useToast } from "@/components/providers/ToastProvider";
 import { t } from "@/lib/i18n";
+import { AcceptTaskDialog } from "./AcceptTaskDialog";
 import { DelegateTaskDialog } from "./DelegateTaskDialog";
-import { QUADRANT_ORDER } from "./types";
+import { TaskDetailDialog } from "./TaskDetailDialog";
 
-const QUADRANT_OPTIONS = QUADRANT_ORDER.map((quadrant) => ({
-  value: quadrant,
-  label: t(`priorityTracker.quadrants.${quadrant}.label`),
-}));
+const NOTES_PREVIEW_LENGTH = 80;
+
+function notesPreview(notes: string | null): string | null {
+  const trimmed = notes?.trim();
+  if (!trimmed) return null;
+  return trimmed.length > NOTES_PREVIEW_LENGTH ? `${trimmed.slice(0, NOTES_PREVIEW_LENGTH)}…` : trimmed;
+}
 
 interface IncomingPanelDialogProps {
   onClose: () => void;
@@ -30,12 +33,15 @@ interface IncomingPanelDialogProps {
 
 export function IncomingPanelDialog({ onClose, onAccepted, onCountChange }: IncomingPanelDialogProps) {
   const { showError } = useAlert();
+  const { showToast } = useToast();
   const [items, setItems] = useState<IncomingTaskResponse[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  // Per-item chosen quadrant for the accept action ("" until picked).
-  const [quadrantById, setQuadrantById] = useState<Record<string, PriorityTaskQuadrant>>({});
   const [redelegatingId, setRedelegatingId] = useState<string | null>(null);
+  // Story 2.9 -- "Add to board" now opens a quadrant-tile dialog rather than
+  // reading an inline dropdown, and "Open" reads the task read-only.
+  const [acceptingItem, setAcceptingItem] = useState<IncomingTaskResponse | null>(null);
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,18 +68,9 @@ export function IncomingPanelDialog({ onClose, onAccepted, onCountChange }: Inco
     });
   }
 
-  async function handleAccept(item: IncomingTaskResponse) {
-    const quadrant = quadrantById[item.id] ?? PriorityTaskQuadrant.Do;
-    setBusyId(item.id);
-    try {
-      const task = await acceptPriorityTask(item.id, { quadrant });
-      onAccepted(task);
-      removeItem(item.id);
-    } catch (err) {
-      showError(err instanceof ApiError ? err.message : t("priorityTracker.incoming.errors.acceptFailed"));
-    } finally {
-      setBusyId(null);
-    }
+  function handleAccepted(task: PriorityTaskResponse) {
+    onAccepted(task);
+    if (acceptingItem) removeItem(acceptingItem.id);
   }
 
   async function handleRedelegated(user: UserPickerResponse) {
@@ -83,6 +80,10 @@ export function IncomingPanelDialog({ onClose, onAccepted, onCountChange }: Inco
     try {
       await redelegatePriorityTask(id, { userId: user.id });
       removeItem(id);
+      // Story 2.11 -- toasted here because re-delegation is fully owned by
+      // this panel; accept is handed to the board via onAccepted, which
+      // toasts that one.
+      showToast({ message: t("priorityTracker.toast.redelegated", { name: user.displayName }) });
     } catch (err) {
       showError(err instanceof ApiError ? err.message : t("priorityTracker.incoming.errors.redelegateFailed"));
     } finally {
@@ -91,8 +92,19 @@ export function IncomingPanelDialog({ onClose, onAccepted, onCountChange }: Inco
     }
   }
 
+  const count = items?.length ?? 0;
+
   return (
-    <SidePanel title={t("priorityTracker.incoming.title")} onClose={onClose} width="440px">
+    <SidePanel
+      title={t("priorityTracker.incoming.title")}
+      subtitle={
+        count > 0
+          ? t("priorityTracker.incoming.waitingCount", { count: String(count) })
+          : t("priorityTracker.incoming.subtitle")
+      }
+      onClose={onClose}
+      width="440px"
+    >
       {loadError && <p className="mt-1.5 mb-3 text-[12.5px] text-[var(--color-danger)]">{loadError}</p>}
 
       {!items && !loadError && (
@@ -100,8 +112,11 @@ export function IncomingPanelDialog({ onClose, onAccepted, onCountChange }: Inco
       )}
 
       {items && items.length === 0 && (
-        <div className="flex flex-col items-center gap-1 py-8 text-center">
-          <p className="text-[13px] font-medium text-crm-text">{t("priorityTracker.incoming.emptyTitle")}</p>
+        <div className="flex flex-col items-center gap-1 py-12 text-center">
+          <span aria-hidden="true" className="mb-2 text-[34px] opacity-55">
+            🛰️
+          </span>
+          <p className="text-[13px] font-bold text-crm-text">{t("priorityTracker.incoming.emptyTitle")}</p>
           <p className="text-xs text-[var(--color-text-muted)]">{t("priorityTracker.incoming.emptyMessage")}</p>
         </div>
       )}
@@ -110,56 +125,70 @@ export function IncomingPanelDialog({ onClose, onAccepted, onCountChange }: Inco
         <div className="flex flex-col gap-3">
           {items.map((item) => {
             const isDelegated = item.kind === "delegated";
+            const preview = notesPreview(item.notes);
             return (
-              <div key={item.id} className="rounded-xl border border-[var(--color-border)] bg-white p-3.5">
-                <div className="mb-2 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-[13.5px] font-semibold text-crm-text">{item.title}</span>
-                      <span
-                        className={`inline-flex flex-shrink-0 items-center rounded-full px-2 py-[2px] text-[10.5px] font-semibold ${
-                          isDelegated ? "bg-crm-primary-tint text-crm-primary" : "bg-[var(--color-bg)] text-[var(--color-text-muted)]"
-                        }`}
-                      >
-                        {isDelegated ? t("priorityTracker.incoming.delegatedBadge") : t("priorityTracker.incoming.sharedBadge")}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">
-                      {t("priorityTracker.incoming.from", { name: item.fromName })}
-                    </p>
+              <div
+                key={item.id}
+                // Story 2.9 -- a 4px kind bar, amber for a delegation and blue
+                // for a share, so the two are separable at a glance before
+                // reading either badge or action set.
+                className={`rounded-xl border border-l-4 border-[var(--color-border)] bg-white p-3.5 ${
+                  isDelegated ? "border-l-pd-dg-acc" : "border-l-pd-de-acc"
+                }`}
+              >
+                <div className="mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-[13.5px] font-semibold text-crm-text">{item.title}</span>
+                    <span
+                      className={`inline-flex flex-shrink-0 items-center rounded-full px-2 py-[2px] text-[10.5px] font-semibold ${
+                        isDelegated
+                          ? "bg-pd-pill-track-bg text-pd-pill-track-fg"
+                          : "bg-pd-pill-shared-bg text-pd-pill-shared-fg"
+                      }`}
+                    >
+                      {isDelegated
+                        ? t("priorityTracker.incoming.delegatedBadge")
+                        : t("priorityTracker.incoming.sharedBadge")}
+                    </span>
                   </div>
+                  <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">
+                    {t("priorityTracker.incoming.from", { name: item.fromName })}
+                  </p>
+                  {preview && (
+                    <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+                      <span aria-hidden="true">📝 </span>
+                      {preview}
+                    </p>
+                  )}
                 </div>
 
-                {isDelegated ? (
-                  <div className="flex flex-wrap items-end gap-2.5">
-                    <div className="w-[150px]">
-                      <label className="mb-1 block text-[11.5px] font-semibold text-[var(--color-text-muted)]">
-                        {t("priorityTracker.incoming.placeInLabel")}
-                      </label>
-                      <CustomSelect
-                        fullWidth
-                        label=""
-                        value={quadrantById[item.id] ?? PriorityTaskQuadrant.Do}
-                        onChange={(val) =>
-                          setQuadrantById((current) => ({ ...current, [item.id]: val as PriorityTaskQuadrant }))
-                        }
-                        options={QUADRANT_OPTIONS}
-                      />
-                    </div>
-                    <Button type="button" onClick={() => handleAccept(item)} isLoading={busyId === item.id}>
-                      {t("priorityTracker.incoming.acceptButton")}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => setRedelegatingId(item.id)}
-                      disabled={busyId === item.id}
-                    >
-                      {t("priorityTracker.incoming.redelegateButton")}
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="text-[12px] text-[var(--color-text-muted)]">
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Story 2.9 -- "Add to board" and "Re-delegate" are
+                      delegation-only. A share is visibility, never ownership,
+                      so it deliberately gets neither (Stories 1.5/1.8) --
+                      this is the one place the prototype was NOT followed. */}
+                  {isDelegated && (
+                    <>
+                      <Button type="button" onClick={() => setAcceptingItem(item)} disabled={busyId === item.id}>
+                        {t("priorityTracker.incoming.acceptButton")}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => setRedelegatingId(item.id)}
+                        disabled={busyId === item.id}
+                      >
+                        {t("priorityTracker.incoming.redelegateButton")}
+                      </Button>
+                    </>
+                  )}
+                  <Button type="button" variant="secondary" onClick={() => setOpenTaskId(item.id)}>
+                    {t("priorityTracker.incoming.openButton")}
+                  </Button>
+                </div>
+
+                {!isDelegated && (
+                  <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">
                     {t("priorityTracker.incoming.sharedHint")}
                   </p>
                 )}
@@ -167,6 +196,28 @@ export function IncomingPanelDialog({ onClose, onAccepted, onCountChange }: Inco
             );
           })}
         </div>
+      )}
+
+      {acceptingItem && (
+        <AcceptTaskDialog
+          taskId={acceptingItem.id}
+          taskTitle={acceptingItem.title}
+          onClose={() => setAcceptingItem(null)}
+          onAccepted={handleAccepted}
+        />
+      )}
+
+      {/* Read-only: the viewer is either the pending delegate or a share
+          recipient, so canEdit is false and the dialog renders no controls.
+          The mutation callbacks are unreachable and stay no-ops. */}
+      {openTaskId && (
+        <TaskDetailDialog
+          taskId={openTaskId}
+          onClose={() => setOpenTaskId(null)}
+          onSaved={() => {}}
+          onDelegated={() => {}}
+          onArchived={() => {}}
+        />
       )}
 
       {redelegatingId && (

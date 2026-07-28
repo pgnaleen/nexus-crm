@@ -4,7 +4,7 @@ import {
   PriorityTaskHistoryEntry,
   PriorityTaskResponse,
 } from "@orelia/common";
-import { Body, Controller, Get, Logger, Param, ParseUUIDPipe, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Logger, Param, ParseUUIDPipe, Patch, Post } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { AcceptPriorityTaskDto } from "./dto/accept-priority-task.dto";
@@ -33,8 +33,13 @@ export class PriorityTasksController {
     this.logger.debug(`GET /priority-tasks called by ${user.sub}`);
     try {
       const tasks = await this.priorityTasksService.findAllForUser(user.sub);
+      // Story 2.3 -- one grouped query for every card's "Shared" pill,
+      // rather than letting toResponse fire one count per task.
+      const shareCounts = await this.priorityTasksService.countSharesByTaskIds(tasks.map((task) => task.id));
       this.logger.debug(`GET /priority-tasks returning ${tasks.length} row(s)`);
-      return tasks.map((task) => this.toResponse(task, user.sub));
+      return await Promise.all(
+        tasks.map((task) => this.toResponse(task, user.sub, undefined, shareCounts.get(task.id) ?? 0)),
+      );
     } catch (err) {
       this.logger.error(`GET /priority-tasks failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -50,7 +55,7 @@ export class PriorityTasksController {
     try {
       const task = await this.priorityTasksService.create(dto, user.sub);
       this.logger.debug(`POST /priority-tasks succeeded for task ${task.id}`);
-      return this.toResponse(task, user.sub);
+      return await this.toResponse(task, user.sub);
     } catch (err) {
       this.logger.error(`POST /priority-tasks failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -99,10 +104,52 @@ export class PriorityTasksController {
     this.logger.debug(`GET /priority-tasks/archived called by ${user.sub}`);
     try {
       const tasks = await this.priorityTasksService.findArchivedForUser(user.sub);
+      const shareCounts = await this.priorityTasksService.countSharesByTaskIds(tasks.map((task) => task.id));
+      // Story 2.10 -- the Archive row's "by {creator}" attribution. Resolved
+      // per distinct creator, not per row: an archive of 30 tasks you made
+      // yourself is one lookup, not 30.
+      const creatorIds = [...new Set(tasks.map((task) => task.createdBy).filter((id): id is string => Boolean(id)))];
+      this.logger.debug(`Resolving ${creatorIds.length} distinct creator name(s) for ${tasks.length} archived task(s)`);
+      const creatorNames = new Map(
+        await Promise.all(
+          creatorIds.map(
+            async (id) => [id, await this.priorityTasksService.getUserDisplayName(id)] as const,
+          ),
+        ),
+      );
       this.logger.debug(`GET /priority-tasks/archived returning ${tasks.length} row(s)`);
-      return tasks.map((task) => this.toResponse(task, user.sub));
+      return await Promise.all(
+        tasks.map((task) =>
+          this.toResponse(
+            task,
+            user.sub,
+            task.createdBy ? (creatorNames.get(task.createdBy) ?? null) : null,
+            shareCounts.get(task.id) ?? 0,
+          ),
+        ),
+      );
     } catch (err) {
       this.logger.error(`GET /priority-tasks/archived failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Story 2.10 -- permanently clear an archived task out of the Archive.
+  // Soft delete: the row keeps existing with deletedAt/deletedBy set, it just
+  // stops being returned anywhere. Only an archived task qualifies -- see the
+  // service method's own comment for why.
+  @Delete(":id")
+  async remove(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ success: true }> {
+    this.logger.debug(`DELETE /priority-tasks/${id} called by ${user.sub}`);
+    try {
+      await this.priorityTasksService.remove(id, user.sub);
+      this.logger.debug(`DELETE /priority-tasks/${id} succeeded`);
+      return { success: true };
+    } catch (err) {
+      this.logger.error(`DELETE /priority-tasks/${id} failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }
@@ -117,7 +164,7 @@ export class PriorityTasksController {
     try {
       const task = await this.priorityTasksService.archive(id, user.sub);
       this.logger.debug(`PATCH /priority-tasks/${id}/archive succeeded`);
-      return this.toResponse(task, user.sub);
+      return await this.toResponse(task, user.sub);
     } catch (err) {
       this.logger.error(`PATCH /priority-tasks/${id}/archive failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -134,7 +181,7 @@ export class PriorityTasksController {
     try {
       const task = await this.priorityTasksService.restore(id, user.sub);
       this.logger.debug(`PATCH /priority-tasks/${id}/restore succeeded`);
-      return this.toResponse(task, user.sub);
+      return await this.toResponse(task, user.sub);
     } catch (err) {
       this.logger.error(`PATCH /priority-tasks/${id}/restore failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -153,7 +200,7 @@ export class PriorityTasksController {
     try {
       const task = await this.priorityTasksService.accept(id, user.sub, dto);
       this.logger.debug(`POST /priority-tasks/${id}/accept succeeded`);
-      return this.toResponse(task, user.sub);
+      return await this.toResponse(task, user.sub);
     } catch (err) {
       this.logger.error(`POST /priority-tasks/${id}/accept failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -172,7 +219,7 @@ export class PriorityTasksController {
     try {
       const task = await this.priorityTasksService.redelegate(id, user.sub, dto);
       this.logger.debug(`POST /priority-tasks/${id}/redelegate succeeded`);
-      return this.toResponse(task, user.sub);
+      return await this.toResponse(task, user.sub);
     } catch (err) {
       this.logger.error(`POST /priority-tasks/${id}/redelegate failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -189,7 +236,7 @@ export class PriorityTasksController {
     try {
       const task = await this.priorityTasksService.delegate(id, user.sub, dto);
       this.logger.debug(`POST /priority-tasks/${id}/delegate succeeded`);
-      return this.toResponse(task, user.sub);
+      return await this.toResponse(task, user.sub);
     } catch (err) {
       this.logger.error(`POST /priority-tasks/${id}/delegate failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -206,7 +253,7 @@ export class PriorityTasksController {
       const task = await this.priorityTasksService.findOneForUser(id, user.sub);
       const creatorName = await this.priorityTasksService.getUserDisplayName(task.createdBy);
       this.logger.debug(`GET /priority-tasks/${id} succeeded`);
-      return this.toResponse(task, user.sub, creatorName);
+      return await this.toResponse(task, user.sub, creatorName);
     } catch (err) {
       this.logger.error(`GET /priority-tasks/${id} failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -224,7 +271,7 @@ export class PriorityTasksController {
       const task = await this.priorityTasksService.updateNotes(id, user.sub, dto);
       const creatorName = await this.priorityTasksService.getUserDisplayName(task.createdBy);
       this.logger.debug(`PATCH /priority-tasks/${id} succeeded`);
-      return this.toResponse(task, user.sub, creatorName);
+      return await this.toResponse(task, user.sub, creatorName);
     } catch (err) {
       this.logger.error(`PATCH /priority-tasks/${id} failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -257,7 +304,7 @@ export class PriorityTasksController {
     try {
       const task = await this.priorityTasksService.complete(id, user.sub);
       this.logger.debug(`PATCH /priority-tasks/${id}/complete succeeded`);
-      return this.toResponse(task, user.sub);
+      return await this.toResponse(task, user.sub);
     } catch (err) {
       this.logger.error(`PATCH /priority-tasks/${id}/complete failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -274,7 +321,7 @@ export class PriorityTasksController {
     try {
       const task = await this.priorityTasksService.updateProgress(id, user.sub, dto);
       this.logger.debug(`PATCH /priority-tasks/${id}/progress succeeded`);
-      return this.toResponse(task, user.sub);
+      return await this.toResponse(task, user.sub);
     } catch (err) {
       this.logger.error(`PATCH /priority-tasks/${id}/progress failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -293,7 +340,7 @@ export class PriorityTasksController {
     try {
       const task = await this.priorityTasksService.move(id, user.sub, dto);
       this.logger.debug(`PATCH /priority-tasks/${id}/move succeeded`);
-      return this.toResponse(task, user.sub);
+      return await this.toResponse(task, user.sub);
     } catch (err) {
       this.logger.error(`PATCH /priority-tasks/${id}/move failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -307,6 +354,10 @@ export class PriorityTasksController {
     // ["task"]) -- a tracker with no task would mean the FK's ON DELETE
     // CASCADE didn't fire, which should be impossible, but fail loudly
     // rather than silently rendering a blank card if it ever happens.
+    // The service now filters trackers whose task no longer resolves (Story
+    // 2.10 -- a soft-deleted task doesn't fire the FK's ON DELETE CASCADE),
+    // so this is unreachable in practice. Kept as a hard assertion rather
+    // than rendering a blank card if that filter ever regresses.
     if (!tracker.task) {
       throw new Error(`Delegation tracker ${tracker.id} has no linked task`);
     }
@@ -329,7 +380,19 @@ export class PriorityTasksController {
     };
   }
 
-  private toResponse(task: PriorityTask, viewerId: string, creatorName?: string | null): PriorityTaskResponse {
+  // Async because `shareCount` (Story 2.3) needs a lookup when the caller
+  // hasn't already batched it -- the list endpoints pass a pre-fetched count
+  // so N cards cost one query; every single-task endpoint lets it resolve
+  // one here rather than shipping a stale 0 that would drop the card's
+  // "Shared" pill right after an unrelated edit.
+  private async toResponse(
+    task: PriorityTask,
+    viewerId: string,
+    creatorName?: string | null,
+    shareCount?: number,
+  ): Promise<PriorityTaskResponse> {
+    const resolvedShareCount =
+      shareCount ?? (await this.priorityTasksService.countSharesForTask(task.id));
     return {
       id: task.id,
       title: task.title,
@@ -344,6 +407,17 @@ export class PriorityTasksController {
       // never moves ownerId, so a shared recipient must still see
       // "received" even though the task's real owner never changed).
       ownership: task.ownerId === viewerId ? "owned" : "received",
+      // Story 2.3 -- the orthogonal "did I make this, or did I inherit it via
+      // an accepted delegation" axis that `ownership` deliberately can't
+      // express. createdBy comes from AuditedTenantEntity and never changes.
+      isCreator: task.createdBy === viewerId,
+      // Story 2.4 -- the delegator keeps ownerId until the recipient accepts,
+      // so "am I the owner" is not the same question as "may I edit". A
+      // pending delegation makes the owner a read-only tracker of their own
+      // task; without this the delegator's tracking card would open with full
+      // edit controls on work they've already handed off.
+      canEdit: task.ownerId === viewerId && !task.delegatedToUserId,
+      shareCount: resolvedShareCount,
       createdAt: task.createdAt.toISOString(),
       ...(creatorName !== undefined ? { createdByName: creatorName } : {}),
     };

@@ -77,6 +77,18 @@ texture, a soft linear-gradient from `-gradient-start` through `--color-crm-shel
 `bg-crm-shell/30`). Sidebar nav-item hover state is a plain `white/10` overlay, not red — the
 written rule above only lists the *active* item as an approved red usage, not hover.
 
+**Approved exception — Priority Deck quadrant palettes.** The Priority Tracker's Eisenhower board
+(`frontend/src/app/[tenant]/(dashboard)/priority/`) carries its own sixteen `--color-pd-*` tokens in
+the same `@theme` block: four quadrants × `-soft`/`-fill`/`-acc`/`-word`. These are taken verbatim
+from the client's own `orel-tasks_2.html` prototype and **include blue** (`--color-pd-de-acc:
+#4f8cf6`, the DECIDE quadrant) — a deliberate, scoped exception to the "no blue anywhere" rule above,
+signed off by the client. The justification: four quadrants need four mutually distinguishable hues,
+and these are content-area fills inside one module, never app chrome. The exception does **not**
+extend beyond that board — buttons, focus rings, nav, and every other surface still follow the rules
+above, and no other module may introduce blue by citing this precedent. Documented so it stops being
+re-flagged as a violation on every review. (Epic 2 of
+`_bmad-output/planning-artifacts/epics-task-management.md`, Story 2.1.)
+
 **Single-source-of-truth rule:** never hardcode a raw hex or `rgba()` color value in a component
 for anything that represents one of the tokens above — reference the token instead, either as a
 plain Tailwind utility (`bg-crm-primary`, `hover:bg-crm-shell/30` for opacity variants) or, for
