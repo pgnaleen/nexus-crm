@@ -184,12 +184,15 @@ export function ViewDealDialog({
 
   return (
     <Dialog open title={deal.name} onClose={onClose} maxWidth="720px">
-      <div className="-mx-5 -mt-5 mb-5 flex flex-wrap border-b border-[var(--color-border)] px-5">
+      {/* Single row, never wrapping -- History used to drop onto its own second
+          row once all 8 tabs no longer fit the 720px dialog. Tabs keep their
+          natural width (shrink-0) and the strip scrolls horizontally instead. */}
+      <div className="-mx-5 -mt-5 mb-5 flex flex-nowrap gap-x-4 overflow-x-auto border-b border-[var(--color-border)] px-5">
         {TABS.map(([id, label]) => (
           <button
             key={id}
             type="button"
-            className={`mr-[22px] cursor-pointer border-0 border-b-2 bg-transparent px-1 py-3 text-[13.5px] font-semibold transition-colors duration-150 hover:text-[var(--color-text)] ${
+            className={`shrink-0 cursor-pointer whitespace-nowrap border-0 border-b-2 bg-transparent px-1 py-3 text-[13.5px] font-semibold transition-colors duration-150 hover:text-[var(--color-text)] ${
               activeTab === id
                 ? "border-b-[var(--color-crm-primary)] text-[var(--color-crm-primary)]"
                 : "border-b-transparent text-[var(--color-text-muted)]"

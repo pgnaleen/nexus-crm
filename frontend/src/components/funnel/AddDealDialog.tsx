@@ -856,12 +856,15 @@ export function AddDealDialog({
   return (
     <Dialog open title={isEdit ? deal?.name ?? "Edit Deal" : "Add New Deal"} onClose={onClose} maxWidth="720px">
       <form onSubmit={handleSubmit}>
-        <div className="-mx-5 -mt-5 mb-5 flex border-b border-[var(--color-border)] px-5">
+        {/* Single row, never wrapping or squashing -- mirrors ViewDealDialog's
+            tab strip. Tabs keep their natural width (shrink-0) and the strip
+            scrolls horizontally when all 8 no longer fit the 720px dialog. */}
+        <div className="-mx-5 -mt-5 mb-5 flex flex-nowrap gap-x-4 overflow-x-auto border-b border-[var(--color-border)] px-5">
           {tabDefs.map(([id, label]) => (
             <button
               key={id}
               type="button"
-              className={`mr-[22px] cursor-pointer border-0 border-b-2 bg-transparent px-1 py-3 text-[13.5px] font-semibold transition-colors duration-150 hover:text-[var(--color-text)] ${
+              className={`shrink-0 cursor-pointer whitespace-nowrap border-0 border-b-2 bg-transparent px-1 py-3 text-[13.5px] font-semibold transition-colors duration-150 hover:text-[var(--color-text)] ${
                 activeTab === id
                   ? "border-b-[var(--color-crm-primary)] text-[var(--color-crm-primary)]"
                   : "border-b-transparent text-[var(--color-text-muted)]"
