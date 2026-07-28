@@ -272,6 +272,30 @@
     }
   },
   "profile": {
+    "tabs": {
+      "employeeRecord": "Employee Record",
+      "certifications": "Certifications",
+      "account": "Account",
+      "security": "Security"
+    },
+    "header": {
+      "noEmployeeRecord": "This login isn't linked to an employee record yet, so there's nothing from HR to show. Ask HR to link your account if you expect one here."
+    },
+    "account": {
+      "hint": "Your login account. Contact an administrator to change your username, email, or roles.",
+      "displayName": "Display Name",
+      "username": "Username",
+      "loginEmail": "Login Email",
+      "status": "Status",
+      "roles": "Roles",
+      "tenant": "Tenant",
+      "lastLogin": "Last Login",
+      "noRoles": "None assigned",
+      "neverLoggedIn": "Not logged in yet"
+    },
+    "security": {
+      "hint": "Choose a password you don't use anywhere else. You'll stay signed in on this device after changing it."
+    },
     "employeeRecord": {
       "title": "My Employee Record",
       "hint": "What HR has on file for you — read-only. Contact HR to correct anything here."

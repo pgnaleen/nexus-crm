@@ -238,38 +238,10 @@ body {
   color: var(--color-text);
 }
 
-.profile-page {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  max-width: 640px;
-}
-
-.profile-page .content-card-title {
-  margin-bottom: 14px;
-}
-
-.profile-info-grid {
-  display: grid;
-  grid-template-columns: 160px 1fr;
-  row-gap: 12px;
-  margin: 0;
-}
-
-.profile-info-row {
-  display: contents;
-}
-
-.profile-info-row dt {
-  color: var(--color-text-muted);
-  font-size: 13.5px;
-}
-
-.profile-info-row dd {
-  margin: 0;
-  font-size: 13.5px;
-  color: var(--color-text);
-}
+/* .profile-page / .profile-info-grid / .profile-info-row lived here until the
+   My Profile page was rebuilt around tabs -- their only two consumers
+   (profile/page.tsx, ProfileView.tsx) now use Tailwind utilities, so the rules
+   were dead. Removed rather than left to rot. */
 
 .empty-state {
   display: flex;

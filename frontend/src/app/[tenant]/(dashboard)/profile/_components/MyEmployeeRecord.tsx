@@ -40,13 +40,9 @@ export function MyEmployeeRecord({ record }: { record: EmployeeDetailResponse })
         {t("profile.employeeRecord.hint")}
       </p>
 
-      {record.profilePhotoDisplayUrl && (
-        <img
-          src={record.profilePhotoDisplayUrl}
-          alt=""
-          className="mb-4 h-16 w-16 rounded-full border border-[var(--color-border)] object-cover"
-        />
-      )}
+      {/* The profile photo used to render here. It moved to ProfileHeader so
+          it stays visible on every tab instead of vanishing when you leave
+          this one -- and so the same image isn't drawn twice on one page. */}
 
       <div className="grid grid-cols-2 gap-x-5 gap-y-0">
         <SectionHeading>{t("employees.dialog.tabs.personal")}</SectionHeading>

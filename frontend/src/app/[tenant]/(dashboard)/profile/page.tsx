@@ -3,6 +3,8 @@ import { getServerSession } from "@/lib/auth/session";
 import { fetchMyEmployeeRecord } from "@/lib/employees/server";
 import { fetchMyCertifications } from "@/lib/certifications/server";
 import { t } from "@/lib/i18n";
+import { ProfileHeader } from "./_components/ProfileHeader";
+import { ProfileTabs, type ProfileTab } from "./_components/ProfileTabs";
 import { ProfileView } from "./_components/ProfileView";
 import { ChangePasswordForm } from "./_components/ChangePasswordForm";
 import { MyEmployeeRecord } from "./_components/MyEmployeeRecord";
@@ -22,31 +24,51 @@ export default async function ProfilePage({ params }: { params: { tenant: string
   // section is gated on the same linked-employee condition.
   const certifications = employeeRecord ? await fetchMyCertifications() : null;
 
+  // Panels are rendered here, on the server, and handed to the client tab
+  // shell as finished trees -- so MyEmployeeRecord/ProfileView stay Server
+  // Components even though tab switching is client state.
+  //
+  // HR record first when there is one: it's the tab people actually come for.
+  // Unlinked accounts start on Account instead, since the first two tabs
+  // simply don't exist for them.
+  const tabs: ProfileTab[] = [
+    ...(employeeRecord
+      ? [
+          {
+            id: "employeeRecord",
+            label: t("profile.tabs.employeeRecord"),
+            panel: <MyEmployeeRecord record={employeeRecord} />,
+          },
+          {
+            id: "certifications",
+            label: t("profile.tabs.certifications"),
+            panel: <MyCertifications initial={certifications ?? []} />,
+          },
+        ]
+      : []),
+    {
+      id: "account",
+      label: t("profile.tabs.account"),
+      panel: <ProfileView session={session} />,
+    },
+    {
+      id: "security",
+      label: t("profile.tabs.security"),
+      panel: (
+        <div>
+          <p className="m-0 mb-4 text-[12.5px] text-[var(--color-text-muted)]">
+            {t("profile.security.hint")}
+          </p>
+          <ChangePasswordForm />
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div className="profile-page">
-      <div className="content-card">
-        <h2 className="content-card-title">My Profile</h2>
-        <ProfileView session={session} />
-      </div>
-
-      {employeeRecord && (
-        <div className="content-card">
-          <h2 className="content-card-title">{t("profile.employeeRecord.title")}</h2>
-          <MyEmployeeRecord record={employeeRecord} />
-        </div>
-      )}
-
-      {employeeRecord && (
-        <div className="content-card">
-          <h2 className="content-card-title">{t("profile.certifications.title")}</h2>
-          <MyCertifications initial={certifications ?? []} />
-        </div>
-      )}
-
-      <div className="content-card">
-        <h2 className="content-card-title">Change Password</h2>
-        <ChangePasswordForm />
-      </div>
+    <div className="mx-auto flex w-full max-w-[900px] flex-col gap-5">
+      <ProfileHeader session={session} record={employeeRecord} />
+      <ProfileTabs tabs={tabs} />
     </div>
   );
 }
