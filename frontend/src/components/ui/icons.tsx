@@ -235,3 +235,45 @@ export function ExternalLinkIcon({ size = 16 }: IconProps) {
     </svg>
   );
 }
+
+export function LegalIcon({ size = 18 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="3" x2="12" y2="21" />
+      <line x1="5" y1="7" x2="19" y2="7" />
+      <path d="M5 7l-3 6a3 3 0 0 0 6 0l-3-6Z" />
+      <path d="M19 7l-3 6a3 3 0 0 0 6 0l-3-6Z" />
+      <line x1="8" y1="21" x2="16" y2="21" />
+    </svg>
+  );
+}
+
+export function FinanceIcon({ size = 18 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="2" x2="12" y2="22" />
+      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+    </svg>
+  );
+}
+
+export function DealRegistrationIcon({ size = 18 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+      <polyline points="14 2 14 8 20 8" />
+      <polyline points="8.5 14 10.5 16 15 11" />
+    </svg>
+  );
+}
+
+export function LeadsIcon({ size = 18 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="8" r="4" />
+      <path d="M2 21c0-4.4 3.1-8 7-8s7 3.6 7 8" />
+      <line x1="19" y1="8" x2="19" y2="14" />
+      <line x1="16" y1="11" x2="22" y2="11" />
+    </svg>
+  );
+}

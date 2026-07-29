@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NexusLogo } from "@/components/brand/NexusLogo";
-import { ChevronDownIcon, ChevronRightIcon, DashboardIcon, FunnelIcon, PriorityIcon, SettingsIcon, SlidersIcon, UsersGroupIcon, UserIcon, ActivityIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, ChevronRightIcon, DashboardIcon, DealRegistrationIcon, FinanceIcon, FunnelIcon, LeadsIcon, LegalIcon, PriorityIcon, SettingsIcon, SlidersIcon, UsersGroupIcon, UserIcon, ActivityIcon } from "@/components/ui/icons";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { PERMISSIONS } from "@orelia/common";
 import type { RelationshipTypeResponse, MainStageResponse } from "@orelia/common";
@@ -153,6 +153,22 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
   const funnelHref = `/${tenantSlug}/funnel`;
   const isFunnelActive = pathname === funnelHref;
 
+  // Placeholder root links -- pages exist (auth-only, same as Priority
+  // Tracker) but render "Coming Soon" until each section's real
+  // functionality is built. No RBAC permission exists for any of these
+  // yet, so -- also like Priority Tracker -- there's nothing to gate on.
+  const leadsHref = `/${tenantSlug}/leads`;
+  const isLeadsActive = pathname === leadsHref;
+
+  const dealRegistrationHref = `/${tenantSlug}/deal-registration`;
+  const isDealRegistrationActive = pathname === dealRegistrationHref;
+
+  const legalHref = `/${tenantSlug}/legal`;
+  const isLegalActive = pathname === legalHref;
+
+  const financeHref = `/${tenantSlug}/finance`;
+  const isFinanceActive = pathname === financeHref;
+
   const hrHref = `/${tenantSlug}/employees`;
   const isHrActive = pathname === hrHref;
 
@@ -236,6 +252,17 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
           {!collapsed && "Priority Tracker"}
         </Link>
 
+        {/* LEADS ROOT LINK (placeholder -- see const comment above) */}
+        <Link
+          href={leadsHref}
+          className={`${linkClasses(isLeadsActive)} ${collapsed ? "justify-center" : ""}`}
+          onClick={() => handleLinkClick(isLeadsActive)}
+          title={collapsed ? "Leads" : undefined}
+        >
+          <LeadsIcon size={17} />
+          {!collapsed && "Leads"}
+        </Link>
+
         {/* FUNNEL ROOT LINK */}
         {canSeeDeals && (
           <Link
@@ -308,6 +335,17 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
             )}
           </>
         )}
+
+        {/* DEAL REGISTRATION ROOT LINK (placeholder -- see const comment above) */}
+        <Link
+          href={dealRegistrationHref}
+          className={`${linkClasses(isDealRegistrationActive)} ${collapsed ? "justify-center" : ""}`}
+          onClick={() => handleLinkClick(isDealRegistrationActive)}
+          title={collapsed ? "Deal Registration" : undefined}
+        >
+          <DealRegistrationIcon size={17} />
+          {!collapsed && "Deal Registration"}
+        </Link>
 
         {/* RELATIONSHIPS GROUP */}
         <button
@@ -463,6 +501,29 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
             )}
           </>
         )}
+
+        {/* LEGAL ROOT LINK (placeholder -- see const comment above) */}
+        <Link
+          href={legalHref}
+          className={`${linkClasses(isLegalActive)} ${collapsed ? "justify-center" : ""}`}
+          onClick={() => handleLinkClick(isLegalActive)}
+          title={collapsed ? "Legal" : undefined}
+        >
+          <LegalIcon size={17} />
+          {!collapsed && "Legal"}
+        </Link>
+
+        {/* FINANCE ROOT LINK (placeholder -- see const comment above) */}
+        <Link
+          href={financeHref}
+          className={`${linkClasses(isFinanceActive)} ${collapsed ? "justify-center" : ""}`}
+          onClick={() => handleLinkClick(isFinanceActive)}
+          title={collapsed ? "Finance" : undefined}
+        >
+          <FinanceIcon size={17} />
+          {!collapsed && "Finance"}
+        </Link>
+
         {/* CRM CONFIGURATION GROUP */}
         {visibleConfigItems.length > 0 && (
           <button
