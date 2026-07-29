@@ -12,7 +12,12 @@ import { t } from "@/lib/i18n";
 // verified claims ever surface here (the backend filters); expired certs
 // are shown with their expiry date rather than hidden, so the searcher
 // judges relevance themselves.
-export function CertifiedSearchWidget({ canView }: { canView: boolean }) {
+//
+// This is the "Certified Employees" tab of the Certifications page --
+// access gating happens one level up, in page.tsx, by only including this
+// tab when the caller holds EMPLOYEES_VIEW (mirrors how Profile's own tabs
+// are conditionally included rather than each panel re-checking access).
+export function CertifiedSearchWidget() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CertifiedEmployeeResponse[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -35,24 +40,8 @@ export function CertifiedSearchWidget({ canView }: { canView: boolean }) {
     }
   }
 
-  if (!canView) {
-    return (
-      <div className="content-card">
-        <div className="empty-state">
-          <p className="empty-state-title">{t("certifiedSearch.title")}</p>
-          <p className="empty-state-message">{t("certifiedSearch.noAccess")}</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col">
-      <div className="mb-6 flex flex-col">
-        <h1 className="m-0 mb-0.5 text-[26px] font-bold text-crm-text">{t("certifiedSearch.title")}</h1>
-        <p className="m-0 text-[13.5px] text-[var(--color-text-muted)]">{t("certifiedSearch.subtitle")}</p>
-      </div>
-
+    <div>
       <form
         onSubmit={handleSearch}
         className="mb-6 flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[#f8fafc] px-4 py-3"
@@ -76,19 +65,18 @@ export function CertifiedSearchWidget({ canView }: { canView: boolean }) {
 
       {error && <p className="mb-4 text-[13px] text-[var(--color-danger)]">{error}</p>}
 
-      <div className="content-card">
-        {results === null ? (
-          <div className="empty-state">
-            <p className="empty-state-title">{t("certifiedSearch.promptTitle")}</p>
-            <p className="empty-state-message">{t("certifiedSearch.promptMessage")}</p>
-          </div>
-        ) : results.length === 0 ? (
-          <div className="empty-state">
-            <p className="empty-state-title">{t("certifiedSearch.noMatchTitle")}</p>
-            <p className="empty-state-message">{t("certifiedSearch.noMatchMessage")}</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
+      {results === null ? (
+        <div className="empty-state">
+          <p className="empty-state-title">{t("certifiedSearch.promptTitle")}</p>
+          <p className="empty-state-message">{t("certifiedSearch.promptMessage")}</p>
+        </div>
+      ) : results.length === 0 ? (
+        <div className="empty-state">
+          <p className="empty-state-title">{t("certifiedSearch.noMatchTitle")}</p>
+          <p className="empty-state-message">{t("certifiedSearch.noMatchMessage")}</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
           <table className="w-full border-collapse text-[13px]">
             <thead>
               <tr>
@@ -128,9 +116,8 @@ export function CertifiedSearchWidget({ canView }: { canView: boolean }) {
               ))}
             </tbody>
           </table>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

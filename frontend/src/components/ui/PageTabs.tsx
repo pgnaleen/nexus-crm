@@ -2,32 +2,35 @@
 
 import { useState, type ReactNode } from "react";
 
-export interface ProfileTab {
+export interface PageTab {
   id: string;
   label: string;
   panel: ReactNode;
 }
 
 /**
- * Tab shell for My Profile — the first page-level tab strip in the app (every
- * other one lives inside a dialog). Visual language matches the deal dialogs'
- * strip on purpose, one size up for page context.
+ * Tab shell for page-level tab strips (as opposed to the dialog tab strip
+ * in CLAUDE.md's multi-tab dialog rule -- that's a separate pattern, for a
+ * separate context). Originally built for My Profile; Employees >
+ * Certifications is the second consumer.
  *
  * `panel` is a ReactNode rather than a component reference so the server can
  * render each panel and hand the finished tree down. That keeps
- * MyEmployeeRecord and ProfileHeader as Server Components even though the tab
- * state itself has to be client-side.
+ * Server Component panels (or "use client" ones with their own state, like
+ * Profile's MyCertifications) working identically -- the tab shell only
+ * needs to own which one is currently visible.
  *
  * Unlike the dialog rule in CLAUDE.md, panels are deliberately NOT forced to a
  * fixed height: a dialog must not resize under the cursor, but a page that
  * grows and shrinks with its content is normal and avoids a big dead gap
  * under the short tabs.
  */
-export function ProfileTabs({ tabs }: { tabs: ProfileTab[] }) {
+export function PageTabs({ tabs }: { tabs: PageTab[] }) {
   const [activeId, setActiveId] = useState(tabs[0]?.id ?? "");
 
-  // Falls back to the first tab if the active one disappears (e.g. an account
-  // that loses its linked employee record between renders).
+  // Falls back to the first tab if the active one disappears (e.g. a
+  // permission or linked-record condition changes which tabs exist between
+  // renders).
   const active = tabs.find((tab) => tab.id === activeId) ?? tabs[0];
 
   return (

@@ -175,11 +175,11 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
   const orgChartHref = `/${tenantSlug}/employees/org-chart`;
   const isOrgChartActive = pathname === orgChartHref;
 
-  const certReviewHref = `/${tenantSlug}/employees/certifications`;
-  const isCertReviewActive = pathname === certReviewHref;
-
-  const certifiedHref = `/${tenantSlug}/employees/certified`;
-  const isCertifiedActive = pathname === certifiedHref;
+  // Certified Employees + Certification Review used to be two separate sub-
+  // links; now one page with tabs (see employees/certifications/page.tsx),
+  // so one sidebar link covering both permissions.
+  const certificationsHref = `/${tenantSlug}/employees/certifications`;
+  const isCertificationsActive = pathname === certificationsHref;
 
   const canSeeDeals = hasAnyPermissionForPrefix(permissions, "deals");
   const canSeeEmployees = hasAnyPermissionForPrefix(permissions, "employees");
@@ -438,22 +438,13 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
                 >
                   Organization Chart
                 </Link>
-                {canViewEmployees && (
+                {(canViewEmployees || canReviewCertifications) && (
                   <Link
-                    href={certifiedHref}
-                    className={linkClasses(isCertifiedActive, true)}
-                    onClick={() => handleLinkClick(isCertifiedActive)}
+                    href={certificationsHref}
+                    className={linkClasses(isCertificationsActive, true)}
+                    onClick={() => handleLinkClick(isCertificationsActive)}
                   >
-                    Certified Employees
-                  </Link>
-                )}
-                {canReviewCertifications && (
-                  <Link
-                    href={certReviewHref}
-                    className={linkClasses(isCertReviewActive, true)}
-                    onClick={() => handleLinkClick(isCertReviewActive)}
-                  >
-                    Certification Review
+                    Certifications
                   </Link>
                 )}
               </div>
@@ -477,24 +468,14 @@ export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages
                 >
                   {abbreviateLabel("Organization Chart")}
                 </Link>
-                {canViewEmployees && (
+                {(canViewEmployees || canReviewCertifications) && (
                   <Link
-                    href={certifiedHref}
-                    className={badgeClasses(isCertifiedActive)}
-                    onClick={() => handleLinkClick(isCertifiedActive)}
-                    title="Certified Employees"
+                    href={certificationsHref}
+                    className={badgeClasses(isCertificationsActive)}
+                    onClick={() => handleLinkClick(isCertificationsActive)}
+                    title="Certifications"
                   >
-                    {abbreviateLabel("Certified Employees")}
-                  </Link>
-                )}
-                {canReviewCertifications && (
-                  <Link
-                    href={certReviewHref}
-                    className={badgeClasses(isCertReviewActive)}
-                    onClick={() => handleLinkClick(isCertReviewActive)}
-                    title="Certification Review"
-                  >
-                    {abbreviateLabel("Certification Review")}
+                    {abbreviateLabel("Certifications")}
                   </Link>
                 )}
               </div>

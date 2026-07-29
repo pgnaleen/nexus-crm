@@ -11,11 +11,13 @@ import { t } from "@/lib/i18n";
 import { RejectCertificationDialog } from "./RejectCertificationDialog";
 
 interface CertificationReviewWidgetProps {
-  canReview: boolean;
   initial: CertificationReviewResponse[];
 }
 
-export function CertificationReviewWidget({ canReview, initial }: CertificationReviewWidgetProps) {
+// This is the "Pending Review" tab of the Certifications page -- access
+// gating happens one level up, in page.tsx, by only including this tab when
+// the caller holds EMPLOYEES_VERIFY_CERTIFICATIONS.
+export function CertificationReviewWidget({ initial }: CertificationReviewWidgetProps) {
   const { showError, showSuccess } = useAlert();
   const [pending, setPending] = useState(initial);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -49,109 +51,91 @@ export function CertificationReviewWidget({ canReview, initial }: CertificationR
     }
   }
 
-  if (!canReview) {
-    return (
-      <div className="content-card">
-        <div className="empty-state">
-          <p className="empty-state-title">{t("certificationReview.title")}</p>
-          <p className="empty-state-message">{t("certificationReview.noAccess")}</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col">
-      <div className="mb-6 flex flex-col">
-        <h1 className="m-0 mb-0.5 text-[26px] font-bold text-crm-text">{t("certificationReview.title")}</h1>
-        <p className="m-0 text-[13.5px] text-[var(--color-text-muted)]">{t("certificationReview.subtitle")}</p>
-      </div>
-
-      <div className="content-card">
-        {pending.length === 0 ? (
-          <div className="empty-state">
-            <p className="empty-state-title">{t("certificationReview.emptyTitle")}</p>
-            <p className="empty-state-message">{t("certificationReview.emptyMessage")}</p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {pending.map((certification) => {
-              const hasEvidence = Boolean(certification.evidenceFileUrl || certification.evidenceLink);
-              return (
-                <div key={certification.id} className="rounded-xl border border-[var(--color-border)] bg-white p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="text-[14px] font-semibold text-crm-text">{certification.name}</div>
-                      <div className="mt-0.5 text-[12.5px] text-[var(--color-text-muted)]">
-                        {t("certificationReview.submittedBy")}:{" "}
-                        <span className="font-medium text-crm-text">{certification.employeeName}</span>
-                      </div>
-                      <div className="mt-0.5 text-[12.5px] text-[var(--color-text-muted)]">
-                        {certification.issuingOrganization}
-                        {certification.credentialId && ` · ${certification.credentialId}`}
-                      </div>
-                      <div className="mt-1 text-[12px] text-[var(--color-text-muted)]">
-                        {t("certificationReview.issued")}: {certification.issueDate}
-                        {certification.expiryDate &&
-                          ` · ${t("certificationReview.expires")}: ${certification.expiryDate}`}
-                      </div>
-                      <div className="mt-1.5 flex items-center gap-3">
-                        {certification.evidenceFileDisplayUrl && (
-                          <a
-                            href={certification.evidenceFileDisplayUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-[12.5px] text-crm-primary underline"
-                          >
-                            <FileIcon size={13} /> {t("certificationReview.viewCertificate")}
-                          </a>
-                        )}
-                        {certification.evidenceLink && (
-                          <a
-                            href={certification.evidenceLink}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-[12.5px] text-crm-primary underline"
-                          >
-                            <ExternalLinkIcon size={13} /> {t("certificationReview.verificationLink")}
-                          </a>
-                        )}
-                        {!hasEvidence && (
-                          <span className="text-[12px] font-medium text-[#c0392b]">
-                            {t("certificationReview.noEvidence")}
-                          </span>
-                        )}
-                      </div>
+    <div>
+      {pending.length === 0 ? (
+        <div className="empty-state">
+          <p className="empty-state-title">{t("certificationReview.emptyTitle")}</p>
+          <p className="empty-state-message">{t("certificationReview.emptyMessage")}</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {pending.map((certification) => {
+            const hasEvidence = Boolean(certification.evidenceFileUrl || certification.evidenceLink);
+            return (
+              <div key={certification.id} className="rounded-xl border border-[var(--color-border)] bg-white p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="text-[14px] font-semibold text-crm-text">{certification.name}</div>
+                    <div className="mt-0.5 text-[12.5px] text-[var(--color-text-muted)]">
+                      {t("certificationReview.submittedBy")}:{" "}
+                      <span className="font-medium text-crm-text">{certification.employeeName}</span>
                     </div>
-                    <div className="flex shrink-0 flex-col gap-2">
-                      {/* AC: a claim with no evidence can be rejected but not
-                          verified -- the Verify button is disabled and the
-                          reason shown above. The backend enforces this too. */}
-                      <Button
-                        type="button"
-                        onClick={() => handleVerify(certification)}
-                        isLoading={busyId === certification.id}
-                        disabled={!hasEvidence || busyId === certification.id}
-                      >
-                        {t("certificationReview.verifyButton")}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        style={{ color: "#c0392b", borderColor: "#c0392b" }}
-                        onClick={() => setRejecting(certification)}
-                        disabled={busyId === certification.id}
-                      >
-                        {t("certificationReview.rejectButton")}
-                      </Button>
+                    <div className="mt-0.5 text-[12.5px] text-[var(--color-text-muted)]">
+                      {certification.issuingOrganization}
+                      {certification.credentialId && ` · ${certification.credentialId}`}
+                    </div>
+                    <div className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+                      {t("certificationReview.issued")}: {certification.issueDate}
+                      {certification.expiryDate &&
+                        ` · ${t("certificationReview.expires")}: ${certification.expiryDate}`}
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-3">
+                      {certification.evidenceFileDisplayUrl && (
+                        <a
+                          href={certification.evidenceFileDisplayUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-[12.5px] text-crm-primary underline"
+                        >
+                          <FileIcon size={13} /> {t("certificationReview.viewCertificate")}
+                        </a>
+                      )}
+                      {certification.evidenceLink && (
+                        <a
+                          href={certification.evidenceLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-[12.5px] text-crm-primary underline"
+                        >
+                          <ExternalLinkIcon size={13} /> {t("certificationReview.verificationLink")}
+                        </a>
+                      )}
+                      {!hasEvidence && (
+                        <span className="text-[12px] font-medium text-[#c0392b]">
+                          {t("certificationReview.noEvidence")}
+                        </span>
+                      )}
                     </div>
                   </div>
+                  <div className="flex shrink-0 flex-col gap-2">
+                    {/* AC: a claim with no evidence can be rejected but not
+                        verified -- the Verify button is disabled and the
+                        reason shown above. The backend enforces this too. */}
+                    <Button
+                      type="button"
+                      onClick={() => handleVerify(certification)}
+                      isLoading={busyId === certification.id}
+                      disabled={!hasEvidence || busyId === certification.id}
+                    >
+                      {t("certificationReview.verifyButton")}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      style={{ color: "#c0392b", borderColor: "#c0392b" }}
+                      onClick={() => setRejecting(certification)}
+                      disabled={busyId === certification.id}
+                    >
+                      {t("certificationReview.rejectButton")}
+                    </Button>
+                  </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {rejecting && (
         <RejectCertificationDialog

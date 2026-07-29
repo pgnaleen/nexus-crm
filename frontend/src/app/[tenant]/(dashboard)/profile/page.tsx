@@ -3,8 +3,8 @@ import { getServerSession } from "@/lib/auth/session";
 import { fetchMyEmployeeRecord } from "@/lib/employees/server";
 import { fetchMyCertifications } from "@/lib/certifications/server";
 import { t } from "@/lib/i18n";
+import { PageTabs, type PageTab } from "@/components/ui/PageTabs";
 import { ProfileHeader } from "./_components/ProfileHeader";
-import { ProfileTabs, type ProfileTab } from "./_components/ProfileTabs";
 import { ProfileView } from "./_components/ProfileView";
 import { ChangePasswordForm } from "./_components/ChangePasswordForm";
 import { MyEmployeeRecord } from "./_components/MyEmployeeRecord";
@@ -31,7 +31,7 @@ export default async function ProfilePage({ params }: { params: { tenant: string
   // HR record first when there is one: it's the tab people actually come for.
   // Unlinked accounts start on Account instead, since the first two tabs
   // simply don't exist for them.
-  const tabs: ProfileTab[] = [
+  const tabs: PageTab[] = [
     ...(employeeRecord
       ? [
           {
@@ -68,7 +68,7 @@ export default async function ProfilePage({ params }: { params: { tenant: string
   return (
     <div className="mx-auto flex w-full max-w-[900px] flex-col gap-5">
       <ProfileHeader session={session} record={employeeRecord} />
-      <ProfileTabs tabs={tabs} />
+      <PageTabs tabs={tabs} />
     </div>
   );
 }
