@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { useRouter } from "next/navigation";
 import { PERMISSIONS } from "@orelia/common";
 import type { DepartmentPickerResponse, OrgChartEmployeeResponse, OrgChartStructureChange } from "@orelia/common";
 import {
@@ -26,6 +27,9 @@ import { ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/Button";
 import { useAlert, useConfirm } from "@/components/providers/DialogProvider";
 import { t } from "@/lib/i18n";
+import { ChevronDownIcon, ChevronRightIcon, PlusIcon } from "@/components/ui/icons";
+import { EmployeeFormDialog } from "@/app/[tenant]/(dashboard)/employees/_components/EmployeeFormDialog";
+import { DepartmentFormDialog } from "@/app/[tenant]/(dashboard)/admin/departments/_components/DepartmentFormDialog";
 
 // Stories 1.7 + 1.8 -- the Organization Chart. View mode is read-only; edit
 // mode ("Edit Chart", EMPLOYEES_UPDATE only) is a playground: drag employees
@@ -206,12 +210,41 @@ function OrgChartInner({ companyName, employees: initialEmployees, departments, 
 
   const canView = permissions.includes(PERMISSIONS.EMPLOYEES_VIEW);
   const canUpdate = permissions.includes(PERMISSIONS.EMPLOYEES_UPDATE);
+  const canCreateEmployee = permissions.includes(PERMISSIONS.EMPLOYEES_CREATE);
+  const canCreateDepartment = permissions.includes(PERMISSIONS.DEPARTMENT_CREATE);
+  const canViewSensitive = permissions.includes(PERMISSIONS.EMPLOYEES_VIEW_SENSITIVE);
+  const canCreateLogin = permissions.includes(PERMISSIONS.USERS_CREATE);
+  const router = useRouter();
 
   // Last-saved baseline -- what view mode shows and what Cancel reverts to.
   const [employees, setEmployees] = useState(initialEmployees);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
+  const [isAddDepartmentOpen, setIsAddDepartmentOpen] = useState(false);
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
+  const addMenuRef = useRef<HTMLDivElement>(null);
+
+  // Resync the baseline after router.refresh() delivers freshly created data
+  // (see the "Add" toolbar menu below) -- a useState initializer only runs
+  // once, so a prop change alone wouldn't otherwise reach this local
+  // baseline.
+  useEffect(() => {
+    setEmployees(initialEmployees);
+  }, [initialEmployees]);
+
+  // Same click-outside-to-close pattern as AccountMenu.tsx.
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (addMenuRef.current && !addMenuRef.current.contains(event.target as globalThis.Node)) {
+        setIsAddMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const colorForEmployee = useMemo(() => {
     const departmentIds = Array.from(
@@ -566,6 +599,45 @@ function OrgChartInner({ companyName, employees: initialEmployees, departments, 
           </p>
         </div>
         <div className="flex gap-2.5">
+          {!isEditMode && (canCreateEmployee || canCreateDepartment) && (
+            <div ref={addMenuRef} className="relative">
+              <Button type="button" variant="secondary" onClick={() => setIsAddMenuOpen((open) => !open)}>
+                <span className="flex items-center gap-1.5">
+                  <PlusIcon size={13} />
+                  {t("employees.orgChart.addButton")}
+                  <ChevronDownIcon size={11} />
+                </span>
+              </Button>
+              {isAddMenuOpen && (
+                <div className="absolute right-0 top-[calc(100%+8px)] z-20 min-w-[190px] rounded-[10px] border border-[var(--color-border)] bg-white p-1.5 shadow-[0_8px_24px_rgba(16,24,40,0.14)]">
+                  {canCreateEmployee && (
+                    <button
+                      type="button"
+                      className="block w-full rounded-md px-2.5 py-2 text-left text-[13px] text-crm-text hover:bg-[#f5f6fa]"
+                      onClick={() => {
+                        setIsAddMenuOpen(false);
+                        setIsAddEmployeeOpen(true);
+                      }}
+                    >
+                      {t("employees.orgChart.addEmployeeButton")}
+                    </button>
+                  )}
+                  {canCreateDepartment && (
+                    <button
+                      type="button"
+                      className="block w-full rounded-md px-2.5 py-2 text-left text-[13px] text-crm-text hover:bg-[#f5f6fa]"
+                      onClick={() => {
+                        setIsAddMenuOpen(false);
+                        setIsAddDepartmentOpen(true);
+                      }}
+                    >
+                      {t("employees.orgChart.addDepartmentButton")}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <Button type="button" variant="secondary" onClick={handleExport} isLoading={isExporting}>
             {t("employees.orgChart.exportButton")}
           </Button>
@@ -638,7 +710,37 @@ function OrgChartInner({ companyName, employees: initialEmployees, departments, 
         </div>
 
         {/* ── Side panel: unplaced employees (+ anchors in edit mode) ── */}
-        <div className="flex w-[280px] shrink-0 flex-col gap-5 self-start">
+        <div
+          className={`flex shrink-0 flex-col gap-3 self-start transition-[width] duration-200 ${
+            isPanelCollapsed ? "w-10" : "w-[280px] gap-5"
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => setIsPanelCollapsed((collapsed) => !collapsed)}
+            aria-label={
+              isPanelCollapsed
+                ? t("employees.orgChart.expandPanelAriaLabel")
+                : t("employees.orgChart.collapsePanelAriaLabel")
+            }
+            title={
+              isPanelCollapsed
+                ? t("employees.orgChart.expandPanelAriaLabel")
+                : t("employees.orgChart.collapsePanelAriaLabel")
+            }
+            className="flex h-7 w-7 items-center justify-center self-end rounded-md border border-[var(--color-border)] bg-white text-[var(--color-text-muted)] hover:bg-[#f5f6fa]"
+          >
+            <span className={isPanelCollapsed ? "flex rotate-180 transition-transform duration-150" : "flex transition-transform duration-150"}>
+              <ChevronRightIcon size={14} />
+            </span>
+          </button>
+          {isPanelCollapsed && unplaced.length > 0 && (
+            <div className="flex h-6 w-6 items-center justify-center self-end rounded-full bg-[#f1f5f9] text-[11px] font-semibold text-[var(--color-text-muted)]">
+              {unplaced.length}
+            </div>
+          )}
+          {!isPanelCollapsed && (
+          <>
           <div className="content-card">
             <h2 className="m-0 mb-1 text-[15px] font-bold text-crm-text">
               {t("employees.orgChart.unplacedTitle")}
@@ -706,8 +808,33 @@ function OrgChartInner({ companyName, employees: initialEmployees, departments, 
               </div>
             </div>
           )}
+          </>
+          )}
         </div>
       </div>
+
+      {isAddEmployeeOpen && (
+        <EmployeeFormDialog
+          departments={departments}
+          canViewSensitive={canViewSensitive}
+          canCreateLogin={canCreateLogin}
+          onClose={() => setIsAddEmployeeOpen(false)}
+          onSaved={() => {
+            setIsAddEmployeeOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
+      {isAddDepartmentOpen && (
+        <DepartmentFormDialog
+          mode="create"
+          onClose={() => setIsAddDepartmentOpen(false)}
+          onSaved={() => {
+            setIsAddDepartmentOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

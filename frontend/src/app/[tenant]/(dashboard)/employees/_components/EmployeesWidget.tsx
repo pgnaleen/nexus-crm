@@ -56,6 +56,7 @@ export function EmployeesWidget({ employees: initialEmployees, permissions, depa
   const canUpdate = permissions.includes(PERMISSIONS.EMPLOYEES_UPDATE);
   const canDelete = permissions.includes(PERMISSIONS.EMPLOYEES_DELETE);
   const canViewSensitive = permissions.includes(PERMISSIONS.EMPLOYEES_VIEW_SENSITIVE);
+  const canCreateLogin = permissions.includes(PERMISSIONS.USERS_CREATE);
   const showActionsColumn = canUpdate || canDelete;
 
   const filteredEmployees = employees.filter(
@@ -300,6 +301,7 @@ export function EmployeesWidget({ employees: initialEmployees, permissions, depa
         <EmployeeFormDialog
           departments={departments}
           canViewSensitive={canViewSensitive}
+          canCreateLogin={canCreateLogin}
           onClose={() => setIsAddOpen(false)}
           onSaved={handleSaved}
         />

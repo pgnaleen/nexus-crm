@@ -1,7 +1,7 @@
 "use client";
 
 import { type InputHTMLAttributes } from "react";
-import PhoneInput from "react-phone-number-input";
+import PhoneInput, { type Country } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 
 interface PhoneFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
@@ -9,9 +9,11 @@ interface PhoneFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'v
   error?: string;
   value: string;
   onChange: (value: string) => void;
+  /** ISO country the picker opens on before the user types/picks anything. */
+  defaultCountry?: Country;
 }
 
-export function PhoneField({ label, error, id, name, value, onChange, ...inputProps }: PhoneFieldProps) {
+export function PhoneField({ label, error, id, name, value, onChange, defaultCountry = "US", ...inputProps }: PhoneFieldProps) {
   const fieldId = id ?? name;
 
   return (
@@ -31,7 +33,7 @@ export function PhoneField({ label, error, id, name, value, onChange, ...inputPr
       >
         <PhoneInput
           international
-          defaultCountry="US"
+          defaultCountry={defaultCountry}
           id={fieldId}
           name={name}
           value={value}

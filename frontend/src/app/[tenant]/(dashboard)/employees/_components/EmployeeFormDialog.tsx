@@ -1,23 +1,30 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
-import { ClearanceLevel, EmployeeTitle, EmploymentStatus, EmploymentType, Gender } from "@orelia/common";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ClearanceLevel, EmployeeTitle, EmploymentStatus, EmploymentType, Gender, UserStatus } from "@orelia/common";
 import type {
   DepartmentPickerResponse,
   EmployeeDetailResponse,
   EmployeeListItemResponse,
+  RbacRoleResponse,
   UpdateEmployeeRequest,
 } from "@orelia/common";
 import { createEmployee, updateEmployee } from "@/lib/api/employees";
+import { createUser } from "@/lib/api/users";
+import { listRoles } from "@/lib/api/roles";
 import { uploadEmployeeCv, uploadEmployeePhoto } from "@/lib/api/uploads";
 import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
+import { Spinner } from "@/components/ui/Spinner";
 import { TextField } from "@/components/ui/TextField";
+import { EmailField } from "@/components/ui/EmailField";
 import { PhoneField } from "@/components/ui/PhoneField";
 import { CustomSelect } from "@/components/ui/CustomSelect";
-import { UploadCloudIcon } from "@/components/ui/icons";
-import { minLength, required, validate } from "@/lib/validation";
+import { CountrySelect } from "@/components/ui/CountrySelect";
+import { RoleCardPicker } from "@/components/ui/RoleCardPicker";
+import { CheckCircleIcon, UploadCloudIcon } from "@/components/ui/icons";
+import { email, minLength, pattern, required, validate } from "@/lib/validation";
 import { t } from "@/lib/i18n";
 import {
   CLEARANCE_LEVEL_LABELS,
@@ -43,7 +50,12 @@ const CLEARANCE_LEVEL_OPTIONS = withNotSet(
   Object.values(ClearanceLevel).map((value) => ({ value, label: CLEARANCE_LEVEL_LABELS[value] })),
 );
 
-type TabId = "personal" | "employment" | "contact" | "confidential";
+type TabId = "personal" | "employment" | "contact" | "confidential" | "account";
+
+// Mirrors UserFormDialog's own USERNAME_REGEX -- kept as a separate local
+// copy rather than importing from that dialog, since it's not exported and
+// this is the only other place that needs it.
+const USERNAME_REGEX = /^[a-z0-9._-]+$/;
 
 interface FormState {
   fullName: string;
@@ -130,6 +142,10 @@ function formStateFromDetail(detail: EmployeeDetailResponse): FormState {
 interface EmployeeFormDialogProps {
   departments: DepartmentPickerResponse[];
   canViewSensitive: boolean;
+  // Gates the "Also create a login account" tab. Create mode only -- caller
+  // (EmployeesWidget) derives this from PERMISSIONS.USERS_CREATE, since
+  // creating a login is a distinct capability from creating an employee.
+  canCreateLogin?: boolean;
   onClose: () => void;
   onSaved: (employee: EmployeeListItemResponse) => void;
   // Story 1.4 -- both present = edit mode: the form pre-fills from
@@ -138,15 +154,63 @@ interface EmployeeFormDialogProps {
   onUpdated?: (employee: EmployeeDetailResponse) => void;
 }
 
+// Suggests a starting point for the login username from whatever's already
+// typed -- the email's local part if there is one (most likely to already be
+// unique org-wide), otherwise a dotted version of the full name. Always
+// editable afterwards; this only fires once, when the checkbox is first
+// switched on.
+function suggestUsername(employeeEmail: string, fullName: string): string {
+  const fromEmail = employeeEmail.trim().split("@")[0] ?? "";
+  if (fromEmail) return fromEmail.toLowerCase().replace(/[^a-z0-9._-]/g, "");
+  return fullName.trim().toLowerCase().replace(/\s+/g, ".").replace(/[^a-z0-9._-]/g, "");
+}
+
+// Excludes visually-ambiguous characters (0/O, 1/l/I) since this password is
+// meant to be read off-screen and typed once at first login, not just
+// copy-pasted.
+const TEMP_PASSWORD_CHARS = {
+  lower: "abcdefghijkmnpqrstuvwxyz",
+  upper: "ABCDEFGHJKLMNPQRSTUVWXYZ",
+  digit: "23456789",
+  special: "!@#$%^&*-_",
+};
+
+function secureRandomFloat(): number {
+  const buf = new Uint32Array(1);
+  crypto.getRandomValues(buf);
+  return (buf[0] ?? 0) / (0xffffffff + 1);
+}
+
+// Generates a password satisfying PASSWORD_STRENGTH_REGEX (lib/validation.ts)
+// by construction -- one guaranteed char from each required class, then
+// random fill, then shuffled so the required chars aren't always first.
+function generateTempPassword(): string {
+  const pools = Object.values(TEMP_PASSWORD_CHARS);
+  const all = pools.join("");
+  const pick = (chars: string) => chars[Math.floor(secureRandomFloat() * chars.length)];
+  const chars = [...pools.map(pick), ...Array.from({ length: 10 }, () => pick(all))];
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = Math.floor(secureRandomFloat() * (i + 1));
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join("");
+}
+
+type LoginResult =
+  | { status: "success"; username: string; password: string }
+  | { status: "error"; message: string };
+
 export function EmployeeFormDialog({
   departments,
   canViewSensitive,
+  canCreateLogin = false,
   onClose,
   onSaved,
   initialDetail,
   onUpdated,
 }: EmployeeFormDialogProps) {
   const isEditMode = Boolean(initialDetail);
+  const showAccountTab = !isEditMode && canCreateLogin;
   const [activeTab, setActiveTab] = useState<TabId>("personal");
   const [values, setValues] = useState<FormState>(() =>
     initialDetail ? formStateFromDetail(initialDetail) : emptyFormState(),
@@ -154,6 +218,50 @@ export function EmployeeFormDialog({
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // "Also create a login" -- create mode only, gated by showAccountTab.
+  const [createLogin, setCreateLogin] = useState(false);
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginRoleIds, setLoginRoleIds] = useState<string[]>([]);
+  const [loginErrors, setLoginErrors] = useState<{ username?: string; email?: string; roles?: string }>({});
+  const [availableRoles, setAvailableRoles] = useState<RbacRoleResponse[]>([]);
+  const [isLoadingRoles, setIsLoadingRoles] = useState(false);
+  // Non-null once the employee save has gone through and (if requested) the
+  // login attempt has resolved either way -- swaps the dialog body from the
+  // form to a result screen. The employee is captured here specifically so
+  // "Done" can still call onSaved even if the login half failed: the
+  // employee record is real and must show up in the list either way.
+  const [postSaveState, setPostSaveState] = useState<{
+    employee: EmployeeListItemResponse;
+    login: LoginResult;
+  } | null>(null);
+  const [passwordCopied, setPasswordCopied] = useState(false);
+
+  useEffect(() => {
+    if (!showAccountTab) return;
+    let cancelled = false;
+    setIsLoadingRoles(true);
+    listRoles()
+      .then((roles) => {
+        if (!cancelled) setAvailableRoles(roles);
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableRoles([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingRoles(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showAccountTab]);
+
+  function handleToggleCreateLogin(checked: boolean) {
+    setCreateLogin(checked);
+    if (checked && !loginUsername) {
+      setLoginUsername(suggestUsername(values.employeeEmail, values.fullName));
+    }
+  }
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isUploadingCv, setIsUploadingCv] = useState(false);
   // values.profilePhotoUrl/cvUrl are the stable S3 keys that actually get
@@ -215,6 +323,32 @@ export function EmployeeFormDialog({
       setActiveTab("personal");
       return false;
     }
+
+    const nextLoginErrors: { username?: string; email?: string; roles?: string } = {};
+    if (createLogin) {
+      const usernameError = validate(loginUsername, [
+        required(),
+        minLength(3),
+        pattern(USERNAME_REGEX, "Lowercase letters, numbers, dots, underscores, and hyphens only"),
+      ]);
+      if (usernameError) nextLoginErrors.username = usernameError;
+
+      // The login's email is the employee's own Contact-tab email -- there's
+      // no separate field for it, so a missing/invalid one is reported here,
+      // on the Account tab, even though the value itself lives on Contact.
+      const loginEmailError = validate(values.employeeEmail, [required(), email()]);
+      if (loginEmailError) nextLoginErrors.email = loginEmailError;
+
+      if (loginRoleIds.length === 0) {
+        nextLoginErrors.roles = t("employees.dialog.account.errors.roleRequired");
+      }
+    }
+    setLoginErrors(nextLoginErrors);
+    if (Object.keys(nextLoginErrors).length > 0) {
+      setActiveTab("account");
+      return false;
+    }
+
     return true;
   }
 
@@ -251,7 +385,7 @@ export function EmployeeFormDialog({
           cvUrl: values.cvUrl || null,
           employeeEmail: values.employeeEmail.trim() || null,
           mobileNo: values.mobileNo || null,
-          officeNo: values.officeNo.trim() || null,
+          officeNo: values.officeNo || null,
         };
         if (canViewSensitive) {
           payload.nicPassportNumber = values.nicPassportNumber.trim() || null;
@@ -283,7 +417,7 @@ export function EmployeeFormDialog({
         cvUrl: values.cvUrl || undefined,
         employeeEmail: values.employeeEmail.trim() || undefined,
         mobileNo: values.mobileNo || undefined,
-        officeNo: values.officeNo.trim() || undefined,
+        officeNo: values.officeNo || undefined,
         // Confidential fields are only ever sent when the Confidential tab is
         // actually visible -- the backend independently strips them anyway
         // for a caller without EMPLOYEES_VIEW_SENSITIVE, this just avoids
@@ -291,8 +425,41 @@ export function EmployeeFormDialog({
         nicPassportNumber: canViewSensitive ? values.nicPassportNumber.trim() || undefined : undefined,
         baseSalary: canViewSensitive && values.baseSalary.trim() ? Number(values.baseSalary) : undefined,
       });
-      onSaved(employee);
-      onClose();
+
+      if (!createLogin) {
+        onSaved(employee);
+        onClose();
+        return;
+      }
+
+      // The employee row now exists for real, regardless of what happens
+      // next -- a failure here gets its own try/catch (never the outer
+      // catch/formError below) so it can't be mistaken for "nothing saved".
+      // The dialog stays open on a dedicated result screen either way; the
+      // employee is only handed to onSaved once the admin acknowledges it
+      // via "Done", see the postSaveState render branch.
+      try {
+        const password = generateTempPassword();
+        await createUser({
+          username: loginUsername.trim(),
+          displayName: values.fullName.trim(),
+          loggingEmail: values.employeeEmail.trim(),
+          password,
+          status: UserStatus.Active,
+          mustChangePassword: true,
+          roleIds: loginRoleIds,
+          employeeId: employee.id,
+        });
+        setPostSaveState({ employee, login: { status: "success", username: loginUsername.trim(), password } });
+      } catch (err) {
+        setPostSaveState({
+          employee,
+          login: {
+            status: "error",
+            message: err instanceof ApiError ? err.message : t("employees.dialog.account.resultErrorGeneric"),
+          },
+        });
+      }
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : t("employees.dialog.errors.saveFailed"));
     } finally {
@@ -302,13 +469,103 @@ export function EmployeeFormDialog({
 
   const departmentOptions = withNotSet(departments.map((d) => ({ value: d.id, label: d.name })));
 
+  // Once set, the dialog stays open on a result screen instead of the form
+  // (see the postSaveState branch below) -- every way to close the dialog
+  // from there (X button, overlay click, Escape -- Dialog funnels all three
+  // through this one onClose prop) must still hand the employee to onSaved,
+  // exactly like clicking "Done" does, or the new row silently never reaches
+  // the list until a manual refresh.
+  const handleDialogClose = postSaveState
+    ? () => {
+        onSaved(postSaveState.employee);
+        onClose();
+      }
+    : onClose;
+
   return (
     <Dialog
       open
-      title={isEditMode ? t("employees.dialog.editTitle") : t("employees.dialog.addTitle")}
-      onClose={onClose}
+      title={
+        postSaveState
+          ? t("employees.dialog.account.resultDialogTitle")
+          : isEditMode
+            ? t("employees.dialog.editTitle")
+            : t("employees.dialog.addTitle")
+      }
+      onClose={handleDialogClose}
       maxWidth="720px"
     >
+      {postSaveState ? (
+        <div className="px-1 py-1">
+          {(() => {
+            const { employee, login } = postSaveState;
+            return login.status === "success" ? (
+              <>
+                <div className="mb-3 flex items-center gap-2 text-crm-primary">
+                  <CheckCircleIcon size={20} />
+                  <h3 className="text-[15px] font-semibold text-crm-text">
+                    {t("employees.dialog.account.resultSuccessTitle")}
+                  </h3>
+                </div>
+                <p className="mb-4 text-[13px] text-[var(--color-text-muted)]">
+                  {t("employees.dialog.account.resultSuccessMessage", { name: employee.fullName })}
+                </p>
+                <div className="mb-4 rounded-lg border border-[var(--color-border)] bg-[#f8fafc] p-3.5">
+                  <div className="mb-2.5 flex items-center justify-between gap-3">
+                    <span className="text-[12px] font-semibold text-[var(--color-text-muted)]">
+                      {t("employees.dialog.account.usernameLabel")}
+                    </span>
+                    <span className="font-mono text-[13px] text-crm-text">{login.username}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[12px] font-semibold text-[var(--color-text-muted)]">
+                      {t("employees.dialog.account.passwordLabel")}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[13px] text-crm-text">{login.password}</span>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => {
+                          navigator.clipboard.writeText(login.password);
+                          setPasswordCopied(true);
+                        }}
+                      >
+                        {passwordCopied
+                          ? t("employees.dialog.account.copied")
+                          : t("employees.dialog.account.copyPassword")}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-[12px] text-[var(--color-text-muted)]">
+                  {t("employees.dialog.account.passwordNotice")}
+                </p>
+              </>
+            ) : (
+              <>
+                <h3 className="mb-2 text-[15px] font-semibold text-crm-text">
+                  {t("employees.dialog.account.resultErrorTitle")}
+                </h3>
+                <p className="mb-2 text-[13px] text-[var(--color-danger)]">
+                  {t("employees.dialog.account.resultErrorMessage", {
+                    name: employee.fullName,
+                    error: login.message,
+                  })}
+                </p>
+                <p className="mb-4 text-[13px] text-[var(--color-text-muted)]">
+                  {t("employees.dialog.account.resultErrorHint")}
+                </p>
+              </>
+            );
+          })()}
+          <div className="mt-2 flex justify-end">
+            <Button type="button" onClick={handleDialogClose}>
+              {t("employees.dialog.account.doneButton")}
+            </Button>
+          </div>
+        </div>
+      ) : (
       <form onSubmit={handleSubmit}>
         <div className="dialog-tabs">
           <button
@@ -339,6 +596,15 @@ export function EmployeeFormDialog({
               onClick={() => setActiveTab("confidential")}
             >
               {t("employees.dialog.tabs.confidential")}
+            </button>
+          )}
+          {showAccountTab && (
+            <button
+              type="button"
+              className={`dialog-tab${activeTab === "account" ? " dialog-tab-active" : ""}`}
+              onClick={() => setActiveTab("account")}
+            >
+              {t("employees.dialog.tabs.account")}
             </button>
           )}
         </div>
@@ -548,11 +814,10 @@ export function EmployeeFormDialog({
                 value={values.primaryLocation}
                 onChange={(e) => setField("primaryLocation", e.target.value)}
               />
-              <TextField
+              <CountrySelect
                 label={t("employees.dialog.employment.baseCountry")}
-                name="baseCountry"
                 value={values.baseCountry}
-                onChange={(e) => setField("baseCountry", e.target.value)}
+                onChange={(val) => setField("baseCountry", val)}
               />
             </div>
 
@@ -602,11 +867,11 @@ export function EmployeeFormDialog({
         {/* ── Tab 3: Contact ─────────────────────────────── */}
         {activeTab === "contact" && (
           <div className="h-[480px] overflow-y-auto pr-1">
-            <TextField
+            <EmailField
               label={t("employees.dialog.contact.email")}
               name="employeeEmail"
-              type="email"
               value={values.employeeEmail}
+              error={errors.employeeEmail}
               onChange={(e) => setField("employeeEmail", e.target.value)}
             />
             <PhoneField
@@ -614,12 +879,14 @@ export function EmployeeFormDialog({
               name="mobileNo"
               value={values.mobileNo}
               onChange={(val) => setField("mobileNo", val)}
+              defaultCountry="LK"
             />
-            <TextField
+            <PhoneField
               label={t("employees.dialog.contact.officeNo")}
               name="officeNo"
               value={values.officeNo}
-              onChange={(e) => setField("officeNo", e.target.value)}
+              onChange={(val) => setField("officeNo", val)}
+              defaultCountry="LK"
             />
           </div>
         )}
@@ -646,6 +913,70 @@ export function EmployeeFormDialog({
           </div>
         )}
 
+        {/* ── Tab 5: Account (create mode + USERS_CREATE only) ── */}
+        {activeTab === "account" && showAccountTab && (
+          <div className="h-[480px] overflow-y-auto pr-1">
+            <label className="mb-4 flex cursor-pointer items-start gap-2.5 text-[13.5px] text-crm-text">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={createLogin}
+                onChange={(e) => handleToggleCreateLogin(e.target.checked)}
+              />
+              <span>
+                <span className="block font-semibold">{t("employees.dialog.account.checkboxLabel")}</span>
+                <span className="block text-[12.5px] text-[var(--color-text-muted)]">
+                  {t("employees.dialog.account.checkboxHint")}
+                </span>
+              </span>
+            </label>
+
+            {createLogin && (
+              <>
+                <TextField
+                  label={t("employees.dialog.account.username")}
+                  name="loginUsername"
+                  value={loginUsername}
+                  error={loginErrors.username}
+                  placeholder={t("employees.dialog.account.usernamePlaceholder")}
+                  onChange={(e) => setLoginUsername(e.target.value.toLowerCase())}
+                />
+
+                <p className="mb-1.5 text-[12px] text-[var(--color-text-muted)]">
+                  {t("employees.dialog.account.emailSourceHint")}
+                </p>
+                {loginErrors.email && (
+                  <p className="mb-4 text-[12.5px] text-[var(--color-danger)]">{loginErrors.email}</p>
+                )}
+
+                <div className="mb-[18px]">
+                  <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                    {t("employees.dialog.account.roles")}
+                  </label>
+                  {isLoadingRoles ? (
+                    <div className="dialog-loading" style={{ padding: "12px 0" }}>
+                      <Spinner size={20} />
+                    </div>
+                  ) : (
+                    <RoleCardPicker
+                      options={availableRoles.map((r) => ({ value: r.id, label: r.name, description: r.description ?? undefined }))}
+                      values={loginRoleIds}
+                      onChange={setLoginRoleIds}
+                    />
+                  )}
+                  {loginErrors.roles && (
+                    <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{loginErrors.roles}</p>
+                  )}
+                </div>
+
+                <p className="text-[12px] text-[var(--color-text-muted)]">
+                  {t("employees.dialog.account.passwordNotice")}
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
         <div className="mt-2 flex justify-end gap-2.5">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
             {t("common.actions.cancel")}
@@ -655,6 +986,7 @@ export function EmployeeFormDialog({
           </Button>
         </div>
       </form>
+      )}
     </Dialog>
   );
 }

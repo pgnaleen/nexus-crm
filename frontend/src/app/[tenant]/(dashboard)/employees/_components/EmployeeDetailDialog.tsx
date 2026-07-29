@@ -7,6 +7,8 @@ import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
+import { UserIcon } from "@/components/ui/icons";
+import { getInitials } from "@/lib/deals/deal-display";
 import { t } from "@/lib/i18n";
 import {
   CLEARANCE_LEVEL_LABELS,
@@ -192,14 +194,37 @@ export function EmployeeDetailDialog({ employeeId, canViewSensitive, onClose }: 
               <DetailItem label={t("employees.dialog.contact.email")} value={detail.employeeEmail} />
               <DetailItem label={t("employees.dialog.contact.mobileNo")} value={detail.mobileNo} />
               <DetailItem label={t("employees.dialog.contact.officeNo")} value={detail.officeNo} />
-              <DetailItem
-                label={t("employees.dialog.contact.linkedAccount")}
-                value={
-                  detail.linkedUser
-                    ? `${detail.linkedUser.displayName} (${detail.linkedUser.username})`
-                    : t("employees.dialog.contact.notLinked")
-                }
-              />
+              <div className="col-span-2">
+                <div className="mb-1.5 text-xs font-semibold text-[var(--color-text-muted)]">
+                  {t("employees.dialog.contact.linkedAccount")}
+                </div>
+                {detail.linkedUser ? (
+                  <div className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[#f8fafc] p-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-crm-primary-tint text-xs font-bold text-crm-primary">
+                      {getInitials(detail.linkedUser.displayName)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold text-crm-text">
+                        {detail.linkedUser.displayName}
+                      </div>
+                      <div className="truncate text-[12.5px] text-[var(--color-text-muted)]">
+                        @{detail.linkedUser.username}
+                      </div>
+                    </div>
+                    <span
+                      className="inline-block shrink-0 rounded-full px-2.5 py-[3px] text-[11.5px] font-semibold"
+                      style={{ background: "#e6f7ee", color: "#1a9c5f" }}
+                    >
+                      {t("employees.dialog.contact.linkedBadge")}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 rounded-lg border border-dashed border-[var(--color-border)] p-3 text-sm text-[var(--color-text-muted)]">
+                    <UserIcon size={16} />
+                    {t("employees.dialog.contact.notLinked")}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
