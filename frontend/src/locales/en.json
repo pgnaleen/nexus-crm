@@ -9,7 +9,27 @@
       "cancel": "Cancel",
       "close": "Close",
       "save": "Save"
+    },
+    "comingSoon": {
+      "title": "Under Development",
+      "message": "This section is being built and will be available soon."
     }
+  },
+  "legal": {
+    "title": "Legal",
+    "subtitle": "Contracts, compliance, and legal documentation"
+  },
+  "finance": {
+    "title": "Finance",
+    "subtitle": "Invoicing, budgets, and financial reporting"
+  },
+  "dealRegistration": {
+    "title": "Deal Registration",
+    "subtitle": "Register and track partner-submitted deal opportunities"
+  },
+  "leads": {
+    "title": "Leads",
+    "subtitle": "Prospective contacts and inbound inquiries before they become deals"
   },
   "employees": {
     "title": "Employees",
@@ -61,6 +81,11 @@
       "saveButton": "Save",
       "autoArrangeButton": "Auto-arrange",
       "exportButton": "Export as PNG",
+      "addButton": "Add",
+      "addEmployeeButton": "Add Employee",
+      "addDepartmentButton": "Add Department",
+      "collapsePanelAriaLabel": "Collapse panel",
+      "expandPanelAriaLabel": "Expand panel",
       "collapseAriaLabel": "Collapse {name}'s branch",
       "expandAriaLabel": "Expand {name}'s branch",
       "unplacedTitle": "Unplaced",
@@ -107,7 +132,8 @@
         "personal": "Personal",
         "employment": "Employment",
         "contact": "Contact",
-        "confidential": "Confidential"
+        "confidential": "Confidential",
+        "account": "Login Account"
       },
       "personal": {
         "fullName": "Full name *",
@@ -144,12 +170,37 @@
         "mobileNo": "Mobile number",
         "officeNo": "Office number",
         "linkedAccount": "Linked login account",
+        "linkedBadge": "Linked",
         "notLinked": "Not linked to any login account"
       },
       "confidential": {
         "notice": "Only visible to users with sensitive-data access.",
         "nicPassport": "NIC / Passport number",
         "baseSalary": "Base salary"
+      },
+      "account": {
+        "checkboxLabel": "Also create a login account for this employee",
+        "checkboxHint": "Creates a User login linked to this employee, using the name and email above.",
+        "username": "Username *",
+        "usernamePlaceholder": "e.g. jane.doe",
+        "emailSourceHint": "The login email is the Email address entered on the Contact tab.",
+        "roles": "Roles *",
+        "passwordNotice": "A temporary password is generated automatically. It's shown once and can't be retrieved later, and the new login must change it on first sign-in.",
+        "resultDialogTitle": "Employee Saved",
+        "resultSuccessTitle": "Employee and login account created",
+        "resultSuccessMessage": "Share these sign-in details with {name} — the password is shown once and can't be retrieved later.",
+        "usernameLabel": "Username",
+        "passwordLabel": "Temporary password",
+        "copyPassword": "Copy password",
+        "copied": "Copied",
+        "resultErrorTitle": "Employee created, login account failed",
+        "resultErrorMessage": "{name} was saved successfully, but the login account could not be created: {error}",
+        "resultErrorHint": "You can add a login later from Users → Add User, by linking it to this employee.",
+        "resultErrorGeneric": "Failed to create the login account",
+        "doneButton": "Done",
+        "errors": {
+          "roleRequired": "Select at least one role"
+        }
       },
       "genders": {
         "male": "Male",
@@ -178,12 +229,18 @@
       }
     }
   },
+  "certificationsHub": {
+    "title": "Certifications",
+    "subtitle": "Search certified employees and review pending certification claims",
+    "noAccess": "You don't have permission to view certifications.",
+    "tabs": {
+      "pending": "Pending Review",
+      "certified": "Certified Employees"
+    }
+  },
   "certifiedSearch": {
-    "title": "Certified Employees",
-    "subtitle": "Find employees who hold a specific verified certification, for project staffing",
     "placeholder": "Search by certification name, e.g. AWS Solutions Architect",
     "searchButton": "Search",
-    "noAccess": "You don't have permission to search certified employees.",
     "promptTitle": "Search for a certification",
     "promptMessage": "Type a certification name above to find employees who hold it (verified only).",
     "noMatchTitle": "No matches",
@@ -201,11 +258,8 @@
     }
   },
   "certificationReview": {
-    "title": "Certification Review",
-    "subtitle": "Review employee-submitted certifications and verify or reject each claim",
     "emptyTitle": "Nothing to review",
     "emptyMessage": "There are no pending certification claims right now.",
-    "noAccess": "You don't have permission to review certifications.",
     "submittedBy": "Submitted by",
     "issued": "Issued",
     "expires": "Expires",
@@ -562,7 +616,15 @@
       "removeShareAriaLabel": "Stop sharing with {name}",
       "delegateButton": "Delegate",
       "delegateHint": "Sharing lets someone see this task. Delegating hands it to one person to own — it leaves your board and you track it from Delegate.",
-      "delegatedNotice": "Delegated to {name} — this task now sits in your Delegate quadrant. Only {name} can update its progress until they hand it back."
+      "delegatedNotice": "Delegated to {name} — this task now sits in your Delegate quadrant. Only {name} can update its progress until they hand it back.",
+      "chat": {
+        "label": "Discussion",
+        "empty": "No messages yet — start the discussion.",
+        "placeholder": "Write a message...",
+        "sendButton": "Send",
+        "loadFailed": "Failed to load messages",
+        "sendFailed": "Failed to send message"
+      }
     },
     "shareDialog": {
       "title": "Share Task",

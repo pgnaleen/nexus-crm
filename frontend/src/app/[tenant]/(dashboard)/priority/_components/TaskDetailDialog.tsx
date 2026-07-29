@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { PriorityTaskStatus } from "@orelia/common";
 import type {
   PriorityTaskHistoryEntry,
+  PriorityTaskMessageResponse,
   PriorityTaskResponse,
   PriorityTaskShareResponse,
   UserPickerResponse,
@@ -14,14 +15,18 @@ import { TrashIcon } from "@/components/ui/icons";
 import {
   archivePriorityTask,
   completePriorityTask,
+  createPriorityTaskMessage,
   getPriorityTask,
   getPriorityTaskHistory,
+  listPriorityTaskMessages,
   listPriorityTaskShares,
   removePriorityTaskShare,
   updatePriorityTask,
   updatePriorityTaskProgress,
 } from "@/lib/api/priority-tasks";
 import { ApiError } from "@/lib/api/client";
+import { PRIORITY_TASK_MESSAGE_EVENT, type PriorityTaskMessagePayload } from "@/lib/realtime/events";
+import { getRealtimeSocket } from "@/lib/realtime/socket";
 import { useToast } from "@/components/providers/ToastProvider";
 import { t } from "@/lib/i18n";
 import { DelegateTaskDialog } from "./DelegateTaskDialog";
@@ -246,6 +251,14 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated, onArch
   const [history, setHistory] = useState<PriorityTaskHistoryEntry[]>([]);
   const [isCompleting, setIsCompleting] = useState(false);
 
+  // Story 3.3 -- task chat, additive to notes. Loaded for anyone with access
+  // to the task (not just the owner) -- broader than isOwner, same rule the
+  // backend gates on.
+  const [messages, setMessages] = useState<PriorityTaskMessageResponse[]>([]);
+  const [messagesError, setMessagesError] = useState<string | null>(null);
+  const [newMessage, setNewMessage] = useState("");
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     setTask(null);
@@ -268,8 +281,40 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated, onArch
       .catch(() => {
         // Non-fatal -- the rest of the detail view still works without it.
       });
+    // Story 3.3 -- the chat thread.
+    setMessages([]);
+    setMessagesError(null);
+    listPriorityTaskMessages(taskId)
+      .then((fetched) => {
+        if (!cancelled) setMessages(fetched);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setMessagesError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.chat.loadFailed"));
+        }
+      });
     return () => {
       cancelled = true;
+    };
+  }, [taskId]);
+
+  // Story 3.5 -- live chat delivery, scoped to whichever task this dialog
+  // currently has open. Dedupes by message id: the sender's own tab already
+  // appended the message from the HTTP response in handleSendMessage, and
+  // this same event also reaches them (broadcastMessage includes the
+  // sender, for their other open tabs/devices) -- without the dedupe check
+  // it would show up twice for whoever just sent it.
+  useEffect(() => {
+    const socket = getRealtimeSocket();
+    const handleMessage = (payload: PriorityTaskMessagePayload) => {
+      if (payload.taskId !== taskId) return;
+      setMessages((current) =>
+        current.some((m) => m.id === payload.message.id) ? current : [...current, payload.message],
+      );
+    };
+    socket.on(PRIORITY_TASK_MESSAGE_EVENT, handleMessage);
+    return () => {
+      socket.off(PRIORITY_TASK_MESSAGE_EVENT, handleMessage);
     };
   }, [taskId]);
 
@@ -388,6 +433,23 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated, onArch
     if (!task) return;
     onDelegated(task, user);
     onClose();
+  }
+
+  // Story 3.3 -- send a chat message. Available to anyone who can open this
+  // dialog at all (findOneForUser already gated that), not just the owner.
+  async function handleSendMessage() {
+    if (!task || !newMessage.trim()) return;
+    setIsSendingMessage(true);
+    setMessagesError(null);
+    try {
+      const sent = await createPriorityTaskMessage(task.id, { body: newMessage.trim() });
+      setMessages((current) => [...current, sent]);
+      setNewMessage("");
+    } catch (err) {
+      setMessagesError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.chat.sendFailed"));
+    } finally {
+      setIsSendingMessage(false);
+    }
   }
 
   return (
@@ -572,6 +634,60 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated, onArch
                 ))}
               </ul>
             )}
+          </div>
+
+          {/* Story 3.3 -- task chat, additive to notes. Open to anyone who
+              can see this dialog at all, not just the owner. */}
+          <div className="mb-2 border-t border-[var(--color-border)] pt-3">
+            <p className="mb-2 text-[13px] font-semibold text-[var(--color-text-muted)]">
+              {t("priorityTracker.detailDialog.chat.label")}
+            </p>
+            {messages.length === 0 ? (
+              <p className="text-[12.5px] text-[var(--color-text-muted)]">
+                {t("priorityTracker.detailDialog.chat.empty")}
+              </p>
+            ) : (
+              <ul className="m-0 mb-2 flex max-h-[180px] list-none flex-col gap-2 overflow-y-auto p-0">
+                {messages.map((message) => (
+                  <li
+                    key={message.id}
+                    className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
+                  >
+                    <div className="mb-0.5 flex items-baseline justify-between gap-2">
+                      <span className="text-[12.5px] font-semibold text-crm-text">{message.authorName}</span>
+                      <span className="flex-shrink-0 text-[11px] text-[var(--color-text-muted)]">
+                        {formatTimestamp(message.createdAt)}
+                      </span>
+                    </div>
+                    <p className="m-0 text-[13px] whitespace-pre-wrap text-crm-text">{message.body}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {messagesError && <p className="mb-1.5 text-[12.5px] text-[var(--color-danger)]">{messagesError}</p>}
+            <div className="flex items-end gap-2">
+              <textarea
+                className={TEXTAREA_CLASS}
+                rows={2}
+                value={newMessage}
+                placeholder={t("priorityTracker.detailDialog.chat.placeholder")}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                onClick={handleSendMessage}
+                isLoading={isSendingMessage}
+                disabled={!newMessage.trim()}
+              >
+                {t("priorityTracker.detailDialog.chat.sendButton")}
+              </Button>
+            </div>
           </div>
         </>
       )}

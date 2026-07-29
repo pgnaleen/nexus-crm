@@ -28,9 +28,12 @@ import {
   delegatePriorityTask,
   listIncomingPriorityTasks,
   listPriorityTaskDelegationTrackers,
+  listPriorityTasks,
   movePriorityTask,
 } from "@/lib/api/priority-tasks";
 import { ApiError } from "@/lib/api/client";
+import { PRIORITY_TASK_FLOW_CHANGED_EVENT } from "@/lib/realtime/events";
+import { getRealtimeSocket } from "@/lib/realtime/socket";
 import { useAlert } from "@/components/providers/DialogProvider";
 import { useToast } from "@/components/providers/ToastProvider";
 import { ArchivePanelDialog } from "./ArchivePanelDialog";
@@ -463,6 +466,49 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
   // Snapshot of `order` from the moment the current drag began -- used to
   // roll the board back exactly if the PATCH .../:id/move call fails.
   const dragStartOrderRef = useRef<Record<PriorityTaskQuadrant, string[]> | null>(null);
+
+  // Story 3.4 -- live sync. Mirrored into a ref so the socket handler
+  // (subscribed once, below) always reads the current value rather than
+  // whatever `activeId` was when the effect first ran.
+  const activeIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
+
+  // Re-fetches the board wholesale rather than patching one task in place --
+  // a flow-changed event doesn't say what changed, only that something did,
+  // and a full board is cheap enough to just re-pull. Skipped while a drag is
+  // in flight so a delegate/accept landing from someone else never yanks the
+  // card out from under an in-progress reorder.
+  async function refreshFromServer() {
+    if (activeIdRef.current) return;
+    try {
+      const [tasks, trackers] = await Promise.all([listPriorityTasks(), listPriorityTaskDelegationTrackers()]);
+      setTaskById(Object.fromEntries(tasks.map((task) => [task.id, task])));
+      setOrder(buildOrder(tasks));
+      setDelegationTrackers(trackers);
+    } catch {
+      // Non-fatal -- the next flow-changed event (or a manual reload) will
+      // catch the board up; nothing the user did locally is lost.
+    }
+  }
+
+  useEffect(() => {
+    const socket = getRealtimeSocket();
+    const handleFlowChanged = () => {
+      refreshFromServer();
+      listIncomingPriorityTasks()
+        .then((items) => setIncomingCount(items.length))
+        .catch(() => {
+          // Non-fatal, same as the initial load above.
+        });
+    };
+    socket.on(PRIORITY_TASK_FLOW_CHANGED_EVENT, handleFlowChanged);
+    return () => {
+      socket.off(PRIORITY_TASK_FLOW_CHANGED_EVENT, handleFlowChanged);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 

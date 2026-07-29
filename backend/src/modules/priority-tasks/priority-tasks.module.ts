@@ -2,9 +2,12 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { UsersModule } from "../users/users.module";
 import { User } from "../users/entities/user.entity";
-import { PriorityTaskDelegationTracker } from "./entities/priority-task-delegation-tracker.entity";
+import { PriorityTaskFlow } from "./entities/priority-task-flow.entity";
+import { PriorityTaskMessage } from "./entities/priority-task-message.entity";
 import { PriorityTaskShare } from "./entities/priority-task-share.entity";
 import { PriorityTask } from "./entities/priority-task.entity";
+import { PriorityTaskMessagesController } from "./priority-task-messages.controller";
+import { PriorityTaskMessagesService } from "./priority-task-messages.service";
 import { PriorityTaskSharesController } from "./priority-task-shares.controller";
 import { PriorityTaskSharesService } from "./priority-task-shares.service";
 import { PriorityTasksController } from "./priority-tasks.controller";
@@ -19,10 +22,10 @@ import { PriorityTasksService } from "./priority-tasks.service";
   // UsersService.findOneOrFail to tenant-scope-validate who a task is
   // being shared/delegated to.
   imports: [
-    TypeOrmModule.forFeature([PriorityTask, PriorityTaskShare, PriorityTaskDelegationTracker, User]),
+    TypeOrmModule.forFeature([PriorityTask, PriorityTaskShare, PriorityTaskFlow, PriorityTaskMessage, User]),
     UsersModule,
   ],
-  controllers: [PriorityTasksController, PriorityTaskSharesController],
-  providers: [PriorityTasksService, PriorityTasksRepository, PriorityTaskSharesService],
+  controllers: [PriorityTasksController, PriorityTaskSharesController, PriorityTaskMessagesController],
+  providers: [PriorityTasksService, PriorityTasksRepository, PriorityTaskSharesService, PriorityTaskMessagesService],
 })
 export class PriorityTasksModule {}

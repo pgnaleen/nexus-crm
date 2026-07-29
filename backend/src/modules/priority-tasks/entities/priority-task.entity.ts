@@ -1,45 +1,19 @@
-import { PriorityTaskQuadrant, PriorityTaskStatus } from "@orelia/common";
 import { Column, Entity } from "typeorm";
 import { AuditedTenantEntity } from "../../../core/tenant";
 
-// Story 1.1/1.2 columns only. `createdBy` (from AuditedTenantEntity) is the
-// task's creator and never changes; `ownerId` is the current owner and is
-// the one that will move once Story 1.6 (Delegate) exists -- see the
-// migration's own comment for why there's no separate creator_id column.
+// Epic 3, Story 3.2 -- slimmed to pure identity. Ownership, quadrant, rank,
+// status, and delegation state used to live as mutable columns here; they
+// now live entirely in priority_task_flow (see that entity's own comment),
+// because a single mutable owner_id/quadrant/status shared across every
+// perspective on a task is exactly what let a stale delegation tracker go
+// undetected -- nothing on this row itself changed to signal it. `notes`
+// is still owned by whoever the CURRENT holder is (resolved via flow), same
+// edit rule as before (Story 1.4).
 @Entity("priority_tasks")
 export class PriorityTask extends AuditedTenantEntity {
-  @Column({ name: "owner_id", type: "uuid" })
-  ownerId!: string;
-
   @Column()
   title!: string;
 
   @Column({ type: "text", nullable: true })
   notes?: string;
-
-  @Column({ type: "enum", enum: PriorityTaskQuadrant })
-  quadrant!: PriorityTaskQuadrant;
-
-  @Column()
-  rank!: number;
-
-  @Column({ type: "enum", enum: PriorityTaskStatus, default: PriorityTaskStatus.Placed })
-  status!: PriorityTaskStatus;
-
-  @Column({ default: 0 })
-  progress!: number;
-
-  // Story 1.6 -- set the moment this task is delegated, cleared back to
-  // undefined once Story 1.8's accept flow transfers ownerId to whoever
-  // this points at. Non-null here is the source-of-truth pending signal;
-  // `status: Delegated` is just its human-readable mirror.
-  @Column({ name: "delegated_to_user_id", type: "uuid", nullable: true })
-  delegatedToUserId?: string;
-
-  // Story 1.8 -- who performed the current pending delegation. Equals the
-  // owner on a first delegation; on a re-delegation (recipient passes it on
-  // without accepting) it becomes the re-delegator, so the new recipient's
-  // Incoming panel shows the right "delegated by" name. Cleared on accept.
-  @Column({ name: "delegated_by_user_id", type: "uuid", nullable: true })
-  delegatedByUserId?: string;
 }

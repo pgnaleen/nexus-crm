@@ -128,6 +128,21 @@ export interface PriorityTaskHistoryEntry {
   timestamp: string;
 }
 
+// Epic 3, Story 3.3 (Task Chat). Additive to `notes` -- a real per-task
+// message thread, never a replacement for the owner's own free-text field.
+// Messages are immutable once sent (no edit/delete in this pass).
+export interface CreatePriorityTaskMessageRequest {
+  body: string;
+}
+
+export interface PriorityTaskMessageResponse {
+  id: string;
+  userId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
 // The delegator's own tracking card, live-joined to the real task's
 // current title/status/progress -- never a frozen snapshot.
 export interface PriorityTaskDelegationTrackerResponse {

@@ -39,6 +39,15 @@ a time with the product owner.
    (log: "Skipped 1 tracker(s) whose task is gone") — the 500 this story exists to prevent. The
    archived-only guard returns 409 on a live task and leaves its `deleted_at` NULL. All test data
    removed afterwards; zero orphaned trackers remain database-wide.
+3. Priority Tracker — Event-Sourced Flow, Task Chat & Real-Time Sync — ✅ **all 5 stories built**
+   (2026-07-29). Replaced the mutable `owner_id`/`quadrant`/`rank`/`status` columns on
+   `priority_tasks` and the whole `priority_task_delegation_trackers` table with one append-only
+   `priority_task_flow` table (fixing a confirmed duplicate-tracker bug); added a real per-task chat
+   thread (`priority_task_messages`); added the app's first WebSocket infrastructure
+   (`backend/src/core/realtime/`) so the board, Incoming panel, and chat all update live. See that
+   epic's own Context section for the bug this fixes and why. Every story verified live against a
+   running dev database and, for 3.4/3.5, real signed JWTs and real `socket.io-client` connections —
+   not just reasoned about from the code.
 
 ## Epic 1: Priority Tracker — Eisenhower Task Management
 
@@ -971,3 +980,440 @@ state management, or data mapping/sorting/filtering.
 the card needs fifteen more (six pill bg/fg pairs, two progress-bar colours, one chevron). They were
 added to the same `@theme` block on the same terms — 2.1's rule ("every Deck colour is a named token,
 no raw hex in a component") held; only its inventory was short.
+
+---
+
+# Epic 3: Priority Tracker — Event-Sourced Flow, Task Chat & Real-Time Sync
+
+## Context
+
+**The bug this epic exists to fix.** `delegate()` writes a `priority_task_delegation_trackers` row
+for the delegator every time it's called, but nothing ever closes an old tracker out once the task's
+custody moves on. Concretely: A delegates a task (A gets a tracker card in their own DELEGATE
+quadrant) → it eventually cycles back to A and A accepts it again, becoming the real owner a second
+time → A's very first tracker card is still sitting there, live-joined to the same task, because
+nothing ever told it "this delegation is over." A sees the same task twice: once as their real,
+editable board card, once as the stale leftover tracker. Confirmed with the product owner
+2026-07-28 as the actual observed symptom (not a crash — a visual duplicate).
+
+The right fix isn't a cleanup pass bolted onto the existing shape — root cause is that
+`priority_tasks`' `owner_id`/`quadrant`/`rank`/`status` plus a *separate*, independently-keyed
+tracker table gives the system two different, not-always-agreeing opinions about who currently holds
+a task. This epic collapses that into one structure with a single invariant: **a user has at most one
+current row per task, ever, enforced at the database level** — so "stale but still showing" becomes
+impossible to construct, not something every read path has to remember to filter out.
+
+Two things ride along, agreed with the product owner in the same conversation:
+
+- **Task chat.** A real per-task message thread — new, additive. The existing free-text field stays
+  exactly as it is (`notes`); it is not replaced by chat. **Correction (Story 3.3): the rename to
+  `description` floated below never happened** — dropped as unnecessary scope once chat was actually
+  built. It was never required for chat to be additive, only assumed to make a tidier field name.
+- **Real-time sync.** This codebase has no WebSocket infrastructure anywhere yet — this epic adds the
+  first one. Both the board/Incoming panel (delegations, moves, progress) and the new chat thread
+  push live; no reload needed for either.
+
+## Data Model
+
+Replaces `priority_tasks`' mutable ownership columns and the whole `priority_task_delegation_trackers`
+table with three tables. `priority_task_shares` is **unchanged** — deliberately not folded in; see the
+rationale below.
+
+### `priority_tasks` (slimmed to pure identity)
+
+| Column | Notes |
+|---|---|
+| `id`, `tenant_id` | unchanged |
+| `title` | unchanged, required |
+| `notes` | unchanged, not renamed (see the correction above) — same owner-only edit rule (Story 1.4) |
+| `created_at`/`created_by`, `updated_at`/`updated_by`, `deleted_at`/`deleted_by` | unchanged — this row is still what Story 2.10's soft-delete acts on |
+
+`owner_id`, `quadrant`, `rank`, `status`, `progress`, `delegated_to_user_id`, `delegated_by_user_id`
+are **removed** — all derived from `priority_task_flow` below.
+
+### `priority_task_flow` (append-only — replaces the trackers table and the columns above)
+
+| Column | Notes |
+|---|---|
+| `id` | PK |
+| `task_id` | FK → `priority_tasks`, CASCADE |
+| `user_id` | FK → `users` — whose board/perspective this row belongs to |
+| `seq` | per-task monotonic hop counter (1, 2, 3, …) — the "which step is this task on" the requirement asked for |
+| `event_type` | enum: `placed` \| `delegated` \| `accepted` \| `redelegated` \| `completed` \| `archived` \| `restored` |
+| `linked_user_id` | nullable — the other party: who a `delegated` row was sent to, or who an `accepted`/`redelegated` row came from |
+| `quadrant`, `rank`, `progress` | mutable **in place** on the current row only (drag-reorder, progress updates) — these are position/state, not hops, so they don't burn a new `seq` |
+| `is_current` | boolean. Exactly one `true` row per `(task_id, user_id)` at any moment, enforced by `UNIQUE (task_id, user_id) WHERE is_current` |
+| `created_at`, `created_by` | who caused the hop |
+
+**The invariant that fixes the bug:** every write that gives a user a new flow row for a task sets
+`is_current = false` on any prior row(s) they hold for that same task, in the same transaction, before
+inserting the new one. A user's board is `WHERE user_id = me AND is_current AND event_type IN
+(placed, accepted)`; their DELEGATE tracking cards are `WHERE user_id = me AND is_current AND
+event_type = delegated`. A superseded row is `is_current = false` forever — it cannot render anywhere,
+because every query that renders a card filters on `is_current`.
+
+**A useful side effect:** a task's full lifecycle history (Story 1.9's stepper/timeline) becomes
+`SELECT * FROM priority_task_flow WHERE task_id = X ORDER BY seq` directly — no more reconstructing it
+by scraping `audit_logs` rows through `mapAuditRow`'s heuristics (priority-tasks.service.ts:256–282).
+`audit_logs` recording continues unchanged (CLAUDE.md's audit rule applies to every table, flow
+included), it's just no longer the thing the UI has to parse to answer "what happened to this task."
+
+### `priority_task_messages` (new — task chat)
+
+| Column | Notes |
+|---|---|
+| `id` | PK, doubles as the message's own identity |
+| `task_id` | FK → `priority_tasks`, CASCADE |
+| `user_id` | FK → `users` — the author |
+| `seq` | per-task monotonic message counter — stable ordering independent of clock skew, and the hook a future "unread count" would need |
+| `body` | text, required |
+| `created_at`, `created_by` | standard |
+
+No `updated_at`/`deleted_at` — messages are immutable for this pass; editing/deleting a sent message is
+out of scope unless you want it added. Read access mirrors `findOneForUser`'s existing rule (owner,
+current tracker-holder, share recipient, or pending delegate — same parties who can already open the
+task today).
+
+### Why `priority_task_shares` stays as-is
+
+A share is a standing visibility grant, not a step in the task's journey — Story 1.5 explicitly allows
+several simultaneous, independent shares with no "current vs superseded" relationship between them.
+Forcing it into the `seq`/`is_current` shape built for ownership handoffs would add fields that don't
+mean anything for a share. My recommendation, not yet built: leave it exactly as it is. Flag if you'd
+rather see it unified.
+
+### Real-time sync
+
+No WebSocket library exists anywhere in this codebase yet (checked — no `socket.io`/
+`@nestjs/websockets` in `backend/package.json`, no gateway anywhere under `backend/src`), and
+`docker-compose.yml` runs a single backend container with no replicas — so a plain in-process
+Socket.IO gateway is enough; no Redis adapter needed unless the app is later horizontally scaled
+(flag to revisit then, not now). One gateway, JWT-authenticated on handshake using the same auth
+already in place for HTTP, each socket joining a `tenant:{tenantId}:user:{userId}` room on connect.
+Two events: `priority-task:flow-changed` (payload: `taskId`) emitted to every `user_id` touched by a
+flow-mutating transaction, and `priority-task:message` (payload: `taskId`, the new message) emitted to
+every user with read access to that task's chat.
+
+## Migration strategy (live production data)
+
+Epic 1/2 are shipped with real rows in `priority_tasks`/`priority_task_delegation_trackers`. This is a
+cutover, not a greenfield build:
+
+1. Backfill `priority_task_flow` from the union of each task's current
+   `owner_id`/`quadrant`/`rank`/`status`/`progress` and its `priority_task_delegation_trackers` rows,
+   in the order `audit_logs` already records for that task — this pass is also where today's
+   duplicate-tracker bug gets cleaned out of existing data: only the true current holder per user
+   ends up `is_current = true`, superseded rows land `is_current = false` from the start.
+2. Cut the service layer over to read/write `priority_task_flow` exclusively.
+3. Once verified live (per CLAUDE.md's cascade-verification rule — query the actual rows, don't
+   assume), drop the now-dead columns from `priority_tasks` and drop
+   `priority_task_delegation_trackers` entirely, in their own follow-up migration.
+
+---
+
+### Story 3.1: Data Model — Event-Sourced Flow Table & Migration — ✅ built (2026-07-28)
+
+**Verified live**, per CLAUDE.md's cascade/migration-verification rule (query the actual rows, don't
+assume): ran migration `1784700000022-CreatePriorityTaskFlow` against the real dev database. The
+one existing `priority_tasks` row backfilled to a single `priority_task_flow` row whose
+`owner_id`/`quadrant`/`rank`/`status`/`progress` matched the source row exactly. Directly tried to
+insert a second `is_current = true` row for the same `(task_id, user_id)` pair by hand —
+Postgres rejected it: `duplicate key value violates unique constraint
+"UQ_priority_task_flow_current_per_user"`, confirming the invariant that makes the duplicate-tracker
+bug structurally impossible is enforced at the database level, not just in application code (which
+doesn't exist yet — that's Story 3.2). Also round-tripped `migration:revert` then `migration:run`
+to confirm the down-migration and re-backfill both work cleanly. Backend picked up the new entity/
+module wiring with no bootstrap errors, continuing to serve live traffic throughout.
+
+Left for Story 3.2, not resolved here: the backfill reconstructs ownership/lifecycle hops only
+(placed/delegated/accepted/completed/archived/restored) from each task's `audit_logs` trail — it does
+**not** emit a flow row per progress update, since progress is a mutable field on the current row,
+not a hop. That means Story 1.9's "Progress updated" history entries can't come from `flow` alone;
+3.2 needs to decide whether the timeline keeps merging those in from `audit_logs` (still recorded,
+untouched) or drops granular progress history as an accepted scope change.
+
+As a **developer**,
+I want **`priority_task_flow` created and backfilled from every existing task's current state and
+tracker history**,
+So that **the new event-sourced model goes live with zero data loss and the existing duplicate-tracker
+bug is cleaned out of production data in the same pass**.
+
+**Acceptance Criteria:**
+
+**Given** the migration runs against a database with existing `priority_tasks` and
+`priority_task_delegation_trackers` rows
+**When** it completes
+**Then** every task has a correct, ordered `priority_task_flow` history reconstructed from its current
+columns and tracker rows, and exactly one `is_current = true` row per `(task_id, user_id)` that ever
+held it
+
+**Given** a task that was affected by the duplicate-tracker bug (a stale tracker plus a real current
+owner both present)
+**When** the backfill runs
+**Then** the stale tracker's synthesized row lands `is_current = false`, and only the true current
+holder's row is `true` — verified by direct query against a copy of the real dataset before this ships
+
+**Given** `priority_task_flow` exists
+**When** I inspect its constraints
+**Then** `UNIQUE (task_id, user_id) WHERE is_current` is enforced at the database level, not just in
+application code
+
+**Given** the migration
+**When** it's written
+**Then** `priority_tasks`' old columns and `priority_task_delegation_trackers` are **not yet dropped**
+— that's Story 3.2's job, once the service layer has cut over and been verified live
+
+---
+
+### Story 3.2: Backend Cutover — Rebuild Task Lifecycle on Flow — ✅ built (2026-07-29)
+
+**Verified live**, per CLAUDE.md's rule. Cut the whole service/controller over to `priority_task_flow`
+(`priority-tasks.service.ts` rewritten around a `PriorityTaskView`/`DelegationTrackerView` pair that
+replaces reading columns straight off `PriorityTask`), then ran migration
+`1784700000023-DropPriorityTaskOwnershipColumns` (drops `priority_tasks`' old `owner_id`/`quadrant`/
+`rank`/`status`/`progress`/`delegated_to_user_id`/`delegated_by_user_id` columns and the whole
+`priority_task_delegation_trackers` table, now fully superseded). Backend picked up both the schema
+drop and the full service rewrite with zero bootstrap errors, continuing to serve live traffic
+throughout.
+
+Reproduced the **exact bug scenario** end-to-end against the real dev DB through the real service
+(two real tenant users, Admin and Geemeth — not a mock): create → Admin delegates to Geemeth →
+Geemeth accepts → Geemeth delegates back to Admin → Admin accepts again. Result: the task appears on
+Admin's board **exactly once** (`findAllForUser` × `findDelegationTrackersForUser` combined = 1, not
+2), confirmed by also inspecting the raw `priority_task_flow` rows directly — Admin's original
+`delegated` tracker from the first hand-off is `is_current = false`, correctly superseded, while
+Geemeth's own legitimate tracker (from delegating it onward) stays `is_current = true`, proving the
+fix doesn't over-correct and erase real trackers along with stale ones.
+
+A second pass exercised every remaining path — progress update, complete → archive → restore,
+redelegate (a still-pending recipient passing it on without accepting), cross-quadrant move, history,
+and the delete-only-if-archived guard — all against the live service. Progress correctly survives a
+complete/archive/restore round-trip; history returned the exact expected sequence (`created →
+progress → delegated → redelegated → accepted → completed → archived → restored`); a removed task
+correctly 404s and disappears from both the board and the archive.
+
+**One real bug caught and fixed by this testing, not by review:** `redelegate()`'s return path
+originally re-checked the caller's access via `findOneForUser` — but a re-delegator has no remaining
+relationship to the task the instant they pass it on (no holder row, no tracker, no longer the
+pending target), so the method 404'd on its own success response. Fixed by adding an explicitly
+ungated `canonicalView()` fetch for a method's own return value once the caller has already proven
+they were allowed to act — matching what the old code's unguarded final `findOneScoped` always did
+for delegate/redelegate/accept. `delegate()`/`accept()` didn't have this problem (the actor always
+retains a tracker or holder row afterward) and were left as-is.
+
+**Accepted, documented simplifications** (none affect any existing story's ACs):
+- `findIncomingForUser`'s `fromName` for a pending delegation shows the *original* delegator, not
+  the most recent re-delegator on a 2+-hop pre-acceptance chain — the flow row carries no separate
+  "last re-delegator" field. Narrow and only visible mid-chain before anyone accepts.
+- `delegate()` now requires the caller's current row to be `Placed`/`Accepted` (not `Completed`/
+  `Archived`) — slightly tighter than the old code, which had no such guard at all; matches what the
+  UI actually offers a Delegate action on.
+- `getHistory()` is **unchanged** — still reads from `audit_logs`, not from `flow`. Flow only
+  records ownership/lifecycle hops, not every progress tick or re-delegation hand-off, so it can't
+  replace `audit_logs` as the sole history source without losing entries the existing ACs require.
+  The "history reads from flow" idea floated in this epic's Data Model section is **dropped**.
+
+As an **authenticated user**,
+I want **every existing Priority Tracker action (create, delegate, accept, re-delegate, move, complete,
+archive, restore, history) to keep working exactly as documented in Epic 1/2, now backed by
+`priority_task_flow`**,
+So that **nothing I already rely on breaks, and the duplicate-card bug is gone for good**.
+
+**Acceptance Criteria:**
+
+**Given** every mutation this module supports (Stories 1.2, 1.3, 1.6, 1.7, 1.8, 1.9, 1.10, 2.8)
+**When** it's rewritten against `priority_task_flow`
+**Then** its existing acceptance criteria still hold unchanged — this story changes storage, not
+behaviour or API shape
+
+**Given** the exact bug scenario (A delegates → eventually cycles back to A → A accepts again)
+**When** it's reproduced against the rebuilt service
+**Then** A sees the task exactly once — no leftover tracking card — verified live against the real API
++ database, per CLAUDE.md's cascade-verification precedent (Story 2.10), not assumed from code review
+
+**Given** Story 1.9's history view and Story 2.7's timeline
+**When** they're rewired
+**Then** they read directly from `priority_task_flow` ordered by `seq`, not from parsing `audit_logs`
+via `mapAuditRow` — `audit_logs` recording itself is untouched (CLAUDE.md's audit rule still applies)
+
+**Given** Story 3.1's backfill has been verified live
+**When** this story ships
+**Then** `priority_tasks`' dead columns are dropped and `priority_task_delegation_trackers` is dropped,
+in their own migration
+
+**Given** `priority_task_shares`
+**When** this story is built
+**Then** it is untouched — no schema or service change to sharing
+
+---
+
+### Story 3.3: Task Chat — Send and Read Messages — ✅ built (2026-07-29)
+
+**Verified live**, per CLAUDE.md's rule: created a task, delegated it (so the recipient is a
+*pending, not-yet-accepted* delegate), and confirmed the pending recipient could **already** post
+and read the thread before accepting — the intended access rule (owner, tracker-holder, share
+recipient, or pending delegate — broader than the owner-only rule shares use). Confirmed message
+ordering (`seq`) survives interleaved posts from both parties across an accept(). Confirmed a user
+in a **different tenant entirely**, with no relationship to the task, is denied both read and post
+with a 404 (not a leaked-existence 403) — same convention as the rest of this module.
+
+Built: `priority_task_messages` table/entity/migration (bare join table, same shape/rationale as
+`priority_task_shares` — no `tenant_id` of its own, no soft-delete; additionally immutable once sent,
+so no `updated_at` either), `PriorityTaskMessagesService`/`PriorityTaskMessagesController` routed
+under `/priority-tasks/:taskId/messages`, common contracts, frontend API client functions, `en.json`
+strings, and a chat section in `TaskDetailDialog.tsx` (bounded-height scrollable thread + a textarea
+that sends on Enter, Shift+Enter for a newline) — open to anyone who can open the dialog at all, not
+gated behind `isOwner` the way notes/sharing/progress are. `api-endpoint-registry.md` updated in the
+same change, including correcting several now-stale Epic 1/2 notes that still described columns/
+tables Story 3.2 already dropped.
+
+**Notes stays `notes`, not renamed to `description`.** The Data Model section above described a
+rename as part of the plan; it's dropped as unnecessary scope — chat is additive regardless of what
+the free-text field is called, and renaming a live column/field for no functional reason isn't worth
+touching every call site that already reads `task.notes`.
+
+As an **authenticated user with access to a task**,
+I want **to post and read messages in a thread scoped to that task**,
+So that **discussion about a task lives with the task itself, separate from its one-line description**.
+
+**Acceptance Criteria:**
+
+**Given** I have access to a task (owner, current tracker-holder, share recipient, or pending delegate
+— the same rule `findOneForUser` already applies)
+**When** I open its detail view
+**Then** I see a chat thread showing every message in order, each with the author's name and a relative
+timestamp
+
+**Given** I have access to a task
+**When** I send a message
+**Then** it's persisted to `priority_task_messages`, appears in the thread immediately, and is visible
+to everyone else with access to that task
+
+**Given** I have no relationship to a task
+**When** I try to read or post to its chat
+**Then** I can't — same 404 access rule as the rest of the detail view
+
+**Given** the task's `notes` field
+**When** this story ships
+**Then** it is untouched — still a single owner-editable field, not renamed, not replaced by or
+merged with chat
+
+---
+
+### Story 3.4: Real-Time Sync — Board, Incoming & Delegation Live Updates — ✅ built (2026-07-29)
+
+**Verified live**, per CLAUDE.md's rule — and unusually thoroughly, since this is new infrastructure
+with no existing pattern to lean on. Signed real JWTs for two real users (Admin, Geemeth), connected
+two actual `socket.io-client` sockets to the running dev backend, then drove the real HTTP API
+(Bearer-token auth, no browser) through create → delegate → accept. Admin's own socket received all
+three `priority-task:flow-changed` events live; Geemeth's socket received the delegate (while still
+only a pending, not-yet-accepted recipient) and accept events — proving the pending-recipient case
+works, not just the simple "I own it" case. Separately confirmed a socket connecting with a garbage
+token gets server-disconnected (`io server disconnect`) shortly after the transport-level connect —
+Socket.IO's `connect` event fires before the server's async handshake auth check completes, which
+made the first attempt at this check look like a failure until re-tested with a short wait, worth
+noting for next time this pattern comes up.
+
+Built: `backend/src/core/realtime/` (`RealtimeGateway`, `RealtimeService`, room/event constants) —
+the app's first WebSocket infrastructure, added to the already-global `CoreModule` alongside
+`AuditLogService`/`TenantContextService` rather than a new module, since nothing else needed
+importing it. Auth happens by hand on `handleConnection` (no `@nestjs/passport` guard runs on a
+socket the way `JwtAuthGuard` runs on every HTTP request) — the same `JWT_ACCESS_SECRET`-signed
+token, read from the same httpOnly cookie the HTTP API already relies on (falls back to an explicit
+`auth.token` handshake field for any client that can't rely on that; there is none today). CORS
+mirrors `main.ts`'s own `CORS_ORIGIN` allow-list exactly. `PriorityTasksService.broadcastFlowChanged`
+fires after create/delegate/accept/re-delegate/move/complete/archive/restore — every current flow
+row's `user_id` plus any `linked_user_id` (the pending recipient, who holds no row of their own yet);
+`redelegate()` also explicitly names the re-delegator, since passing a task on leaves them with
+neither a row nor a link the generic rule would catch. `progress` updates and `remove()` are
+deliberately **not** wired (not in this story's AC).
+
+Frontend: `frontend/src/lib/realtime/socket.ts` (one lazily-created shared `Socket.IO` connection per
+tab, not one per component — reused by task chat in Story 3.5) and a subscription in
+`PriorityBoard.tsx` that re-fetches the board/trackers/incoming-count wholesale on any
+`flow-changed` event, skipped while a drag is in flight so a delegation landing from someone else
+never yanks a card out from under an in-progress reorder.
+
+As an **authenticated user**,
+I want **my board and Incoming panel to update the moment something changes, without a reload**,
+So that **I never act on stale information about who owns what or what's waiting for me**.
+
+**Acceptance Criteria:**
+
+**Given** the backend has no WebSocket infrastructure yet
+**When** this story is built
+**Then** a single authenticated Socket.IO gateway is added, each connection joining a
+`tenant:{tenantId}:user:{userId}` room using the same auth already protecting the HTTP API
+
+**Given** any action that writes to `priority_task_flow` (create, delegate, accept, re-delegate, move,
+complete, archive, restore)
+**When** it succeeds
+**Then** a `priority-task:flow-changed` event fires to every `user_id` touched by that transaction
+
+**Given** my board or Incoming panel is open
+**When** a `flow-changed` event for a task I can see arrives
+**Then** the affected view updates without a manual reload
+
+**Given** the backend runs as a single instance today (confirmed via `docker-compose.yml`)
+**When** this is built
+**Then** the default in-process Socket.IO adapter is used — no Redis adapter added in this story
+
+---
+
+### Story 3.5: Real-Time Sync — Live Chat Delivery — ✅ built (2026-07-29)
+
+**Verified live**, per CLAUDE.md's rule. Same three-real-user rig as Story 3.4 (signed real JWTs,
+connected three real `socket.io-client` sockets to the running dev backend, drove the real HTTP
+API), extended with a third user in a **different tenant entirely** to prove message delivery is
+correctly scoped, not just correctly triggered. Scenario: Admin creates a task and delegates it to
+Geemeth; **before Geemeth ever accepts** (still only a pending delegate), Geemeth posts a message.
+Confirmed: Admin's socket (the delegator, tracking the still-pending delegation) receives it live;
+Geemeth's own socket also receives it back (proving the "sender is included, for their other open
+tabs" design works); Chamara's socket (zero relationship to the task, different tenant) receives
+nothing at all.
+
+Built: `getAccessibleUserIds(taskId)` on `PriorityTasksService` — the same access rule
+`findOneForUser` already enforces (holder/tracker-holder/pending-delegate/share-recipient),
+computed once and reused, not re-derived in a different shape. `PriorityTaskMessagesService.add()`
+calls it after saving + auditing a message, then emits `priority-task:message` (payload: the actual
+message, not a "go re-fetch" signal — unlike `flow-changed`, a chat message is small, immutable, and
+has no access-control re-derivation to worry about, so pushing it directly is safe and lower-latency)
+to every one of those users, **including the sender** — the frontend dedupes by message id, since
+the sender's own tab already appended it from the synchronous HTTP response. Frontend: a second
+subscription in `TaskDetailDialog.tsx`, scoped to whichever task the dialog currently has open,
+reusing the same shared socket connection from Story 3.4 (`lib/realtime/socket.ts`) rather than a
+second one.
+
+This closes Epic 3 — all five stories (3.1–3.5) are now built and verified live.
+
+As an **authenticated user with a task's chat thread open**,
+I want **new messages to appear the moment someone sends them**,
+So that **a conversation about a task feels like a conversation, not a page I have to keep refreshing**.
+
+**Acceptance Criteria:**
+
+**Given** Story 3.4's gateway exists
+**When** a message is posted (Story 3.3)
+**Then** a `priority-task:message` event fires to every user with read access to that task's chat
+
+**Given** I have that task's chat thread open when a message arrives
+**When** the event is received
+**Then** it appends to the visible thread without a reload
+
+**Given** I do **not** have that task's chat thread open
+**When** a message is sent
+**Then** nothing pushes to me for it in this story — an unread-count/notification badge is a future
+enhancement, not in scope here
+
+## Epic 3 build order
+
+| # | Story | Depends on | Touches |
+|---|---|---|---|
+| 1 | 3.1 Flow table & migration | — | new migration, `priority_task_flow` entity |
+| 2 | 3.2 Backend cutover | 3.1 | `priority-tasks.service.ts`, `priority-tasks.controller.ts`, drop-column migration |
+| 3 | 3.3 Task chat | 3.2 | new `priority_task_messages` table/entity/service/controller, `TaskDetailDialog.tsx` |
+| 4 | 3.4 Real-time board/Incoming | 3.2 | new WS gateway, `PriorityBoard.tsx`, `IncomingPanelDialog.tsx` |
+| 5 | 3.5 Real-time chat | 3.3, 3.4 | WS gateway, chat UI from 3.3 |
+
+Same discipline as Epic 1/2: reviewed and confirmed one story at a time with the product owner before
+build starts on it. All five are **DRAFT** — none are confirmed yet.

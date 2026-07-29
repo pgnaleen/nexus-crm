@@ -1,5 +1,6 @@
 import type {
   AcceptPriorityTaskRequest,
+  CreatePriorityTaskMessageRequest,
   CreatePriorityTaskRequest,
   CreatePriorityTaskShareRequest,
   DelegatePriorityTaskRequest,
@@ -7,6 +8,7 @@ import type {
   MovePriorityTaskRequest,
   PriorityTaskHistoryEntry,
   PriorityTaskDelegationTrackerResponse,
+  PriorityTaskMessageResponse,
   PriorityTaskResponse,
   PriorityTaskShareResponse,
   UpdatePriorityTaskProgressRequest,
@@ -16,6 +18,14 @@ import { apiFetch } from "./client";
 
 export function createPriorityTask(payload: CreatePriorityTaskRequest): Promise<PriorityTaskResponse> {
   return apiFetch<PriorityTaskResponse>("/priority-tasks", { method: "POST", body: JSON.stringify(payload) });
+}
+
+// Story 3.4 -- the initial page load fetches this server-side
+// (lib/priority-tasks/server.ts::listPriorityTasks); this client-side twin
+// is for the live-sync refresh a priority-task:flow-changed event triggers,
+// which has no server-render context to run in.
+export function listPriorityTasks(): Promise<PriorityTaskResponse[]> {
+  return apiFetch<PriorityTaskResponse[]>("/priority-tasks");
 }
 
 export function getPriorityTask(id: string): Promise<PriorityTaskResponse> {
@@ -114,6 +124,24 @@ export function acceptPriorityTask(id: string, payload: AcceptPriorityTaskReques
 
 export function redelegatePriorityTask(id: string, payload: DelegatePriorityTaskRequest): Promise<PriorityTaskResponse> {
   return apiFetch<PriorityTaskResponse>(`/priority-tasks/${id}/redelegate`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+// Story 3.3 -- task chat, additive to notes. Anyone with access to the task
+// (owner, tracker-holder, share recipient, or pending delegate) can read and
+// post -- broader than the owner-only rule shares/mutations elsewhere in
+// this module use.
+export function listPriorityTaskMessages(taskId: string): Promise<PriorityTaskMessageResponse[]> {
+  return apiFetch<PriorityTaskMessageResponse[]>(`/priority-tasks/${taskId}/messages`);
+}
+
+export function createPriorityTaskMessage(
+  taskId: string,
+  payload: CreatePriorityTaskMessageRequest,
+): Promise<PriorityTaskMessageResponse> {
+  return apiFetch<PriorityTaskMessageResponse>(`/priority-tasks/${taskId}/messages`, {
     method: "POST",
     body: JSON.stringify(payload),
   });

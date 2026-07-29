@@ -13,9 +13,7 @@ import { DelegatePriorityTaskDto } from "./dto/delegate-priority-task.dto";
 import { MovePriorityTaskDto } from "./dto/move-priority-task.dto";
 import { UpdatePriorityTaskDto } from "./dto/update-priority-task.dto";
 import { UpdatePriorityTaskProgressDto } from "./dto/update-priority-task-progress.dto";
-import { PriorityTaskDelegationTracker } from "./entities/priority-task-delegation-tracker.entity";
-import { PriorityTask } from "./entities/priority-task.entity";
-import { PriorityTasksService } from "./priority-tasks.service";
+import { DelegationTrackerView, PriorityTasksService, PriorityTaskView } from "./priority-tasks.service";
 
 // No PermissionsGuard/RequirePermission anywhere in this controller -- the
 // global JwtAuthGuard (authentication only) is the entire access rule, same
@@ -348,32 +346,20 @@ export class PriorityTasksController {
   }
 
   private async toTrackerResponse(
-    tracker: PriorityTaskDelegationTracker,
+    tracker: DelegationTrackerView,
   ): Promise<PriorityTaskDelegationTrackerResponse> {
-    // `task` is eager-loaded by the service's own query (relations:
-    // ["task"]) -- a tracker with no task would mean the FK's ON DELETE
-    // CASCADE didn't fire, which should be impossible, but fail loudly
-    // rather than silently rendering a blank card if it ever happens.
-    // The service now filters trackers whose task no longer resolves (Story
-    // 2.10 -- a soft-deleted task doesn't fire the FK's ON DELETE CASCADE),
-    // so this is unreachable in practice. Kept as a hard assertion rather
-    // than rendering a blank card if that filter ever regresses.
-    if (!tracker.task) {
-      throw new Error(`Delegation tracker ${tracker.id} has no linked task`);
-    }
-    // Before acceptance the current holder is the pending recipient
-    // (delegatedToUserId); once accepted (Story 1.8) that's cleared and the
-    // holder is the task's new owner. Fall back to ownerId so the
-    // delegator's card keeps naming whoever currently has it.
-    const currentHolderId = tracker.task.delegatedToUserId ?? tracker.task.ownerId;
-    const delegatedToName = await this.priorityTasksService.getUserDisplayName(currentHolderId);
+    // Story 3.2 -- the service resolves who currently holds the task
+    // (delegatedToUserId here) live-joined from priority_task_flow, not a
+    // frozen snapshot: the pending recipient before acceptance, the real
+    // holder once accepted (Story 1.8/2.4).
+    const delegatedToName = await this.priorityTasksService.getUserDisplayName(tracker.delegatedToUserId);
     return {
       id: tracker.id,
       taskId: tracker.taskId,
-      taskTitle: tracker.task.title,
-      taskStatus: tracker.task.status,
-      taskProgress: tracker.task.progress,
-      delegatedToUserId: currentHolderId ?? "",
+      taskTitle: tracker.taskTitle,
+      taskStatus: tracker.taskStatus,
+      taskProgress: tracker.taskProgress,
+      delegatedToUserId: tracker.delegatedToUserId,
       delegatedToName: delegatedToName ?? "",
       rank: tracker.rank,
       createdAt: tracker.createdAt.toISOString(),
@@ -386,7 +372,7 @@ export class PriorityTasksController {
   // one here rather than shipping a stale 0 that would drop the card's
   // "Shared" pill right after an unrelated edit.
   private async toResponse(
-    task: PriorityTask,
+    task: PriorityTaskView,
     viewerId: string,
     creatorName?: string | null,
     shareCount?: number,

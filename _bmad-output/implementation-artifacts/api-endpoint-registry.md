@@ -399,6 +399,18 @@ FK) — same shape as `deal-partners.service.ts`'s own hard-delete path, no `del
 
 ## Priority Tasks (`backend/src/modules/priority-tasks/priority-tasks.controller.ts`)
 
+**Superseded by Epic 3, 2026-07-29 — read this before the history below.** Stories 3.1/3.2 replaced
+`priority_tasks.owner_id`/`quadrant`/`rank`/`status`/`progress`/`delegated_to_user_id`/
+`delegated_by_user_id` and the whole `priority_task_delegation_trackers` table (both **dropped**)
+with one append-only `priority_task_flow` table — every mention of those columns/that table in the
+Epic 1/2 notes below is now historical, describing the mechanism at the time each story was built,
+not the current schema. **No request/response shape changed** (`PriorityTaskResponse` etc. are
+byte-identical) — this was a storage rewrite, verified live by reproducing the exact bug it fixes
+(a task delegated in a loop leaving a stale duplicate tracker behind) against the real dev DB. See
+that story's own writeup in `epics-task-management.md` for the full verification evidence. The
+history below is kept for context on *why* each endpoint's access rules/validation are what they
+are — that reasoning didn't change, only where the state lives.
+
 New module, 2026-07-23/24 — Priority Tracker epic (Eisenhower task board), Stories 1.1 (View/
 Navigate board), 1.2 (Create a Task), 1.3 (Drag-and-drop reorder), 1.4 (View/Edit Task Details &
 Notes), 1.5 (Share a Task), and 1.6 (Delegate a Task — send-side only, see below). Every story's
@@ -476,6 +488,52 @@ see or act on it yet (same "real backend, no receiving-side UI" shape Story 1.5 
 | 9 | POST | `/priority-tasks/:id/delegate` | Any authenticated user (no RBAC permission) | Delegate a task to exactly one other active user (Story 1.6, send-side). | body: `{userId}` | `PriorityTaskResponse` | `delegate` → `priority-tasks.service.ts::delegate` | `lib/api/priority-tasks.ts::delegatePriorityTask` — `PriorityBoard.tsx`'s `handleTaskDelegated`, called from `TaskDetailDialog.tsx`'s Delegate button via `DelegateTaskDialog.tsx` | ✅ | Owner-only. One DB transaction: resequences the task's old quadrant (same pattern as `move`), sets `status: 'delegated'` + `delegated_to_user_id`, creates the delegator's tracking card. `409 Conflict` if already delegated (pending), `400` for self-delegation or a non-active target. Records an `audit_logs` update (`entityType: "priority_task"`, noting the status/delegatedTo transition). |
 | 10 | GET | `/priority-tasks/delegated-trackers` | Any authenticated user (no RBAC permission) | List the caller's own delegation tracking cards, for the DELEGATE quadrant (Story 1.6). | none | `PriorityTaskDelegationTrackerResponse[]` → `{id, taskId, taskTitle, taskStatus, taskProgress, delegatedToUserId, delegatedToName, rank, createdAt}[]` | `findDelegationTrackers` → `priority-tasks.service.ts::findDelegationTrackersForUser` | `lib/priority-tasks/server.ts::listPriorityTaskDelegationTrackers` (initial load) + `lib/api/priority-tasks.ts::listPriorityTaskDelegationTrackers` (re-fetched client-side right after a successful delegate) — `PriorityBoard.tsx` | ✅ | Declared **before** `:id` in the controller so `delegated-trackers` isn't swallowed as a route param (same fix as `GET /deals/partner-links`). `taskTitle`/`taskStatus`/`taskProgress` are live-joined from the referenced task on every call, never frozen at delegation time. |
 
-| 11 | DELETE | `/priority-tasks/:id` | Any authenticated user (no RBAC permission) | Permanently clear an archived task out of the Archive (Story 2.10). | none | `{success: true}` | `remove` -> `priority-tasks.service.ts::remove` | `lib/api/priority-tasks.ts::deletePriorityTask` -- `ArchivePanelDialog.tsx`, behind a `useConfirm()` destructive confirmation | OK | **Soft delete, never a hard `DELETE`** -- `softRemove()` then `update(id, {deletedBy})`, the same two-step `deals.service.ts::remove` uses (`softRemove` sets `deletedAt` but not `deletedBy`). Owner-only via `findOneOwnedOrFail`, and **409 unless `status === archived`**: a live task can be pending-delegation or shared, and soft-deleting one would yank it out of another user's Incoming panel -- exactly the cross-user side effect Story 1.10's "archiving is scoped to my own perspective" rule exists to prevent. In the same transaction it **hard-deletes the task's `priority_task_delegation_trackers` and `priority_task_shares` rows** (both bare join tables, both hard-removed by their own unlink action anyway): their FKs are `ON DELETE CASCADE`, which a soft-delete never fires, and an orphaned tracker is not cosmetic -- `findDelegationTrackersForUser` eager-loads `task`, so it would have 500'd the delegator's entire board. That method now also filters unresolvable trackers as a second line of defence. Records one `audit_logs` delete row carrying the title/quadrant/status/progress snapshot plus the two cascade counts. No password re-entry: CLAUDE.md requires that for *cascading* deletes, and nothing cascades to a real leaf entity here. |
+| 11 | DELETE | `/priority-tasks/:id` | Any authenticated user (no RBAC permission) | Permanently clear an archived task out of the Archive (Story 2.10). | none | `{success: true}` | `remove` -> `priority-tasks.service.ts::remove` | `lib/api/priority-tasks.ts::deletePriorityTask` -- `ArchivePanelDialog.tsx`, behind a `useConfirm()` destructive confirmation | OK | **Soft delete, never a hard `DELETE`** -- `softRemove()` then `update(id, {deletedBy})`, the same two-step `deals.service.ts::remove` uses (`softRemove` sets `deletedAt` but not `deletedBy`). Owner-only via `findOneOwnedOrFail`, and **409 unless `status === archived`**: a live task can be pending-delegation or shared, and soft-deleting one would yank it out of another user's Incoming panel -- exactly the cross-user side effect Story 1.10's "archiving is scoped to my own perspective" rule exists to prevent. **Epic 3 update:** the cascade now force-flips `is_current = false` on every `priority_task_flow` row for the task (never hard-deleted -- flow rows are never removed, only superseded, so history survives as long as the task row does) instead of hard-deleting `priority_task_delegation_trackers` rows (that table no longer exists); `priority_task_shares` is still hard-deleted, unchanged. Records one `audit_logs` delete row carrying the title/quadrant/status/progress snapshot plus the closed-flow-row and removed-share counts. No password re-entry: CLAUDE.md requires that for *cascading* deletes, and nothing cascades to a real leaf entity here. |
+
+`priority_task_messages` is a second bare join table (Epic 3, Story 3.3, 2026-07-29 — task chat),
+routed under `/priority-tasks/:taskId/messages`, same shape/rationale as `priority_task_shares`: no
+`tenant_id` of its own (scoped via the parent task), no soft-delete. Unlike a share, a message is
+also **immutable once sent** — no edit/delete endpoint in this pass, so it carries no `updated_at`
+either. Access is the **broader** `findOneForUser` rule (owner, current tracker-holder, share
+recipient, *or pending delegate*) on both read and write, not the owner-only rule shares/mutations
+elsewhere in this module use — anyone with any relationship to the task can take part in its
+discussion, including a delegation recipient who hasn't accepted yet. Verified live against two real
+tenant users (a pending, not-yet-accepted delegate posting successfully) and a third user in a
+different tenant entirely, confirmed denied on both read and post with a 404 (not a leaked-existence
+403), per this module's existing convention.
+
+| 12 | GET | `/priority-tasks/:taskId/messages` | Any authenticated user (no RBAC permission) | List a task's chat thread, oldest first (Story 3.3). | none | `PriorityTaskMessageResponse[]` → `{id, userId, authorName, body, createdAt}[]` | `priority-task-messages.controller.ts::findAll` → `priority-task-messages.service.ts::findAll` | `lib/api/priority-tasks.ts::listPriorityTaskMessages` — `TaskDetailDialog.tsx`'s chat section | ✅ | Gated by `PriorityTasksService.findOneForUser`, not owner-only. `authorName` resolved via one batched lookup per distinct author (`Promise.all` over a `Set` of ids), not one query per message. |
+| 13 | POST | `/priority-tasks/:taskId/messages` | Any authenticated user (no RBAC permission) | Post a message to a task's chat thread (Story 3.3). | body: `{body}` (1–4000 chars, required) | `PriorityTaskMessageResponse` | `priority-task-messages.controller.ts::create` → `priority-task-messages.service.ts::add` | `lib/api/priority-tasks.ts::createPriorityTaskMessage` — `TaskDetailDialog.tsx`'s chat send button | ✅ | Same access rule as #12. `seq` is server-computed per task (`MAX(seq) + 1` inside the write transaction) for stable ordering independent of clock skew. Records an `audit_logs` insert (`entityType: "priority_task_message"`). |
+
+**WebSocket gateway (Epic 3, Story 3.4, 2026-07-29) — the app's first, not just this module's.**
+Not a REST endpoint, so it doesn't fit the table above, but it's part of this module's surface:
+`backend/src/core/realtime/` (`RealtimeGateway`, `RealtimeService`), registered in the already-global
+`CoreModule`, reachable by any authenticated socket, any module. Auth happens by hand on
+`handleConnection` — no `@nestjs/passport` guard runs on a socket connection the way `JwtAuthGuard`
+runs on every HTTP request — verifying the same `JWT_ACCESS_SECRET`-signed token the HTTP API already
+uses, read from the same httpOnly cookie (`auth.token` handshake field as a fallback). Each socket
+joins a `tenant:{tenantId}:user:{userId}` room; nothing is ever broadcast wider than that. CORS
+mirrors `main.ts`'s own `CORS_ORIGIN` allow-list. Single in-process Socket.IO adapter — the backend
+runs as one instance (confirmed via `docker-compose.yml`); add a Redis adapter first if that changes.
+
+`PriorityTasksService` fires `priority-task:flow-changed` (payload: `{taskId}`, a "go re-fetch"
+signal, never a snapshot to render directly) after create/delegate/accept/redelegate/move/complete/
+archive/restore, to every current flow row's `user_id` plus any `linked_user_id`. Verified live:
+signed real JWTs for two real users, connected two real `socket.io-client` sockets to the running
+dev backend, drove the real HTTP API end to end, and confirmed both the owner's and the pending
+recipient's sockets received exactly the expected events — not asserted from reading the code.
+
+**`priority-task:message` (Epic 3, Story 3.5, 2026-07-29).** Unlike `flow-changed`, this one carries
+the real message content (`{taskId, message: {id, userId, authorName, body, createdAt}}`) rather than
+a "go re-fetch" signal — a chat message is small, immutable once sent, and has no access-control
+re-derivation the way task state does, so pushing it directly is safe and lower-latency.
+`PriorityTaskMessagesService.add()` fires it, via a new `PriorityTasksService.getAccessibleUserIds
+(taskId)` helper that reuses `findOneForUser`'s exact access rule (holder/tracker-holder/pending-
+delegate/share-recipient) rather than re-deriving it in a different shape, to every one of those
+users, **including the sender** (their other open tabs/devices need it too — the frontend dedupes by
+message id, since the sender's own tab already appended it from the synchronous HTTP response).
+Verified live with a third real user in a **different tenant entirely**: a pending, not-yet-accepted
+delegate posted a message, and the delegator's socket received it, the sender's own socket received
+it back, and the unrelated third user's socket received nothing at all.
 
 *(Next section will be added once the rest of Auth is reviewed.)*
