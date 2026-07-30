@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PERMISSIONS, type DealDocumentResponse, type DealNoteResponse, type DealPartnerResponse, type DealResponse } from "@orelia/common";
 import {
   createDealNote,
   deleteDeal,
+  deleteDealNote,
   getDeal,
   getDealDependentsCount,
   listDealDocuments,
@@ -16,7 +17,7 @@ import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { BuildingIcon, EditIcon, ExternalLinkIcon, FileIcon, TrashIcon, UserIcon } from "@/components/ui/icons";
-import { useAlert, useCascadeDeleteConfirm } from "@/components/providers/DialogProvider";
+import { useAlert, useCascadeDeleteConfirm, useConfirm } from "@/components/providers/DialogProvider";
 import { computeCosting, formatLkr, formatNoteTime, formatPercent, getInitials } from "@/lib/deals/deal-display";
 import { DealStageHistoryRoadmap } from "./DealStageHistoryRoadmap";
 
@@ -78,11 +79,19 @@ export function ViewDealDialog({
   const [editNoteDraft, setEditNoteDraft] = useState("");
   const [noteError, setNoteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const notesEndRef = useRef<HTMLDivElement>(null);
 
   const canDelete = permissions.includes(PERMISSIONS.DEALS_DELETE);
   const canUpdate = permissions.includes(PERMISSIONS.DEALS_UPDATE);
   const confirmCascadeDelete = useCascadeDeleteConfirm();
+  const confirm = useConfirm();
   const { showError } = useAlert();
+
+  // Chat-style auto-scroll: jump to the newest note on initial load, after
+  // posting, and after deleting.
+  useEffect(() => {
+    notesEndRef.current?.scrollIntoView({ block: "end" });
+  }, [notes]);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,7 +129,7 @@ export function ViewDealDialog({
 
   function startEditNote(note: DealNoteResponse) {
     setEditingNoteId(note.id);
-    setEditNoteDraft(note.text);
+    setEditNoteDraft(note.text ?? "");
     setNoteError(null);
   }
 
@@ -138,6 +147,27 @@ export function ViewDealDialog({
       setEditingNoteId(null);
     } catch (err) {
       setNoteError(err instanceof ApiError ? err.message : "Failed to save note");
+    }
+  }
+
+  async function deleteNote(noteId: string) {
+    const ok = await confirm({
+      title: "Delete note",
+      message: "Delete this note? This can't be undone.",
+      confirmLabel: "Delete",
+      isDestructive: true,
+    });
+    if (!ok) return;
+    setNoteError(null);
+    try {
+      await deleteDealNote(dealId, noteId);
+      // Stays in the list as a tombstone -- doesn't disappear -- matching
+      // the chat convention of "this message was deleted" rather than
+      // silently vanishing.
+      const deletedAt = new Date().toISOString();
+      setNotes((prev) => (prev ?? []).map((n) => (n.id === noteId ? { ...n, text: null, deletedAt } : n)));
+    } catch (err) {
+      setNoteError(err instanceof ApiError ? err.message : "Failed to delete note");
     }
   }
 
@@ -309,71 +339,106 @@ export function ViewDealDialog({
       )}
 
       {activeTab === "notes" && (
-        <div className="min-h-[420px]">
+        <div className="flex h-[min(480px,calc(100vh-260px))] flex-col">
           {noteError && <p className="mb-3 text-[12.5px] text-[var(--color-danger)]">{noteError}</p>}
-          {notes === null ? (
-            <p className="text-[13.5px] text-[var(--color-text-muted)]">Loading…</p>
-          ) : notes.length === 0 ? (
-            <p className="text-[var(--color-text-muted)]">No notes yet. Add one below.</p>
-          ) : (
-            <div className="mb-5 flex flex-col gap-4">
-              {notes.map((note) => (
-                <div key={note.id} className="flex items-start gap-3">
-                  <div
-                    className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-full bg-[var(--color-brand)] text-[12.5px] font-bold tracking-[0.02em] text-white"
-                    aria-hidden="true"
-                  >
-                    {getInitials(note.authorName ?? "?")}
-                  </div>
-                  <div className="min-w-0 flex-1 rounded-tl-[4px] rounded-tr-[14px] rounded-bl-[14px] rounded-br-[14px] border border-[var(--color-border)] bg-white px-[14px] py-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-semibold text-[var(--color-text)]">
-                        {note.authorName ?? "Unknown"}
-                      </span>
-                      <span className="flex-1 text-[11.5px] text-[var(--color-text-muted)]">
-                        {formatNoteTime(note.createdAt)}
-                      </span>
-                      {note.authorId === currentUserId && editingNoteId !== note.id && (
-                        <button
-                          type="button"
-                          className="flex flex-shrink-0 cursor-pointer rounded-md border-0 bg-transparent p-[5px] text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#eaf1fd] hover:text-[var(--color-brand)]"
-                          aria-label="Edit note"
-                          onClick={() => startEditNote(note)}
-                        >
-                          <EditIcon size={14} />
-                        </button>
-                      )}
-                    </div>
-
-                    {editingNoteId === note.id ? (
-                      <>
-                        <textarea
-                          className={TEXTAREA_CLASS}
-                          rows={3}
-                          value={editNoteDraft}
-                          onChange={(e) => setEditNoteDraft(e.target.value)}
-                        />
-                        <div className="mt-2 flex justify-end gap-2">
-                          <Button type="button" variant="secondary" onClick={cancelEditNote}>
-                            Cancel
-                          </Button>
-                          <Button type="button" onClick={() => saveEditNote(note.id)}>
-                            Save
-                          </Button>
+          <div className="flex-1 overflow-y-auto pr-1">
+            {notes === null ? (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-[13.5px] text-[var(--color-text-muted)]">Loading…</p>
+              </div>
+            ) : notes.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center gap-1 text-center">
+                <p className="text-[13.5px] font-medium text-[var(--color-text)]">No notes yet</p>
+                <p className="text-[12.5px] text-[var(--color-text-muted)]">Start the conversation below.</p>
+              </div>
+            ) : (
+              <div className="mb-2 flex flex-col gap-5">
+                {notes.map((note) => {
+                  const isOwn = note.authorId === currentUserId;
+                  const isDeleted = Boolean(note.deletedAt);
+                  return (
+                    <div key={note.id} className={`flex items-start gap-3 ${isOwn ? "flex-row-reverse" : ""}`}>
+                      <div
+                        className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-[12.5px] font-bold tracking-[0.02em] text-white ${
+                          isDeleted ? "bg-[#cbd5e1]" : isOwn ? "bg-crm-primary" : "bg-[#64748b]"
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {getInitials(note.authorName ?? "?")}
+                      </div>
+                      <div
+                        className={`min-w-0 max-w-[75%] rounded-bl-[18px] rounded-br-[18px] px-4 py-3 ${
+                          isDeleted
+                            ? "border border-dashed border-[var(--color-border)] bg-transparent"
+                            : `shadow-[0_1px_2px_rgba(16,24,40,0.05)] ${isOwn ? "bg-crm-primary-tint" : "bg-[#f1f5f9]"}`
+                        } ${isOwn ? "rounded-tr-[6px] rounded-tl-[18px]" : "rounded-tl-[6px] rounded-tr-[18px]"}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13.5px] font-semibold text-[var(--color-text)]">
+                            {note.authorName ?? "Unknown"}
+                          </span>
+                          <span className="flex-1 text-[11.5px] text-[var(--color-text-muted)]">
+                            {formatNoteTime(note.createdAt)}
+                          </span>
+                          {isOwn && !isDeleted && editingNoteId !== note.id && (
+                            <>
+                              <button
+                                type="button"
+                                className="flex flex-shrink-0 cursor-pointer rounded-full border-0 bg-transparent p-[5px] text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-crm-primary-tint hover:text-crm-primary"
+                                aria-label="Edit note"
+                                onClick={() => startEditNote(note)}
+                              >
+                                <EditIcon size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                className="flex flex-shrink-0 cursor-pointer rounded-full border-0 bg-transparent p-[5px] text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#fdf0ee] hover:text-[var(--color-danger)]"
+                                aria-label="Delete note"
+                                onClick={() => deleteNote(note.id)}
+                              >
+                                <TrashIcon size={14} />
+                              </button>
+                            </>
+                          )}
                         </div>
-                      </>
-                    ) : (
-                      <p className="mt-1 whitespace-pre-wrap text-[13.5px] text-[var(--color-text)]">{note.text}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
 
-          <div className="flex items-start gap-3">
+                        {isDeleted ? (
+                          <p className="mt-1 flex items-center gap-1.5 text-[13px] italic text-[var(--color-text-muted)]">
+                            <TrashIcon size={13} />
+                            This note was deleted
+                          </p>
+                        ) : editingNoteId === note.id ? (
+                          <>
+                            <textarea
+                              className={TEXTAREA_CLASS}
+                              rows={3}
+                              value={editNoteDraft}
+                              onChange={(e) => setEditNoteDraft(e.target.value)}
+                            />
+                            <div className="mt-2 flex justify-end gap-2">
+                              <Button type="button" variant="secondary" onClick={cancelEditNote}>
+                                Cancel
+                              </Button>
+                              <Button type="button" onClick={() => saveEditNote(note.id)}>
+                                Save
+                              </Button>
+                            </div>
+                          </>
+                        ) : (
+                          <p className="mt-1 whitespace-pre-wrap text-[13.5px] leading-relaxed text-[var(--color-text)]">{note.text}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div ref={notesEndRef} />
+          </div>
+
+          <div className="flex items-start gap-3 border-t border-[var(--color-border)] pt-4">
             <div
-              className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-full bg-[var(--color-brand)] text-[12.5px] font-bold tracking-[0.02em] text-white"
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-crm-primary text-[12.5px] font-bold tracking-[0.02em] text-white"
               aria-hidden="true"
             >
               <UserIcon size={16} />
@@ -382,9 +447,15 @@ export function ViewDealDialog({
               <textarea
                 className={TEXTAREA_CLASS}
                 rows={3}
-                placeholder="Write a note..."
+                placeholder="Write a note... (Enter to send, Shift+Enter for a new line)"
                 value={draftNote}
                 onChange={(e) => setDraftNote(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    postNote();
+                  }
+                }}
               />
               <div className="flex justify-end">
                 <Button type="button" onClick={postNote} isLoading={isPostingNote} disabled={!draftNote.trim()}>

@@ -143,6 +143,10 @@ export function updateDealNote(
   });
 }
 
+export function deleteDealNote(dealId: string, noteId: string): Promise<{ success: true }> {
+  return apiFetch<{ success: true }>(`/deals/${dealId}/notes/${noteId}`, { method: "DELETE" });
+}
+
 export function getDealTenderDetails(dealId: string): Promise<DealTenderDetailsResponse | null> {
   return apiFetch<DealTenderDetailsResponse | null>(`/deals/${dealId}/tender-details`);
 }

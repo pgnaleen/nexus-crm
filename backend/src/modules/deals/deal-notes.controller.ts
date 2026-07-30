@@ -1,5 +1,5 @@
 import { DealNoteResponse, PERMISSIONS } from "@orelia/common";
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
@@ -49,15 +49,32 @@ export class DealNotesController {
     return this.toResponse(note);
   }
 
+  // Same DEALS_UPDATE gate as update(); the author-only check (403 if the
+  // caller didn't write the note) happens inside the service.
+  @UseGuards(PermissionsGuard)
+  @RequirePermission([PERMISSIONS.DEALS_UPDATE])
+  @Delete(":noteId")
+  async remove(
+    @Param("dealId", ParseUUIDPipe) dealId: string,
+    @Param("noteId", ParseUUIDPipe) noteId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ success: true }> {
+    await this.dealNotesService.remove(dealId, noteId, user.sub);
+    return { success: true };
+  }
+
   private toResponse(note: DealNote): DealNoteResponse {
     return {
       id: note.id,
       dealId: note.dealId,
-      text: note.text,
+      // Deleted notes stay in the list as a tombstone, but their content
+      // never leaves the server once deleted.
+      text: note.deletedAt ? null : note.text,
       authorId: note.createdBy ?? null,
       authorName: note.authorUser?.displayName ?? null,
       createdAt: note.createdAt.toISOString(),
       updatedAt: note.updatedAt.toISOString(),
+      deletedAt: note.deletedAt ? note.deletedAt.toISOString() : null,
     };
   }
 }

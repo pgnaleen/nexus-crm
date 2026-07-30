@@ -137,11 +137,15 @@ export type UpdateDealNoteRequest = CreateDealNoteRequest;
 export interface DealNoteResponse {
   id: string;
   dealId: string;
-  text: string;
+  // null once the note has been deleted -- the row still comes back (as a
+  // "this note was deleted" tombstone, chat convention) but its content
+  // doesn't.
+  text: string | null;
   authorId: string | null;
   authorName: string | null;
   createdAt: string;
   updatedAt: string;
+  deletedAt: string | null;
 }
 
 // One row per deal -- upsert (create-if-missing, else update), not

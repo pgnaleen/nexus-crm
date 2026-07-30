@@ -344,6 +344,13 @@ export function AddDealDialog({
   const [isDropActive, setIsDropActive] = useState(false);
   const [addPartyState, setAddPartyState] = useState<AddPartyState>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const notesEndRef = useRef<HTMLDivElement>(null);
+
+  // Chat-style auto-scroll: jump to the newest draft note whenever one is
+  // added or removed.
+  useEffect(() => {
+    notesEndRef.current?.scrollIntoView({ block: "end" });
+  }, [notes]);
 
   // Edit mode only -- the deal already exists, so Documents/Partners are
   // fetched for real (not staged locally like create mode) and every
@@ -582,6 +589,10 @@ export function AddDealDialog({
 
   function cancelEditNote() {
     setEditingNoteId(null);
+  }
+
+  function deleteNote(id: string) {
+    setNotes((prev) => prev.filter((n) => n.id !== id));
   }
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
@@ -1527,32 +1538,45 @@ export function AddDealDialog({
         {activeTab === "notes" && (
           <div className="h-[620px] overflow-y-auto pr-1">
             {notes.length === 0 ? (
-              <p className="text-[var(--color-text-muted)]">No notes yet. Add one below.</p>
+              <div className="flex flex-col items-center justify-center gap-1 py-10 text-center">
+                <p className="text-[13.5px] font-medium text-[var(--color-text)]">No notes yet</p>
+                <p className="text-[12.5px] text-[var(--color-text-muted)]">Start the conversation below.</p>
+              </div>
             ) : (
-              <div className="mb-5 flex flex-col gap-4">
+              <div className="mb-5 flex flex-col gap-5">
                 {notes.map((note) => (
                   <div key={note.id} className="flex items-start gap-3">
                     <div
-                      className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-full bg-[var(--color-brand)] text-[12.5px] font-bold tracking-[0.02em] text-white"
+                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-crm-primary text-[12.5px] font-bold tracking-[0.02em] text-white"
                       aria-hidden="true"
                     >
                       {getInitials(note.author)}
                     </div>
-                    <div className="min-w-0 flex-1 rounded-tl-[4px] rounded-tr-[14px] rounded-bl-[14px] rounded-br-[14px] border border-[var(--color-border)] bg-white px-[14px] py-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+                    <div className="min-w-0 max-w-[75%] rounded-tl-[6px] rounded-tr-[18px] rounded-bl-[18px] rounded-br-[18px] bg-crm-primary-tint px-4 py-3 shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
                       <div className="flex items-center gap-2">
-                        <span className="text-[13px] font-semibold text-[var(--color-text)]">{note.author}</span>
+                        <span className="text-[13.5px] font-semibold text-[var(--color-text)]">{note.author}</span>
                         <span className="flex-1 text-[11.5px] text-[var(--color-text-muted)]">
                           {formatNoteTime(note.createdAt)}
                         </span>
                         {note.author === CURRENT_USER_LABEL && editingNoteId !== note.id && (
-                          <button
-                            type="button"
-                            className="flex flex-shrink-0 cursor-pointer rounded-md border-0 bg-transparent p-[5px] text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#eaf1fd] hover:text-[var(--color-brand)]"
-                            aria-label="Edit note"
-                            onClick={() => startEditNote(note)}
-                          >
-                            <EditIcon size={14} />
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className="flex flex-shrink-0 cursor-pointer rounded-full border-0 bg-transparent p-[5px] text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-white hover:text-crm-primary"
+                              aria-label="Edit note"
+                              onClick={() => startEditNote(note)}
+                            >
+                              <EditIcon size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className="flex flex-shrink-0 cursor-pointer rounded-full border-0 bg-transparent p-[5px] text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#fdf0ee] hover:text-[var(--color-danger)]"
+                              aria-label="Delete note"
+                              onClick={() => deleteNote(note.id)}
+                            >
+                              <TrashIcon size={14} />
+                            </button>
+                          </>
                         )}
                       </div>
 
@@ -1574,17 +1598,18 @@ export function AddDealDialog({
                           </div>
                         </>
                       ) : (
-                        <p className="mt-1 whitespace-pre-wrap text-[13.5px] text-[var(--color-text)]">{note.text}</p>
+                        <p className="mt-1 whitespace-pre-wrap text-[13.5px] leading-relaxed text-[var(--color-text)]">{note.text}</p>
                       )}
                     </div>
                   </div>
                 ))}
               </div>
             )}
+            <div ref={notesEndRef} />
 
-            <div className="flex items-start gap-3">
+            <div className="flex items-start gap-3 border-t border-[var(--color-border)] pt-4">
               <div
-                className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-full bg-[var(--color-brand)] text-[12.5px] font-bold tracking-[0.02em] text-white"
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-crm-primary text-[12.5px] font-bold tracking-[0.02em] text-white"
                 aria-hidden="true"
               >
                 {getInitials(CURRENT_USER_LABEL)}
@@ -1593,9 +1618,15 @@ export function AddDealDialog({
                 <textarea
                   className={TEXTAREA_CLASS}
                   rows={3}
-                  placeholder="Write a note..."
+                  placeholder="Write a note... (Enter to send, Shift+Enter for a new line)"
                   value={draftNote}
                   onChange={(e) => setDraftNote(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      postNote();
+                    }
+                  }}
                 />
                 <div className="flex justify-end">
                   <Button type="button" onClick={postNote} disabled={!draftNote.trim()}>

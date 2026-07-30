@@ -25,10 +25,15 @@ export class DealNotesService {
     // touching its notes -- DealNote has no tenant_id of its own, same
     // reasoning as DealDocument.
     await this.dealsService.findOneOrFail(dealId);
+    // withDeleted: a deleted note stays visible to everyone in the thread as
+    // a "this note was deleted" tombstone (chat convention), it doesn't just
+    // vanish -- the controller nulls out `text` for any row with deletedAt
+    // set, so the content itself still isn't exposed once deleted.
     const notes = await this.repo.find({
       where: { dealId },
       relations: ["authorUser"],
       order: { createdAt: "ASC" },
+      withDeleted: true,
     });
     this.logger.debug(`findAll returning ${notes.length} note(s) for deal ${dealId}`);
     return notes;
@@ -36,6 +41,19 @@ export class DealNotesService {
 
   async findOneOrFail(dealId: string, noteId: string): Promise<DealNote> {
     const note = await this.repo.findOne({ where: { id: noteId, dealId }, relations: ["authorUser"] });
+    if (!note) {
+      throw new NotFoundException("Deal note not found");
+    }
+    return note;
+  }
+
+  // Bare fetch (no relations) for the entity that's about to be mutated and
+  // saved -- loading with `authorUser` (joined on the same `created_by`
+  // column as the plain createdBy field) and then save()-ing that object
+  // risks the same relation-nulling bug documented for Deals. Callers that
+  // need display data re-fetch via findOneOrFail() afterward.
+  private async findBareOrFail(dealId: string, noteId: string): Promise<DealNote> {
+    const note = await this.repo.findOne({ where: { id: noteId, dealId } });
     if (!note) {
       throw new NotFoundException("Deal note not found");
     }
@@ -72,7 +90,7 @@ export class DealNotesService {
   // from deal_documents, which has no equivalent ownership check.
   async update(dealId: string, noteId: string, dto: UpdateDealNoteDto, userId: string): Promise<DealNote> {
     this.logger.debug(`update called for note ${noteId} on deal ${dealId} by ${userId}`);
-    const note = await this.findOneOrFail(dealId, noteId);
+    const note = await this.findBareOrFail(dealId, noteId);
 
     if (note.createdBy !== userId) {
       this.logger.debug(`Blocked: ${userId} is not the author of note ${noteId} (author=${note.createdBy})`);
@@ -95,6 +113,35 @@ export class DealNotesService {
       return this.findOneOrFail(dealId, noteId);
     } catch (err) {
       this.logger.error(`update failed for note ${noteId}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Same author-only restriction as update() -- a note has no dependent
+  // records, so this is a plain soft-delete, no cascade.
+  async remove(dealId: string, noteId: string, userId: string): Promise<void> {
+    this.logger.debug(`remove called for note ${noteId} on deal ${dealId} by ${userId}`);
+    const note = await this.findBareOrFail(dealId, noteId);
+
+    if (note.createdBy !== userId) {
+      this.logger.debug(`Blocked: ${userId} is not the author of note ${noteId} (author=${note.createdBy})`);
+      throw new ForbiddenException("Only the author of this note can delete it");
+    }
+
+    try {
+      const textSnapshot = note.text;
+      note.deletedBy = userId;
+      await this.repo.softRemove(note);
+      this.logger.debug(`remove succeeded for note ${noteId}`);
+      await this.auditLogService.record({
+        entityType: AUDIT_ENTITY_TYPE,
+        entityId: noteId,
+        action: "delete",
+        actorId: userId,
+        changes: { text: textSnapshot },
+      });
+    } catch (err) {
+      this.logger.error(`remove failed for note ${noteId}: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }
