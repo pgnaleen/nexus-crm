@@ -1,6 +1,7 @@
 import {
   IncomingTaskResponse,
   PriorityTaskDelegationTrackerResponse,
+  PriorityTaskFlowHopSummary,
   PriorityTaskHistoryEntry,
   PriorityTaskResponse,
 } from "@orelia/common";
@@ -34,9 +35,14 @@ export class PriorityTasksController {
       // Story 2.3 -- one grouped query for every card's "Shared" pill,
       // rather than letting toResponse fire one count per task.
       const shareCounts = await this.priorityTasksService.countSharesByTaskIds(tasks.map((task) => task.id));
+      // The board card's "who moved it where" preview -- one batched query
+      // for the whole board, not one per card.
+      const flowHops = await this.priorityTasksService.getRecentFlowHopsByTaskIds(tasks.map((task) => task.id));
       this.logger.debug(`GET /priority-tasks returning ${tasks.length} row(s)`);
       return await Promise.all(
-        tasks.map((task) => this.toResponse(task, user.sub, undefined, shareCounts.get(task.id) ?? 0)),
+        tasks.map((task) =>
+          this.toResponse(task, user.sub, undefined, shareCounts.get(task.id) ?? 0, flowHops.get(task.id) ?? []),
+        ),
       );
     } catch (err) {
       this.logger.error(`GET /priority-tasks failed: ${(err as Error).message}`, (err as Error).stack);
@@ -69,7 +75,12 @@ export class PriorityTasksController {
     this.logger.debug(`GET /priority-tasks/delegated-trackers called by ${user.sub}`);
     try {
       const trackers = await this.priorityTasksService.findDelegationTrackersForUser(user.sub);
-      const responses = await Promise.all(trackers.map((tracker) => this.toTrackerResponse(tracker)));
+      const flowHops = await this.priorityTasksService.getRecentFlowHopsByTaskIds(
+        trackers.map((tracker) => tracker.taskId),
+      );
+      const responses = await Promise.all(
+        trackers.map((tracker) => this.toTrackerResponse(tracker, flowHops.get(tracker.taskId) ?? [])),
+      );
       this.logger.debug(`GET /priority-tasks/delegated-trackers returning ${responses.length} row(s)`);
       return responses;
     } catch (err) {
@@ -103,6 +114,7 @@ export class PriorityTasksController {
     try {
       const tasks = await this.priorityTasksService.findArchivedForUser(user.sub);
       const shareCounts = await this.priorityTasksService.countSharesByTaskIds(tasks.map((task) => task.id));
+      const flowHops = await this.priorityTasksService.getRecentFlowHopsByTaskIds(tasks.map((task) => task.id));
       // Story 2.10 -- the Archive row's "by {creator}" attribution. Resolved
       // per distinct creator, not per row: an archive of 30 tasks you made
       // yourself is one lookup, not 30.
@@ -123,6 +135,7 @@ export class PriorityTasksController {
             user.sub,
             task.createdBy ? (creatorNames.get(task.createdBy) ?? null) : null,
             shareCounts.get(task.id) ?? 0,
+            flowHops.get(task.id) ?? [],
           ),
         ),
       );
@@ -347,6 +360,7 @@ export class PriorityTasksController {
 
   private async toTrackerResponse(
     tracker: DelegationTrackerView,
+    recentFlowHops: PriorityTaskFlowHopSummary[] = [],
   ): Promise<PriorityTaskDelegationTrackerResponse> {
     // Story 3.2 -- the service resolves who currently holds the task
     // (delegatedToUserId here) live-joined from priority_task_flow, not a
@@ -363,6 +377,7 @@ export class PriorityTasksController {
       delegatedToName: delegatedToName ?? "",
       rank: tracker.rank,
       createdAt: tracker.createdAt.toISOString(),
+      recentFlowHops,
     };
   }
 
@@ -370,12 +385,16 @@ export class PriorityTasksController {
   // hasn't already batched it -- the list endpoints pass a pre-fetched count
   // so N cards cost one query; every single-task endpoint lets it resolve
   // one here rather than shipping a stale 0 that would drop the card's
-  // "Shared" pill right after an unrelated edit.
+  // "Shared" pill right after an unrelated edit. `recentFlowHops` defaults
+  // to empty on every single-task mutation response -- the board's own
+  // WS-triggered refetch (Story 3.4) picks up the real value moments later,
+  // not worth an extra query on a single-task write.
   private async toResponse(
     task: PriorityTaskView,
     viewerId: string,
     creatorName?: string | null,
     shareCount?: number,
+    recentFlowHops: PriorityTaskFlowHopSummary[] = [],
   ): Promise<PriorityTaskResponse> {
     const resolvedShareCount =
       shareCount ?? (await this.priorityTasksService.countSharesForTask(task.id));
@@ -388,6 +407,7 @@ export class PriorityTasksController {
       status: task.status,
       progress: task.progress,
       ownerId: task.ownerId,
+      recentFlowHops,
       // Relative to whoever's asking -- see the contract's own comment for
       // why this is ownerId-vs-viewer, not createdBy-vs-ownerId (sharing
       // never moves ownerId, so a shared recipient must still see

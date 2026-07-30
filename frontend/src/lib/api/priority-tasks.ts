@@ -11,6 +11,7 @@ import type {
   PriorityTaskMessageResponse,
   PriorityTaskResponse,
   PriorityTaskShareResponse,
+  UpdatePriorityTaskMessageRequest,
   UpdatePriorityTaskProgressRequest,
   UpdatePriorityTaskRequest,
 } from "@orelia/common";
@@ -144,5 +145,22 @@ export function createPriorityTaskMessage(
   return apiFetch<PriorityTaskMessageResponse>(`/priority-tasks/${taskId}/messages`, {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function updatePriorityTaskMessage(
+  taskId: string,
+  messageId: string,
+  payload: UpdatePriorityTaskMessageRequest,
+): Promise<PriorityTaskMessageResponse> {
+  return apiFetch<PriorityTaskMessageResponse>(`/priority-tasks/${taskId}/messages/${messageId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deletePriorityTaskMessage(taskId: string, messageId: string): Promise<PriorityTaskMessageResponse> {
+  return apiFetch<PriorityTaskMessageResponse>(`/priority-tasks/${taskId}/messages/${messageId}`, {
+    method: "DELETE",
   });
 }

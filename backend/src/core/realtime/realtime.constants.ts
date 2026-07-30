@@ -17,17 +17,24 @@ export interface PriorityTaskFlowChangedPayload {
 }
 
 // Epic 3, Story 3.5. Unlike flow-changed, this carries the real message --
-// a chat message is small, immutable once sent, and has no access-control
-// re-derivation the way task state does, so pushing the content directly
-// (rather than another "go re-fetch" signal) is safe and lower-latency.
+// a chat message is small, has no access-control re-derivation the way task
+// state does, so pushing the content directly (rather than another
+// "go re-fetch" signal) is safe and lower-latency. `kind` distinguishes a
+// brand-new message from an edit or a delete of an existing one -- same
+// event name for all three, since each is just "here is the current true
+// state of one message"; the frontend upserts by `message.id` rather than
+// always appending.
 export const PRIORITY_TASK_MESSAGE_EVENT = "priority-task:message";
 export interface PriorityTaskMessagePayload {
   taskId: string;
+  kind: "created" | "edited" | "deleted";
   message: {
     id: string;
     userId: string;
     authorName: string;
     body: string;
     createdAt: string;
+    editedAt: string | null;
+    isDeleted: boolean;
   };
 }

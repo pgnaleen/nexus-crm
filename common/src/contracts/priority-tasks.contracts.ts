@@ -30,6 +30,16 @@ export interface UpdatePriorityTaskProgressRequest {
   progress: number;
 }
 
+// The board card's "who moved it where" preview -- e.g. "Ben(Decide) ->
+// Sam(Do)". Sourced from priority_task_flow (each row already IS a
+// per-hop user+quadrant record), not audit_logs. Newest-first; capped at 3.
+export interface PriorityTaskFlowHopSummary {
+  userId: string;
+  userName: string;
+  quadrant: PriorityTaskQuadrant;
+  timestamp: string;
+}
+
 export interface PriorityTaskResponse {
   id: string;
   title: string;
@@ -39,6 +49,11 @@ export interface PriorityTaskResponse {
   status: PriorityTaskStatus;
   progress: number;
   ownerId: string;
+  // Newest-first, at most 3. Empty on every single-task mutation response
+  // (create/delegate/accept/etc.) -- the board's own WS-triggered refetch
+  // picks up the real value moments later, same as other card fields that
+  // aren't worth an extra query on a single-task write.
+  recentFlowHops: PriorityTaskFlowHopSummary[];
   // Derived relative to whoever is asking: ownerId === viewer's own id. On
   // the bulk list endpoint this is always "owned" (that endpoint only ever
   // returns the caller's own tasks), but the single-task detail endpoint
@@ -130,8 +145,16 @@ export interface PriorityTaskHistoryEntry {
 
 // Epic 3, Story 3.3 (Task Chat). Additive to `notes` -- a real per-task
 // message thread, never a replacement for the owner's own free-text field.
-// Messages are immutable once sent (no edit/delete in this pass).
+// The author may edit or delete their own message -- editing sets
+// `editedAt`; deleting sets `isDeleted` and forces `body` to `""` in the
+// wire response (the real text is never destroyed server-side, it's just
+// never shipped to a client once deleted -- see the backend controller's
+// own comment on why).
 export interface CreatePriorityTaskMessageRequest {
+  body: string;
+}
+
+export interface UpdatePriorityTaskMessageRequest {
   body: string;
 }
 
@@ -141,6 +164,8 @@ export interface PriorityTaskMessageResponse {
   authorName: string;
   body: string;
   createdAt: string;
+  editedAt: string | null;
+  isDeleted: boolean;
 }
 
 // The delegator's own tracking card, live-joined to the real task's
@@ -155,4 +180,5 @@ export interface PriorityTaskDelegationTrackerResponse {
   delegatedToName: string;
   rank: number;
   createdAt: string;
+  recentFlowHops: PriorityTaskFlowHopSummary[];
 }

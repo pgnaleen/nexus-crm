@@ -19,6 +19,7 @@ import {
   PriorityTaskQuadrant,
   PriorityTaskStatus,
   type PriorityTaskDelegationTrackerResponse,
+  type PriorityTaskFlowHopSummary,
   type PriorityTaskResponse,
   type UserPickerResponse,
 } from "@orelia/common";
@@ -132,6 +133,29 @@ function CardProgress({ progress }: { progress: number }) {
   );
 }
 
+// The board card's "who moved it where" preview, e.g. "Ben(Decide) ->
+// Sam(Do)". Sourced server-side from priority_task_flow, oldest-first here
+// (the API returns newest-first, reversed on a copy for display) -- same
+// "backend picks a stable order, frontend reverses a presentational copy
+// when the two disagree" pattern TaskDetailDialog's own history list uses.
+// Only rendered for >=2 hops: a single-hop task (never moved) has nothing
+// resembling a "chain" worth a line, and would just add noise to every
+// fresh card on the board.
+function FlowHopsPreview({ hops }: { hops: PriorityTaskFlowHopSummary[] }) {
+  if (hops.length < 2) return null;
+  const ordered = [...hops].reverse();
+  return (
+    <div className="mt-1 truncate text-[11px] font-medium text-[var(--color-text-muted)]">
+      {ordered.map((hop, index) => (
+        <span key={`${hop.userId}-${hop.timestamp}`}>
+          {index > 0 && " → "}
+          {hop.userName}({t(`priorityTracker.quadrants.${hop.quadrant}.label`)})
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // A task with a pending delegation is removed from the board entirely
 // (see findAllForUser's delegatedToUserId filter) -- its delegator-side
 // representation is a TrackerCard instead, never this component, so
@@ -185,6 +209,7 @@ function TaskCard({ task, rank, accentClass }: { task: PriorityTaskResponse; ran
           )}
         </div>
 
+        <FlowHopsPreview hops={task.recentFlowHops} />
         {task.progress > 0 && <CardProgress progress={task.progress} />}
       </div>
 
@@ -299,6 +324,7 @@ function TrackerCard({
           )}
         </div>
 
+        <FlowHopsPreview hops={tracker.recentFlowHops} />
         {/* Live-joined to the real task on every fetch, never a snapshot
             frozen at delegation time -- so the recipient's progress shows up
             here as they move it. */}
@@ -426,9 +452,13 @@ function QuadrantPanel({
 interface PriorityBoardProps {
   initialTasks: PriorityTaskResponse[];
   initialDelegationTrackers: PriorityTaskDelegationTrackerResponse[];
+  // Drives the task detail dialog's Discussion tab own-vs-other bubble
+  // alignment -- threaded down from the server component, which already
+  // has the session in scope.
+  currentUserId: string;
 }
 
-export function PriorityBoard({ initialTasks, initialDelegationTrackers }: PriorityBoardProps) {
+export function PriorityBoard({ initialTasks, initialDelegationTrackers, currentUserId }: PriorityBoardProps) {
   const [taskById, setTaskById] = useState<Record<string, PriorityTaskResponse>>(() =>
     Object.fromEntries(initialTasks.map((task) => [task.id, task])),
   );
@@ -809,6 +839,7 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
       {selectedTaskId && (
         <TaskDetailDialog
           taskId={selectedTaskId}
+          currentUserId={currentUserId}
           onClose={() => setSelectedTaskId(null)}
           onSaved={handleTaskSaved}
           onDelegated={handleTaskDelegated}
@@ -821,6 +852,7 @@ export function PriorityBoard({ initialTasks, initialDelegationTrackers }: Prior
           onClose={() => setIsIncomingOpen(false)}
           onAccepted={handleTaskAccepted}
           onCountChange={setIncomingCount}
+          currentUserId={currentUserId}
         />
       )}
 

@@ -16,5 +16,11 @@ export default async function PriorityPage({ params }: { params: { tenant: strin
     listPriorityTaskDelegationTrackers(),
   ]);
 
-  return <PriorityBoard initialTasks={tasks ?? []} initialDelegationTrackers={delegationTrackers ?? []} />;
+  return (
+    <PriorityBoard
+      initialTasks={tasks ?? []}
+      initialDelegationTrackers={delegationTrackers ?? []}
+      currentUserId={session.user.id}
+    />
+  );
 }

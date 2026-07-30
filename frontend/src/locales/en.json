@@ -8,7 +8,8 @@
     "actions": {
       "cancel": "Cancel",
       "close": "Close",
-      "save": "Save"
+      "save": "Save",
+      "delete": "Delete"
     },
     "comingSoon": {
       "title": "Under Development",
@@ -560,6 +561,11 @@
     "detailDialog": {
       "loading": "Loading…",
       "loadingTitle": "…",
+      "tabs": {
+        "general": "General",
+        "history": "History",
+        "discussion": "Discussion"
+      },
       "quadrantLabel": "Quadrant",
       "progressLabel": "Progress",
       "lifecycleLabel": "Lifecycle",
@@ -596,11 +602,13 @@
         "delegated": "Delegated to {name}",
         "redelegated": "Re-delegated to {name}",
         "accepted": "Accepted",
+        "acceptedIntoQuadrant": "Accepted into {quadrant}",
         "progress": "Progress {value}%",
         "completed": "Completed",
         "archived": "Archived",
         "restored": "Restored from archive",
-        "meta": "{actor} · {time}"
+        "meta": "{actor} · {time}",
+        "seeMoreButton": "See more"
       },
       "errors": {
         "saveFailed": "Failed to save notes",
@@ -623,7 +631,16 @@
         "placeholder": "Write a message...",
         "sendButton": "Send",
         "loadFailed": "Failed to load messages",
-        "sendFailed": "Failed to send message"
+        "sendFailed": "Failed to send message",
+        "editAriaLabel": "Edit message",
+        "deleteAriaLabel": "Delete message",
+        "editedLabel": "(edited)",
+        "deletedPlaceholder": "This message was deleted",
+        "deleteConfirmTitle": "Delete message",
+        "deleteConfirmMessage": "Delete this message? It will show as removed in the thread.",
+        "editFailed": "Failed to edit message",
+        "deleteFailed": "Failed to delete message",
+        "loadEarlierButton": "Load earlier messages"
       }
     },
     "shareDialog": {

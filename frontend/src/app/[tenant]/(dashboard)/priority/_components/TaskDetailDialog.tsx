@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PriorityTaskStatus } from "@orelia/common";
 import type {
   PriorityTaskHistoryEntry,
@@ -11,22 +11,25 @@ import type {
 } from "@orelia/common";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
-import { TrashIcon } from "@/components/ui/icons";
+import { EditIcon, TrashIcon } from "@/components/ui/icons";
 import {
   archivePriorityTask,
   completePriorityTask,
   createPriorityTaskMessage,
+  deletePriorityTaskMessage,
   getPriorityTask,
   getPriorityTaskHistory,
   listPriorityTaskMessages,
   listPriorityTaskShares,
   removePriorityTaskShare,
   updatePriorityTask,
+  updatePriorityTaskMessage,
   updatePriorityTaskProgress,
 } from "@/lib/api/priority-tasks";
 import { ApiError } from "@/lib/api/client";
 import { PRIORITY_TASK_MESSAGE_EVENT, type PriorityTaskMessagePayload } from "@/lib/realtime/events";
 import { getRealtimeSocket } from "@/lib/realtime/socket";
+import { useConfirm } from "@/components/providers/DialogProvider";
 import { useToast } from "@/components/providers/ToastProvider";
 import { t } from "@/lib/i18n";
 import { DelegateTaskDialog } from "./DelegateTaskDialog";
@@ -34,6 +37,15 @@ import { ShareTaskDialog } from "./ShareTaskDialog";
 
 const TEXTAREA_CLASS =
   "w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5 text-sm text-crm-text transition-colors duration-150 focus:border-crm-primary focus:outline-none focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-crm-primary)_15%,transparent)]";
+
+// Every tab panel gets this same fixed height + internal scroll, per
+// CLAUDE.md's "Multi-tab dialogs: fixed panel size across tabs" rule --
+// the dialog's footprint never changes when switching tabs. 420px: this
+// dialog (maxWidth 560px) is notably narrower than AddDealDialog (the
+// documented 620px reference), closer to EmployeeDetailDialog's 380px
+// precedent, but General has more distinct sections than any of that
+// dialog's grid tabs.
+const TAB_PANEL_HEIGHT = "h-[420px]";
 
 // Story 2.7 -- relative for anything inside the last day, absolute beyond
 // that (the prototype's own `fmt`). Safe to read the clock at render time:
@@ -55,12 +67,30 @@ function formatTimestamp(isoTimestamp: string): string {
   )}`;
 }
 
+// Feature-local copy, same precedent as this file's own formatTimestamp
+// duplicating Deal Notes' formatNoteTime rather than importing across
+// feature boundaries -- see frontend/src/lib/deals/deal-display.ts's own
+// getInitials for the twin.
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  const first = parts[0] ?? "";
+  if (parts.length === 1) return first.charAt(0).toUpperCase();
+  const last = parts[parts.length - 1] ?? "";
+  return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase();
+}
+
 // Story 1.9 -- render a structured history entry via i18n (the backend
 // returns a `kind` + `detail`, never a pre-formatted string).
 //
 // Story 2.7 -- the actor moved OUT of these strings. The timeline puts the
 // event on its own bold line and "{actor} · {time}" beneath it, so leaving
 // the actor embedded here would print their name twice on every entry.
+//
+// `accepted` carries the quadrant the acceptor chose in `detail` (the raw
+// enum value, e.g. "decide") once the backend fix ships -- older rows
+// recorded before that fix have no quadrant in their audit changes, so
+// `detail` is null for them and this falls back to the old plain string.
 function historyLabel(entry: PriorityTaskHistoryEntry): string {
   const name = entry.detail ?? "";
   switch (entry.kind) {
@@ -71,7 +101,11 @@ function historyLabel(entry: PriorityTaskHistoryEntry): string {
     case "redelegated":
       return t("priorityTracker.detailDialog.history.redelegated", { name });
     case "accepted":
-      return t("priorityTracker.detailDialog.history.accepted");
+      return entry.detail
+        ? t("priorityTracker.detailDialog.history.acceptedIntoQuadrant", {
+            quadrant: t(`priorityTracker.quadrants.${entry.detail}.label`),
+          })
+        : t("priorityTracker.detailDialog.history.accepted");
     case "progress":
       return t("priorityTracker.detailDialog.history.progress", { value: name });
     case "completed":
@@ -219,8 +253,13 @@ function SegmentedProgress({
   );
 }
 
+type TabId = "general" | "history" | "discussion";
+const TAB_IDS: TabId[] = ["general", "history", "discussion"];
+
 interface TaskDetailDialogProps {
   taskId: string;
+  // Drives the Discussion tab's own-vs-other bubble alignment.
+  currentUserId: string;
   onClose: () => void;
   // The board's own card list doesn't show notes, but keeping its cached
   // copy in sync is good hygiene for whenever a future story does.
@@ -233,10 +272,19 @@ interface TaskDetailDialogProps {
   onArchived: (taskId: string) => void;
 }
 
-export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated, onArchived }: TaskDetailDialogProps) {
+export function TaskDetailDialog({
+  taskId,
+  currentUserId,
+  onClose,
+  onSaved,
+  onDelegated,
+  onArchived,
+}: TaskDetailDialogProps) {
   // Story 2.11 -- Complete and Share toast from here; archive/delegate are
   // handed back to the board, which owns their toast so it can't fire twice.
   const { showToast } = useToast();
+  const confirm = useConfirm();
+  const [activeTab, setActiveTab] = useState<TabId>("general");
   const [task, setTask] = useState<PriorityTaskResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
@@ -249,20 +297,29 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated, onArch
   const [isDelegateDialogOpen, setIsDelegateDialogOpen] = useState(false);
   const [isSavingProgress, setIsSavingProgress] = useState(false);
   const [history, setHistory] = useState<PriorityTaskHistoryEntry[]>([]);
+  const [historyVisibleCount, setHistoryVisibleCount] = useState(5);
   const [isCompleting, setIsCompleting] = useState(false);
 
-  // Story 3.3 -- task chat, additive to notes. Loaded for anyone with access
-  // to the task (not just the owner) -- broader than isOwner, same rule the
-  // backend gates on.
+  // Task chat, additive to notes. Loaded for anyone with access to the task
+  // (not just the owner) -- broader than isOwner, same rule the backend
+  // gates on.
   const [messages, setMessages] = useState<PriorityTaskMessageResponse[]>([]);
   const [messagesError, setMessagesError] = useState<string | null>(null);
+  const [messagesVisibleCount, setMessagesVisibleCount] = useState(15);
   const [newMessage, setNewMessage] = useState("");
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editMessageDraft, setEditMessageDraft] = useState("");
+  const [isSavingMessageEdit, setIsSavingMessageEdit] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
+    setActiveTab("general");
     setTask(null);
     setLoadError(null);
+    setHistoryVisibleCount(5);
+    setMessagesVisibleCount(15);
     getPriorityTask(taskId)
       .then((fetched) => {
         if (cancelled) return;
@@ -281,7 +338,7 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated, onArch
       .catch(() => {
         // Non-fatal -- the rest of the detail view still works without it.
       });
-    // Story 3.3 -- the chat thread.
+    // Task chat thread.
     setMessages([]);
     setMessagesError(null);
     listPriorityTaskMessages(taskId)
@@ -298,25 +355,54 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated, onArch
     };
   }, [taskId]);
 
-  // Story 3.5 -- live chat delivery, scoped to whichever task this dialog
-  // currently has open. Dedupes by message id: the sender's own tab already
-  // appended the message from the HTTP response in handleSendMessage, and
-  // this same event also reaches them (broadcastMessage includes the
-  // sender, for their other open tabs/devices) -- without the dedupe check
-  // it would show up twice for whoever just sent it.
+  // The single place any message write (send/edit/delete, from this tab's
+  // own HTTP response OR a realtime echo of either) lands in state --
+  // append if the id is new, replace in place if it already exists. This is
+  // what makes the arrival order of "my own HTTP response" vs. "the
+  // realtime broadcast of my own action" not matter: the backend emits the
+  // broadcast *before* the HTTP response is even finished being sent back
+  // (see PriorityTaskMessagesService.add's own ordering), so the socket
+  // event can genuinely reach this tab first. Two call sites each doing
+  // their own dedupe/replace independently (as this used to be written)
+  // left a gap: the HTTP-response path had no dedupe check at all, so
+  // whichever path lost the race duplicated the message instead of no-op'ing.
+  function upsertMessage(message: PriorityTaskMessageResponse) {
+    setMessages((current) =>
+      current.some((m) => m.id === message.id)
+        ? current.map((m) => (m.id === message.id ? message : m))
+        : [...current, message],
+    );
+  }
+
+  // Live chat delivery, scoped to whichever task this dialog currently has
+  // open.
   useEffect(() => {
     const socket = getRealtimeSocket();
     const handleMessage = (payload: PriorityTaskMessagePayload) => {
       if (payload.taskId !== taskId) return;
-      setMessages((current) =>
-        current.some((m) => m.id === payload.message.id) ? current : [...current, payload.message],
-      );
+      upsertMessage(payload.message);
     };
     socket.on(PRIORITY_TASK_MESSAGE_EVENT, handleMessage);
     return () => {
       socket.off(PRIORITY_TASK_MESSAGE_EVENT, handleMessage);
     };
+    // upsertMessage only closes over setMessages (a stable dispatch
+    // function), so omitting it here is safe -- which render's copy runs is
+    // behaviorally identical.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
+
+  // Chat-style auto-scroll: jump to the newest message when a new one
+  // arrives (send, or a realtime "created" event) -- deliberately keyed to
+  // the last message's own id, not messages.length or messagesVisibleCount,
+  // so revealing older messages via "Load earlier" never yanks the view.
+  const lastMessageId = messages[messages.length - 1]?.id;
+  useEffect(() => {
+    if (activeTab === "discussion") {
+      messagesEndRef.current?.scrollIntoView({ block: "end" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastMessageId, activeTab]);
 
   // Only whoever currently holds the work may edit notes, manage sharing, or
   // move progress. Story 2.4 -- this is `canEdit`, not `ownership === "owned"`:
@@ -435,15 +521,15 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated, onArch
     onClose();
   }
 
-  // Story 3.3 -- send a chat message. Available to anyone who can open this
-  // dialog at all (findOneForUser already gated that), not just the owner.
+  // Send a chat message. Available to anyone who can open this dialog at
+  // all (findOneForUser already gated that), not just the owner.
   async function handleSendMessage() {
     if (!task || !newMessage.trim()) return;
     setIsSendingMessage(true);
     setMessagesError(null);
     try {
       const sent = await createPriorityTaskMessage(task.id, { body: newMessage.trim() });
-      setMessages((current) => [...current, sent]);
+      upsertMessage(sent);
       setNewMessage("");
     } catch (err) {
       setMessagesError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.chat.sendFailed"));
@@ -451,6 +537,53 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated, onArch
       setIsSendingMessage(false);
     }
   }
+
+  function handleStartEditMessage(message: PriorityTaskMessageResponse) {
+    setEditingMessageId(message.id);
+    setEditMessageDraft(message.body);
+  }
+
+  function handleCancelEditMessage() {
+    setEditingMessageId(null);
+    setEditMessageDraft("");
+  }
+
+  async function handleSaveEditMessage(messageId: string) {
+    if (!task || !editMessageDraft.trim()) return;
+    setIsSavingMessageEdit(true);
+    setMessagesError(null);
+    try {
+      const updated = await updatePriorityTaskMessage(task.id, messageId, { body: editMessageDraft.trim() });
+      upsertMessage(updated);
+      setEditingMessageId(null);
+      setEditMessageDraft("");
+    } catch (err) {
+      setMessagesError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.chat.editFailed"));
+    } finally {
+      setIsSavingMessageEdit(false);
+    }
+  }
+
+  async function handleDeleteMessage(message: PriorityTaskMessageResponse) {
+    if (!task) return;
+    const confirmed = await confirm({
+      title: t("priorityTracker.detailDialog.chat.deleteConfirmTitle"),
+      message: t("priorityTracker.detailDialog.chat.deleteConfirmMessage"),
+      confirmLabel: t("common.actions.delete"),
+      isDestructive: true,
+    });
+    if (!confirmed) return;
+    try {
+      const deleted = await deletePriorityTaskMessage(task.id, message.id);
+      upsertMessage(deleted);
+    } catch (err) {
+      setMessagesError(err instanceof ApiError ? err.message : t("priorityTracker.detailDialog.chat.deleteFailed"));
+    }
+  }
+
+  const reversedHistory = [...history].reverse();
+  const visibleHistory = reversedHistory.slice(0, historyVisibleCount);
+  const visibleMessages = messages.slice(Math.max(0, messages.length - messagesVisibleCount));
 
   return (
     <Dialog open title={task?.title ?? t("priorityTracker.detailDialog.loadingTitle")} onClose={onClose} maxWidth="560px">
@@ -462,241 +595,359 @@ export function TaskDetailDialog({ taskId, onClose, onSaved, onDelegated, onArch
 
       {task && (
         <>
-          {/* Story 2.5 -- the lifecycle stepper. This replaces the old
-              "Status" text cell in the grid below rather than sitting beside
-              it: the stepper shows the same fact (the task's current stage)
-              in a strictly richer form, so keeping both would state it twice,
-              two lines apart. The grid drops from three columns to two. */}
-          <div className="mb-[18px]">
-            <p className="mb-2 text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
-              {t("priorityTracker.detailDialog.lifecycleLabel")}
-            </p>
-            <LifecycleStepper task={task} />
+          {/* Tab strip -- same convention as AddDealDialog.tsx, CLAUDE.md's
+              named reference for tabbed dialogs. */}
+          <div className="-mx-5 -mt-1 mb-4 flex flex-nowrap gap-x-4 overflow-x-auto border-b border-[var(--color-border)] px-5">
+            {TAB_IDS.map((id) => (
+              <button
+                key={id}
+                type="button"
+                className={`shrink-0 cursor-pointer border-0 border-b-2 bg-transparent px-1 py-3 text-[13.5px] font-semibold whitespace-nowrap transition-colors duration-150 hover:text-[var(--color-text)] ${
+                  activeTab === id
+                    ? "border-b-[var(--color-crm-primary)] text-[var(--color-crm-primary)]"
+                    : "border-b-transparent text-[var(--color-text-muted)]"
+                }`}
+                onClick={() => setActiveTab(id)}
+              >
+                {t(`priorityTracker.detailDialog.tabs.${id}`)}
+              </button>
+            ))}
           </div>
 
-          <div className="mb-[18px]">
-            <p className="mb-1 text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
-              {t("priorityTracker.detailDialog.quadrantLabel")}
-            </p>
-            <p className="text-sm font-medium text-crm-text">
-              {t(`priorityTracker.quadrants.${task.quadrant}.label`)}
-            </p>
-          </div>
+          {activeTab === "general" && (
+            <div className={`${TAB_PANEL_HEIGHT} overflow-y-auto pr-1`}>
+              {/* Story 2.5 -- the lifecycle stepper. */}
+              <div className="mb-[18px]">
+                <p className="mb-2 text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  {t("priorityTracker.detailDialog.lifecycleLabel")}
+                </p>
+                <LifecycleStepper task={task} />
+              </div>
 
-          {/* Story 2.6 -- one progress control for every viewer, interactive
-              only for whoever currently holds the work (Story 1.7's rule).
-              This replaces BOTH the old read-only bar in the grid above and
-              the owner-only range slider that sat below it -- two renderings
-              of one number, stacked, each with its own "%" readout. */}
-          <div className="mb-[18px]">
-            <div className="mb-1.5 flex items-center justify-between">
-              <label className="text-[13px] font-semibold text-[var(--color-text-muted)]">
-                {t("priorityTracker.detailDialog.progressLabel")}
-              </label>
-              {task.progress === 100 && (
-                <span className="inline-block rounded-full bg-pd-pill-done-bg px-2.5 py-[2px] text-[11px] font-semibold text-pd-pill-done-fg">
-                  {t("priorityTracker.detailDialog.readyToClose")}
-                </span>
-              )}
-            </div>
-            <SegmentedProgress
-              value={task.progress}
-              editable={isOwner}
-              disabled={isSavingProgress}
-              onChange={handleSetProgress}
-            />
-            {isOwner && (
-              <p className="mt-1.5 text-[11.5px] text-[var(--color-text-muted)]">
-                {t("priorityTracker.detailDialog.segmentHint")}
-              </p>
-            )}
-            {saveError && <p className="mt-1 text-[12.5px] text-[var(--color-danger)]">{saveError}</p>}
-          </div>
+              <div className="mb-[18px]">
+                <p className="mb-1 text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  {t("priorityTracker.detailDialog.quadrantLabel")}
+                </p>
+                <p className="text-sm font-medium text-crm-text">
+                  {t(`priorityTracker.quadrants.${task.quadrant}.label`)}
+                </p>
+              </div>
 
-          <div className="mb-[18px]">
-            <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-              {t("priorityTracker.detailDialog.notesLabel")}
-            </label>
-            {isOwner ? (
-              <>
-                <textarea
-                  className={TEXTAREA_CLASS}
-                  rows={4}
-                  value={notes}
-                  placeholder={t("priorityTracker.detailDialog.notesPlaceholder")}
-                  onChange={(e) => {
-                    setNotes(e.target.value);
-                    setIsDirty(true);
-                  }}
+              {/* Story 2.6 -- one progress control for every viewer, interactive
+                  only for whoever currently holds the work (Story 1.7's rule). */}
+              <div className="mb-[18px]">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label className="text-[13px] font-semibold text-[var(--color-text-muted)]">
+                    {t("priorityTracker.detailDialog.progressLabel")}
+                  </label>
+                  {task.progress === 100 && (
+                    <span className="inline-block rounded-full bg-pd-pill-done-bg px-2.5 py-[2px] text-[11px] font-semibold text-pd-pill-done-fg">
+                      {t("priorityTracker.detailDialog.readyToClose")}
+                    </span>
+                  )}
+                </div>
+                <SegmentedProgress
+                  value={task.progress}
+                  editable={isOwner}
+                  disabled={isSavingProgress}
+                  onChange={handleSetProgress}
                 />
-                {saveError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{saveError}</p>}
-                {isDirty && (
-                  <div className="mt-2 flex justify-end">
-                    <Button type="button" onClick={handleSaveNotes} isLoading={isSaving}>
-                      {t("priorityTracker.detailDialog.saveNotesButton")}
+                {isOwner && (
+                  <p className="mt-1.5 text-[11.5px] text-[var(--color-text-muted)]">
+                    {t("priorityTracker.detailDialog.segmentHint")}
+                  </p>
+                )}
+                {saveError && <p className="mt-1 text-[12.5px] text-[var(--color-danger)]">{saveError}</p>}
+              </div>
+
+              <div className="mb-[18px]">
+                <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                  {t("priorityTracker.detailDialog.notesLabel")}
+                </label>
+                {isOwner ? (
+                  <>
+                    <textarea
+                      className={TEXTAREA_CLASS}
+                      rows={4}
+                      value={notes}
+                      placeholder={t("priorityTracker.detailDialog.notesPlaceholder")}
+                      onChange={(e) => {
+                        setNotes(e.target.value);
+                        setIsDirty(true);
+                      }}
+                    />
+                    {saveError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{saveError}</p>}
+                    {isDirty && (
+                      <div className="mt-2 flex justify-end">
+                        <Button type="button" onClick={handleSaveNotes} isLoading={isSaving}>
+                          {t("priorityTracker.detailDialog.saveNotesButton")}
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-sm whitespace-pre-wrap text-crm-text">
+                      {task.notes || "—"}
+                    </p>
+                    <p className="mt-1.5 text-[12.5px] text-[var(--color-text-muted)]">
+                      {t("priorityTracker.detailDialog.notesReadOnlyHint")}
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {isOwner && (
+                <div className="mb-[18px]">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-[13px] font-semibold text-[var(--color-text-muted)]">
+                      {t("priorityTracker.detailDialog.sharedLabel")}
+                    </p>
+                    <Button type="button" variant="secondary" onClick={() => setIsShareDialogOpen(true)}>
+                      {t("priorityTracker.detailDialog.shareButton")}
                     </Button>
                   </div>
-                )}
-              </>
-            ) : (
-              <>
-                <p className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-sm whitespace-pre-wrap text-crm-text">
-                  {task.notes || "—"}
-                </p>
-                <p className="mt-1.5 text-[12.5px] text-[var(--color-text-muted)]">
-                  {t("priorityTracker.detailDialog.notesReadOnlyHint")}
-                </p>
-              </>
-            )}
-          </div>
-
-          {isOwner && (
-            <div className="mb-[18px]">
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-[13px] font-semibold text-[var(--color-text-muted)]">
-                  {t("priorityTracker.detailDialog.sharedLabel")}
-                </p>
-                <Button type="button" variant="secondary" onClick={() => setIsShareDialogOpen(true)}>
-                  {t("priorityTracker.detailDialog.shareButton")}
-                </Button>
-              </div>
-              {sharedWith.length === 0 ? (
-                <p className="text-[12.5px] text-[var(--color-text-muted)]">
-                  {t("priorityTracker.detailDialog.sharedEmpty")}
-                </p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {sharedWith.map((share) => (
-                    <div
-                      key={share.id}
-                      className="flex items-center gap-2.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2"
-                    >
-                      <span className="flex-1 text-[13.5px] text-crm-text">{share.displayName}</span>
-                      <button
-                        type="button"
-                        aria-label={t("priorityTracker.detailDialog.removeShareAriaLabel", {
-                          name: share.displayName,
-                        })}
-                        className="flex cursor-pointer rounded-md border-0 bg-transparent p-1.5 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#fdf0ee] hover:text-[var(--color-danger)]"
-                        onClick={() => handleRemoveShare(share.id)}
-                      >
-                        <TrashIcon size={14} />
-                      </button>
+                  {sharedWith.length === 0 ? (
+                    <p className="text-[12.5px] text-[var(--color-text-muted)]">
+                      {t("priorityTracker.detailDialog.sharedEmpty")}
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {sharedWith.map((share) => (
+                        <div
+                          key={share.id}
+                          className="flex items-center gap-2.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2"
+                        >
+                          <span className="flex-1 text-[13.5px] text-crm-text">{share.displayName}</span>
+                          <button
+                            type="button"
+                            aria-label={t("priorityTracker.detailDialog.removeShareAriaLabel", {
+                              name: share.displayName,
+                            })}
+                            className="flex cursor-pointer rounded-md border-0 bg-transparent p-1.5 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#fdf0ee] hover:text-[var(--color-danger)]"
+                            onClick={() => handleRemoveShare(share.id)}
+                          >
+                            <TrashIcon size={14} />
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
+              )}
+
+              {/* Story 2.8 -- the hint that used to sit beside the Delegate
+                  button. */}
+              {isOwner && (
+                <p className="mb-[18px] text-[12.5px] text-[var(--color-text-muted)]">
+                  {t("priorityTracker.detailDialog.delegateHint")}
+                </p>
               )}
             </div>
           )}
 
-          {/* Story 2.8 -- the hint that used to sit beside the Delegate
-              button. Delegate moved to the footer, but the share-vs-delegate
-              distinction is genuinely non-obvious, so the explanation stays
-              here where both actions are in view. */}
-          {isOwner && (
-            <p className="mb-[18px] text-[12.5px] text-[var(--color-text-muted)]">
-              {t("priorityTracker.detailDialog.delegateHint")}
-            </p>
+          {activeTab === "history" && (
+            <div className={`${TAB_PANEL_HEIGHT} overflow-y-auto pr-1`}>
+              {history.length === 0 ? (
+                <p className="text-[12.5px] text-[var(--color-text-muted)]">
+                  {t("priorityTracker.detailDialog.historyEmpty")}
+                </p>
+              ) : (
+                <>
+                  {/* Story 2.7 -- newest first. The API returns oldest-first
+                      (audit_logs ordered occurredAt ASC) and stays that way;
+                      this is a presentation-only reversal on a copy. */}
+                  <ul className="m-0 mt-0.5 flex list-none flex-col p-0">
+                    {visibleHistory.map((entry, index) => (
+                      <li key={`${entry.kind}-${entry.timestamp}-${index}`} className="flex gap-2.5 pb-2.5">
+                        <span className="relative flex w-3 flex-shrink-0 justify-center">
+                          <span className="z-[2] mt-[3px] h-2.5 w-2.5 rounded-full bg-pd-accent" />
+                          {index < visibleHistory.length - 1 && (
+                            <span
+                              aria-hidden="true"
+                              className="absolute top-2 bottom-[-4px] w-0.5 bg-pd-timeline-rail"
+                            />
+                          )}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[13px] font-extrabold text-crm-text">
+                            {historyLabel(entry)}
+                          </span>
+                          <span className="block text-[11px] font-bold text-[var(--color-text-muted)]">
+                            {historyMeta(entry)}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {reversedHistory.length > historyVisibleCount && (
+                    <button
+                      type="button"
+                      className="mt-1 cursor-pointer border-0 bg-transparent p-0 text-[12.5px] font-semibold text-crm-primary hover:underline"
+                      onClick={() => setHistoryVisibleCount((n) => n + 10)}
+                    >
+                      {t("priorityTracker.detailDialog.history.seeMoreButton")}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
           )}
 
-          {/* Story 1.9 -- real lifecycle history from audit_logs, chronological. */}
-          <div className="mb-2">
-            <p className="mb-2 text-[13px] font-semibold text-[var(--color-text-muted)]">
-              {t("priorityTracker.detailDialog.historyLabel")}
-            </p>
-            {history.length === 0 ? (
-              <p className="text-[12.5px] text-[var(--color-text-muted)]">
-                {t("priorityTracker.detailDialog.historyEmpty")}
-              </p>
-            ) : (
-              /* Story 2.7 -- newest first. The API returns oldest-first
-                 (audit_logs ordered occurredAt ASC) and stays that way; this
-                 is a presentation-only reversal on a copy, never in place. */
-              <ul className="m-0 mt-1.5 flex list-none flex-col p-0">
-                {[...history].reverse().map((entry, index, reversed) => (
-                  <li key={`${entry.kind}-${entry.timestamp}-${index}`} className="flex gap-2.5 pb-2.5">
-                    <span className="relative flex w-3 flex-shrink-0 justify-center">
-                      <span className="z-[2] mt-[3px] h-2.5 w-2.5 rounded-full bg-pd-accent" />
-                      {/* Rail down to the next dot -- omitted on the last
-                          entry so the timeline ends cleanly rather than
-                          trailing into empty space. */}
-                      {index < reversed.length - 1 && (
-                        <span aria-hidden="true" className="absolute top-2 bottom-[-4px] w-0.5 bg-pd-timeline-rail" />
-                      )}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[13px] font-extrabold text-crm-text">{historyLabel(entry)}</span>
-                      <span className="block text-[11px] font-bold text-[var(--color-text-muted)]">
-                        {historyMeta(entry)}
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          {activeTab === "discussion" && (
+            <div className={`flex ${TAB_PANEL_HEIGHT} flex-col`}>
+              <div className="flex-1 overflow-y-auto pr-1">
+                {messages.length === 0 ? (
+                  <p className="text-[12.5px] text-[var(--color-text-muted)]">
+                    {t("priorityTracker.detailDialog.chat.empty")}
+                  </p>
+                ) : (
+                  <>
+                    {messages.length > messagesVisibleCount && (
+                      <div className="mb-3 flex justify-center">
+                        <button
+                          type="button"
+                          className="cursor-pointer rounded-full border border-[var(--color-border)] bg-white px-3 py-1 text-[12px] font-semibold text-[var(--color-text-muted)] hover:text-crm-text"
+                          onClick={() => setMessagesVisibleCount((n) => n + 25)}
+                        >
+                          {t("priorityTracker.detailDialog.chat.loadEarlierButton")}
+                        </button>
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-4">
+                      {visibleMessages.map((message) => {
+                        const isOwn = message.userId === currentUserId;
+                        const isEditing = editingMessageId === message.id;
+                        return (
+                          <div
+                            key={message.id}
+                            className={`flex items-start gap-2 ${isOwn ? "flex-row-reverse" : ""}`}
+                          >
+                            <div
+                              className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold tracking-[0.02em] text-white ${
+                                message.isDeleted
+                                  ? "bg-[var(--color-text-muted)]/50"
+                                  : isOwn
+                                    ? "bg-crm-primary"
+                                    : "bg-[var(--color-text-muted)]"
+                              }`}
+                              aria-hidden="true"
+                            >
+                              {getInitials(message.authorName || "?")}
+                            </div>
+                            <div
+                              className={`min-w-0 max-w-[78%] rounded-bl-[16px] rounded-br-[16px] px-3 py-2 ${
+                                message.isDeleted
+                                  ? "border border-dashed border-[var(--color-border)] bg-transparent"
+                                  : `shadow-[0_1px_2px_rgba(16,24,40,0.05)] ${isOwn ? "bg-crm-primary-tint" : "bg-[var(--color-bg)]"}`
+                              } ${isOwn ? "rounded-tr-[6px] rounded-tl-[16px]" : "rounded-tl-[6px] rounded-tr-[16px]"}`}
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[12.5px] font-semibold text-crm-text">
+                                  {message.authorName}
+                                </span>
+                                <span className="flex-1 text-[10.5px] text-[var(--color-text-muted)]">
+                                  {formatTimestamp(message.createdAt)}
+                                </span>
+                                {message.editedAt && !message.isDeleted && (
+                                  <span className="text-[10.5px] text-[var(--color-text-muted)] italic">
+                                    {t("priorityTracker.detailDialog.chat.editedLabel")}
+                                  </span>
+                                )}
+                                {isOwn && !message.isDeleted && !isEditing && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="flex flex-shrink-0 cursor-pointer rounded-full border-0 bg-transparent p-1 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-crm-primary-tint hover:text-crm-primary"
+                                      aria-label={t("priorityTracker.detailDialog.chat.editAriaLabel")}
+                                      onClick={() => handleStartEditMessage(message)}
+                                    >
+                                      <EditIcon size={12} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="flex flex-shrink-0 cursor-pointer rounded-full border-0 bg-transparent p-1 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#fdf0ee] hover:text-[var(--color-danger)]"
+                                      aria-label={t("priorityTracker.detailDialog.chat.deleteAriaLabel")}
+                                      onClick={() => handleDeleteMessage(message)}
+                                    >
+                                      <TrashIcon size={12} />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
 
-          {/* Story 3.3 -- task chat, additive to notes. Open to anyone who
-              can see this dialog at all, not just the owner. */}
-          <div className="mb-2 border-t border-[var(--color-border)] pt-3">
-            <p className="mb-2 text-[13px] font-semibold text-[var(--color-text-muted)]">
-              {t("priorityTracker.detailDialog.chat.label")}
-            </p>
-            {messages.length === 0 ? (
-              <p className="text-[12.5px] text-[var(--color-text-muted)]">
-                {t("priorityTracker.detailDialog.chat.empty")}
-              </p>
-            ) : (
-              <ul className="m-0 mb-2 flex max-h-[180px] list-none flex-col gap-2 overflow-y-auto p-0">
-                {messages.map((message) => (
-                  <li
-                    key={message.id}
-                    className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
-                  >
-                    <div className="mb-0.5 flex items-baseline justify-between gap-2">
-                      <span className="text-[12.5px] font-semibold text-crm-text">{message.authorName}</span>
-                      <span className="flex-shrink-0 text-[11px] text-[var(--color-text-muted)]">
-                        {formatTimestamp(message.createdAt)}
-                      </span>
+                              {message.isDeleted ? (
+                                <p className="mt-1 text-[13px] text-[var(--color-text-muted)] italic">
+                                  {t("priorityTracker.detailDialog.chat.deletedPlaceholder")}
+                                </p>
+                              ) : isEditing ? (
+                                <>
+                                  <textarea
+                                    className={`${TEXTAREA_CLASS} mt-1`}
+                                    rows={2}
+                                    value={editMessageDraft}
+                                    onChange={(e) => setEditMessageDraft(e.target.value)}
+                                  />
+                                  <div className="mt-1.5 flex justify-end gap-1.5">
+                                    <Button type="button" variant="secondary" onClick={handleCancelEditMessage}>
+                                      {t("common.actions.cancel")}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      onClick={() => handleSaveEditMessage(message.id)}
+                                      isLoading={isSavingMessageEdit}
+                                      disabled={!editMessageDraft.trim()}
+                                    >
+                                      {t("common.actions.save")}
+                                    </Button>
+                                  </div>
+                                </>
+                              ) : (
+                                <p className="mt-0.5 text-[13px] whitespace-pre-wrap text-crm-text">{message.body}</p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <p className="m-0 text-[13px] whitespace-pre-wrap text-crm-text">{message.body}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {messagesError && <p className="mb-1.5 text-[12.5px] text-[var(--color-danger)]">{messagesError}</p>}
-            <div className="flex items-end gap-2">
-              <textarea
-                className={TEXTAREA_CLASS}
-                rows={2}
-                value={newMessage}
-                placeholder={t("priorityTracker.detailDialog.chat.placeholder")}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-              />
-              <Button
-                type="button"
-                onClick={handleSendMessage}
-                isLoading={isSendingMessage}
-                disabled={!newMessage.trim()}
-              >
-                {t("priorityTracker.detailDialog.chat.sendButton")}
-              </Button>
+                    <div ref={messagesEndRef} />
+                  </>
+                )}
+              </div>
+              {messagesError && <p className="mt-1.5 mb-1.5 text-[12.5px] text-[var(--color-danger)]">{messagesError}</p>}
+              <div className="flex items-end gap-2 border-t border-[var(--color-border)] pt-3">
+                <textarea
+                  className={TEXTAREA_CLASS}
+                  rows={2}
+                  value={newMessage}
+                  placeholder={t("priorityTracker.detailDialog.chat.placeholder")}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  onClick={handleSendMessage}
+                  isLoading={isSendingMessage}
+                  disabled={!newMessage.trim()}
+                >
+                  {t("priorityTracker.detailDialog.chat.sendButton")}
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
 
       {/* Story 2.8 -- one action footer, replacing the three separate
           bordered hint-rows that each carried a single button. Complete and
           Delegate/Re-delegate lead; Archive and Close sit right, matching the
-          prototype's footer. */}
-      <div className="mt-2 flex flex-wrap items-center gap-2.5 border-t border-[var(--color-border)] pt-3">
+          prototype's footer. Stays outside every tab. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2.5 border-t border-[var(--color-border)] pt-3">
         {task && isOwner && task.status !== PriorityTaskStatus.Completed && task.status !== PriorityTaskStatus.Archived && (
           <Button type="button" onClick={handleComplete} isLoading={isCompleting}>
             {t("priorityTracker.detailDialog.completeButton")}

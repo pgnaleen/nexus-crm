@@ -29,9 +29,12 @@ interface IncomingPanelDialogProps {
   onAccepted: (task: PriorityTaskResponse) => void;
   // Keeps the header's Incoming count in sync as items are actioned.
   onCountChange: (count: number) => void;
+  // Threaded down to the "Open" (read-only) TaskDetailDialog's Discussion
+  // tab -- own-vs-other bubble alignment.
+  currentUserId: string;
 }
 
-export function IncomingPanelDialog({ onClose, onAccepted, onCountChange }: IncomingPanelDialogProps) {
+export function IncomingPanelDialog({ onClose, onAccepted, onCountChange, currentUserId }: IncomingPanelDialogProps) {
   const { showError } = useAlert();
   const { showToast } = useToast();
   const [items, setItems] = useState<IncomingTaskResponse[] | null>(null);
@@ -213,6 +216,7 @@ export function IncomingPanelDialog({ onClose, onAccepted, onCountChange }: Inco
       {openTaskId && (
         <TaskDetailDialog
           taskId={openTaskId}
+          currentUserId={currentUserId}
           onClose={() => setOpenTaskId(null)}
           onSaved={() => {}}
           onDelegated={() => {}}

@@ -337,6 +337,65 @@ export class PriorityTasksService {
     }
   }
 
+  // The board card's "who moved it where" preview -- sourced from
+  // priority_task_flow, not audit_logs, since flow already IS a per-hop
+  // (user, quadrant) record in order; no audit-log parsing needed. Only
+  // placed/accepted/delegated hops count as a "move" -- completed/archived
+  // rows just carry the prior quadrant forward unchanged (see complete()/
+  // archive() above), so including them would render misleading duplicate-
+  // looking hops like "Ben(Do) -> Ben(Do)" for marking your own task done.
+  async getRecentFlowHopsByTaskIds(
+    taskIds: string[],
+    limit = 3,
+  ): Promise<Map<string, { userId: string; userName: string; quadrant: PriorityTaskQuadrant; timestamp: string }[]>> {
+    this.logger.debug(`getRecentFlowHopsByTaskIds called (${taskIds.length} task id(s))`);
+    if (taskIds.length === 0) {
+      this.logger.debug("No task ids supplied, skipping the query and returning an empty map");
+      return new Map();
+    }
+    try {
+      const rows: { task_id: string; user_id: string; quadrant: PriorityTaskQuadrant; created_at: Date }[] =
+        await this.flowRepo.query(
+          `SELECT task_id, user_id, quadrant, created_at
+             FROM (
+               SELECT task_id, user_id, quadrant, created_at,
+                      ROW_NUMBER() OVER (PARTITION BY task_id ORDER BY seq DESC) AS rn
+                 FROM priority_task_flow
+                WHERE task_id = ANY($1::uuid[])
+                  AND event_type IN ('placed', 'accepted', 'delegated')
+             ) ranked
+            WHERE rn <= $2
+            ORDER BY task_id, created_at DESC`,
+          [taskIds, limit],
+        );
+      const userIds = [...new Set(rows.map((row) => row.user_id))];
+      const names = new Map(
+        await Promise.all(
+          userIds.map(async (id) => [id, (await this.getUserDisplayName(id)) ?? ""] as const),
+        ),
+      );
+      const byTask = new Map<
+        string,
+        { userId: string; userName: string; quadrant: PriorityTaskQuadrant; timestamp: string }[]
+      >();
+      for (const row of rows) {
+        const list = byTask.get(row.task_id) ?? [];
+        list.push({
+          userId: row.user_id,
+          userName: names.get(row.user_id) ?? "",
+          quadrant: row.quadrant,
+          timestamp: row.created_at.toISOString(),
+        });
+        byTask.set(row.task_id, list);
+      }
+      this.logger.debug(`getRecentFlowHopsByTaskIds returning hops for ${byTask.size} of ${taskIds.length} task(s)`);
+      return byTask;
+    } catch (err) {
+      this.logger.error(`getRecentFlowHopsByTaskIds failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
   async countSharesForTask(taskId: string): Promise<number> {
     this.logger.debug(`countSharesForTask called (taskId=${taskId})`);
     try {
@@ -537,9 +596,15 @@ export class PriorityTasksService {
 
     const statusChange = changes.status as { old?: string; new?: string } | undefined;
     const delegatedToName = typeof changes.delegatedToName === "string" ? changes.delegatedToName : null;
+    // accept()'s own auditLogService.record() call already writes the
+    // acceptor's chosen quadrant into changes.quadrant -- this just stops
+    // dropping it on the floor. Historical rows recorded before this line
+    // existed have no changes.quadrant, so detail falls back to null and the
+    // frontend renders the old plain "Accepted" string for those.
+    const acceptedQuadrant = typeof changes.quadrant === "string" ? changes.quadrant : null;
 
     if (statusChange?.new === PriorityTaskStatus.Delegated) return { kind: "delegated", detail: delegatedToName };
-    if (statusChange?.new === PriorityTaskStatus.Accepted) return { kind: "accepted", detail: null };
+    if (statusChange?.new === PriorityTaskStatus.Accepted) return { kind: "accepted", detail: acceptedQuadrant };
     if (statusChange?.new === PriorityTaskStatus.Completed) return { kind: "completed", detail: null };
     if (statusChange?.new === PriorityTaskStatus.Archived) return { kind: "archived", detail: null };
     if (statusChange?.old === PriorityTaskStatus.Archived && statusChange?.new === PriorityTaskStatus.Placed) {

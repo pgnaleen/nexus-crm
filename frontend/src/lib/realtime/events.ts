@@ -13,5 +13,6 @@ export const PRIORITY_TASK_MESSAGE_EVENT = "priority-task:message";
 
 export interface PriorityTaskMessagePayload {
   taskId: string;
+  kind: "created" | "edited" | "deleted";
   message: PriorityTaskMessageResponse;
 }
