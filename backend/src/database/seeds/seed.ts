@@ -21,6 +21,9 @@ const DEFAULT_INDUSTRIES = [
   "Manufacturing",
   "Retail & E-commerce",
   "Professional Services",
+  "Government",
+  "Military and Defence",
+  "Others",
 ];
 
 const DEFAULT_PLANS: { name: string; amount: number }[] = [

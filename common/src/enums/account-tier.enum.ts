@@ -3,4 +3,5 @@ export enum AccountTier {
   Enterprise = "enterprise",
   MidMarket = "mid_market",
   Smb = "smb",
+  Government = "government",
 }

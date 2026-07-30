@@ -43,6 +43,7 @@ const ACCOUNT_TIER_LABELS: Record<AccountTier, string> = {
   [AccountTier.Enterprise]: "Enterprise",
   [AccountTier.MidMarket]: "Mid-Market",
   [AccountTier.Smb]: "SMB",
+  [AccountTier.Government]: "Government",
 };
 
 const EMPLOYEE_COUNT_LABELS: Record<EmployeeCountBand, string> = {
