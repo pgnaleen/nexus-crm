@@ -1,5 +1,5 @@
 import { DealStatus, DealType } from "@orelia/common";
-import { Check, Column, Entity, JoinColumn, ManyToOne } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne } from "typeorm";
 import { AuditedTenantEntity } from "../../../core/tenant";
 import { Company } from "../../companies/entities/company.entity";
 import { Contact } from "../../contacts/entities/contact.entity";
@@ -15,7 +15,6 @@ export interface CompetitorEntry {
 }
 
 @Entity("deals")
-@Check(`("company_id" IS NOT NULL) OR ("contact_id" IS NOT NULL)`)
 export class Deal extends AuditedTenantEntity {
   @Column()
   dealCode!: string;
@@ -26,9 +25,10 @@ export class Deal extends AuditedTenantEntity {
   @Column({ type: "enum", enum: DealType })
   dealType!: DealType;
 
-  // Nullable -- the customer can be a bare contact with no company of its
-  // own (contactId below carries that case). The CHECK on this entity
-  // enforces that a deal always has one or the other.
+  // Nullable -- the customer is optional. A deal can be created with no
+  // company/contact set (companyId and contactId both null) and one added
+  // later, or the customer can be a bare contact with no company of its own
+  // (contactId below carries that case).
   @Column({ type: "uuid", nullable: true })
   companyId?: string;
 

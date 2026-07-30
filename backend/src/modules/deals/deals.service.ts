@@ -141,11 +141,6 @@ export class DealsService {
   async create(dto: CreateDealDto, userId: string): Promise<Deal> {
     this.logger.debug(`create called by ${userId} (name="${dto.name}")`);
 
-    if (!dto.companyId && !dto.contactId) {
-      this.logger.debug("Blocked: neither companyId nor contactId provided");
-      throw new BadRequestException("Deal requires a customer: a companyId or a contactId");
-    }
-
     await this.validateReferences(dto);
 
     // dealCode is derived from a plain count with no lock, so two concurrent

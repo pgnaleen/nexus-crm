@@ -328,7 +328,7 @@ export function AddDealDialog({
     if (deal.contactId) return { kind: "contact", id: deal.contactId };
     return null;
   });
-  const [errors, setErrors] = useState<Partial<Record<keyof DetailsFormState | "otherParty", string>>>({});
+  const [errors, setErrors] = useState<Partial<Record<keyof DetailsFormState, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const { showToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
@@ -449,13 +449,12 @@ export function AddDealDialog({
   const todayISO = new Date().toLocaleDateString("en-CA");
 
   function runValidation(): boolean {
-    const nextErrors: Partial<Record<keyof DetailsFormState | "otherParty", string>> = {};
+    const nextErrors: Partial<Record<keyof DetailsFormState, string>> = {};
 
     const nameError = validate(values.name, [required("Deal name is required")]);
     if (nameError) nextErrors.name = nameError;
-    // Customer is locked (not editable) once a deal exists, so there's
-    // nothing to validate here in edit mode -- it's always already set.
-    if (!isEdit && !otherParty) nextErrors.otherParty = "Select the other party for this deal";
+    // Customer is optional -- a deal can be created with no company/contact
+    // set and have one added later once it's known.
     if (!values.salesPersonId) nextErrors.salesPersonId = "Sales Person is required";
     if (!isEdit && !values.mainStageId) {
       nextErrors.mainStageId = "Select a stage to create this deal in — add a Main Stage first";
@@ -480,7 +479,7 @@ export function AddDealDialog({
     setErrors(nextErrors);
 
     // Jump to whichever tab actually holds the first invalid field.
-    if (nextErrors.name || nextErrors.otherParty || nextErrors.mainStageId || nextErrors.expectedCloseDate) {
+    if (nextErrors.name || nextErrors.mainStageId || nextErrors.expectedCloseDate) {
       setActiveTab("dealInfo");
     } else if (nextErrors.tenderReference || nextErrors.issuingBody) {
       setActiveTab("tender");
@@ -976,7 +975,7 @@ export function AddDealDialog({
 
             <div className="mb-[18px]">
               <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                Customer (Company or Contact) {!isEdit && "*"}
+                Customer (Company or Contact)
               </label>
               {isEdit ? (
                 <div className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-[13.5px] text-[var(--color-text-muted)]">
@@ -993,12 +992,9 @@ export function AddDealDialog({
                     value={partyValue(otherParty)}
                     onChange={handleOtherPartyChange}
                     options={otherPartyOptions}
-                    placeholder="Search companies and contacts..."
+                    placeholder="Not set — search companies and contacts..."
                     searchPlaceholder="Search by name..."
                   />
-                  {errors.otherParty && (
-                    <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{errors.otherParty}</p>
-                  )}
                 </>
               )}
             </div>
