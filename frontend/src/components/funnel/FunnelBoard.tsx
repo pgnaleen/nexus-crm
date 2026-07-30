@@ -3,7 +3,16 @@
 import { useRef, useState } from "react";
 import { type FunnelLead } from "@/lib/data/funnel";
 import { DealStatus } from "@orelia/common";
-import { ActivityIcon } from "@/components/ui/icons";
+import { ActivityIcon, BuildingIcon, UserIcon } from "@/components/ui/icons";
+import * as Flags from "country-flag-icons/react/3x2";
+import { COUNTRIES } from "@/lib/countries";
+
+// Same SVG-flag approach as CountrySelect.tsx -- Windows renders no flag
+// emojis at all (Segoe UI Emoji excludes them), so this codebase always uses
+// country-flag-icons SVGs instead of emoji flags. dealCountry stores the
+// plain country name, so this maps back to the ISO code the Flags lookup
+// needs.
+const COUNTRY_CODE_BY_NAME = new Map(COUNTRIES.map((c) => [c.name, c.code]));
 
 const STATUS_BADGE: Record<DealStatus, { label: string; bg: string; color: string }> = {
   [DealStatus.Open]: { label: "Open", bg: "#e0e7ff", color: "#4338ca" },
@@ -87,6 +96,9 @@ function DealCard({
   onShowHistory?: (dealId: string) => void;
   onViewDeal?: (dealId: string) => void;
 }) {
+  const countryCode = lead.country ? COUNTRY_CODE_BY_NAME.get(lead.country) : undefined;
+  const Flag = countryCode ? Flags[countryCode as keyof typeof Flags] : undefined;
+
   return (
     <div
       className={`select-none rounded-[10px] border-l-[3px] bg-white px-3 pb-2.5 pt-3 shadow-[0_1px_3px_rgba(16,24,40,0.07)] transition-[box-shadow,opacity,transform] duration-150 hover:shadow-[0_4px_12px_rgba(16,24,40,0.12)] hover:-translate-y-px${
@@ -98,9 +110,9 @@ function DealCard({
       onClick={() => onViewDeal?.(lead.id)}
       style={{ borderLeftColor: accent }}
     >
-      <div className="mb-1 flex items-start justify-between gap-2">
+      <div className="mb-1.5 flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-[13px] font-semibold leading-[1.3] text-[var(--color-text)]">
+          <span className="truncate text-[13.5px] font-bold leading-[1.3] text-[var(--color-text)]" title={lead.name}>
             {lead.name}
           </span>
           {lead.code && (
@@ -118,7 +130,7 @@ function DealCard({
         </span>
       </div>
       {lead.status && (
-        <div className="mb-1.5">
+        <div className="mb-2">
           <span
             className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold"
             style={{ background: STATUS_BADGE[lead.status].bg, color: STATUS_BADGE[lead.status].color }}
@@ -127,12 +139,32 @@ function DealCard({
           </span>
         </div>
       )}
-      <div className="mb-2.5 overflow-hidden truncate text-[11.5px] text-[var(--color-text-muted)]">
-        {lead.company}
-        {lead.country ? `, ${lead.country}` : ""}
+      <div className="mb-2.5 flex flex-col gap-1">
+        <div className="flex items-center gap-1.5 overflow-hidden">
+          {lead.company ? (
+            <>
+              <span className="flex-shrink-0 text-[var(--color-text-muted)]">
+                {lead.customerKind === "contact" ? <UserIcon size={12} /> : <BuildingIcon size={12} />}
+              </span>
+              <span className="truncate text-[12px] font-medium text-[var(--color-text)]" title={lead.company}>
+                {lead.company}
+              </span>
+            </>
+          ) : (
+            <span className="truncate text-[12px] italic text-[var(--color-text-muted)]">No customer set</span>
+          )}
+        </div>
+        {lead.country && (
+          <div className="flex items-center gap-1.5 overflow-hidden">
+            {Flag && <Flag aria-hidden="true" className="w-4 flex-shrink-0 rounded-[2px]" />}
+            <span className="truncate text-[11px] text-[var(--color-text-muted)]" title={lead.country}>
+              {lead.country}
+            </span>
+          </div>
+        )}
       </div>
-      <div className="flex items-center justify-between">
-        <span className="text-[13px] font-bold tabular-nums text-[var(--color-text)]">
+      <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] pt-2">
+        <span className="text-[13.5px] font-bold tabular-nums text-[var(--color-text)]">
           {fmt(lead.value, lead.currency ?? "USD")}
         </span>
         <span className="text-[10.5px] text-[var(--color-text-muted)]">{lead.date}</span>

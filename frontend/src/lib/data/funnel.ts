@@ -39,6 +39,12 @@ export interface FunnelLead {
   country?: string;
   status?: DealStatus;
   currency?: string;
+  // Which kind of party `company` actually represents -- a real Company
+  // customer, or a bare Contact with no company of its own (a deal's
+  // customer is one or the other, never both -- see the Deal entity).
+  // Undefined when the deal has no customer set at all (customer is
+  // optional as of the deals-customer-optional change).
+  customerKind?: "company" | "contact";
 }
 
 export interface FunnelSource {

@@ -72,7 +72,11 @@ function dealToFunnelLead(deal: DealResponse, stageIdField: StageIdField): Funne
   return {
     id: deal.id,
     name: deal.name,
-    company: deal.companyName ?? "",
+    // Customer is optional and, when set, is a Company or a bare Contact
+    // (never both) -- fall back to the contact's name so contact-only
+    // customers still show up on the card instead of a blank line.
+    company: deal.companyName ?? deal.contactName ?? "",
+    customerKind: deal.companyName ? "company" : deal.contactName ? "contact" : undefined,
     value: deal.estimatedValue ?? 0,
     stage: deal[stageIdField] ?? "",
     date: deal.expectedCloseDate ?? "",
