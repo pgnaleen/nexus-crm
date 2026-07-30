@@ -65,7 +65,7 @@ export function AccountMenu({
     <div className="account-menu" ref={containerRef}>
       <button
         type="button"
-        className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border-none bg-crm-shell text-xs font-bold text-white"
+        className="box-border flex h-8 w-8 shrink-0 appearance-none items-center justify-center overflow-hidden rounded-full border-none bg-crm-shell p-0 text-xs font-bold text-white"
         onClick={() => setIsOpen((current) => !current)}
         aria-label="Account menu"
       >
