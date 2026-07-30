@@ -51,7 +51,7 @@ export const envValidationSchema = Joi.object({
   // instead of failing the user-creation request that triggered it.
   SENDGRID_API_KEY: Joi.string().empty("").optional(),
   MAIL_FROM_ADDRESS: Joi.string().empty("").optional(),
-  MAIL_FROM_NAME: Joi.string().default("ORELIA CRM"),
+  MAIL_FROM_NAME: Joi.string().default("NEXUS CRM"),
   // Used to build the login link in the welcome email -- the frontend's own
   // public origin, not the backend's (NEXT_PUBLIC_API_URL is the reverse).
   APP_BASE_URL: Joi.string().default("http://localhost:3000"),

@@ -29,7 +29,7 @@ export class MailService {
   constructor(private readonly config: ConfigService) {
     this.apiKey = this.config.get<string>("SENDGRID_API_KEY");
     this.fromAddress = this.config.get<string>("MAIL_FROM_ADDRESS");
-    this.fromName = this.config.get<string>("MAIL_FROM_NAME") ?? "ORELIA CRM";
+    this.fromName = this.config.get<string>("MAIL_FROM_NAME") ?? "NEXUS CRM";
     this.appBaseUrl = this.config.get<string>("APP_BASE_URL") ?? "http://localhost:3000";
   }
 
@@ -58,7 +58,7 @@ export class MailService {
       await sgMail.send({
         to: input.to,
         from: { email: this.fromAddress as string, name: this.fromName },
-        subject: "Your ORELIA CRM account has been created",
+        subject: "Your Nexus CRM account has been created",
         text: buildWelcomeText(input, loginUrl),
         html: buildWelcomeHtml(input, loginUrl),
       });
@@ -73,42 +73,81 @@ function buildWelcomeText(input: WelcomeEmailInput, loginUrl: string): string {
   return [
     `Hi ${input.displayName},`,
     "",
-    "An account has been created for you on ORELIA CRM.",
+    "Welcome to Nexus CRM! An account has been created for you -- here's what you need to sign in:",
     "",
-    `Username: ${input.username}`,
-    `Temporary password: ${input.temporaryPassword}`,
+    `  Username:            ${input.username}`,
+    `  Temporary password:  ${input.temporaryPassword}`,
     "",
     `Log in here: ${loginUrl}`,
     "",
     "You'll be asked to set a new password the first time you sign in.",
+    "If you weren't expecting this email, you can ignore it or contact your administrator.",
   ].join("\n");
 }
 
-// Brand red is hardcoded here (not var(--color-crm-primary)) deliberately --
-// this is raw HTML handed to SendGrid, rendered by mail clients with no
-// guaranteed CSS custom property support, unlike every frontend component.
+// Brand colors are hardcoded here (not var(--color-crm-primary) etc.)
+// deliberately -- this is raw HTML handed to SendGrid, rendered by mail
+// clients with no guaranteed CSS custom property support, unlike every
+// frontend component. Layout uses nested <table role="presentation">
+// elements with inline styles rather than divs/flexbox -- the standard
+// technique for HTML email, since client CSS support (Outlook especially)
+// is far less consistent than a browser's.
 function buildWelcomeHtml(input: WelcomeEmailInput, loginUrl: string): string {
+  const name = escapeHtml(input.displayName);
+  const username = escapeHtml(input.username);
+  const password = escapeHtml(input.temporaryPassword);
+
   return `
-    <div style="font-family: Arial, sans-serif; color: #0F172A; max-width: 480px;">
-      <h2 style="color: #022B5D; margin-bottom: 4px;">Welcome to ORELIA CRM</h2>
-      <p>Hi ${escapeHtml(input.displayName)},</p>
-      <p>An account has been created for you.</p>
-      <table style="margin: 16px 0; border-collapse: collapse;">
+    <div style="background: #F8FAFC; padding: 32px 16px; font-family: Arial, Helvetica, sans-serif;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 520px; margin: 0 auto;">
         <tr>
-          <td style="padding: 4px 12px 4px 0; color: #64748b;">Username</td>
-          <td><strong>${escapeHtml(input.username)}</strong></td>
+          <td style="background: #022B5D; border-radius: 10px 10px 0 0; padding: 22px 32px; text-align: center;">
+            <span style="font-size: 19px; font-weight: bold; color: #ffffff; letter-spacing: 0.5px;">NEXUS CRM</span>
+          </td>
         </tr>
         <tr>
-          <td style="padding: 4px 12px 4px 0; color: #64748b;">Temporary password</td>
-          <td><strong>${escapeHtml(input.temporaryPassword)}</strong></td>
+          <td style="background: #ffffff; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px; padding: 32px;">
+            <h1 style="margin: 0 0 8px; font-size: 20px; color: #0F172A;">Welcome, ${name}</h1>
+            <p style="margin: 0 0 24px; font-size: 14px; color: #334155; line-height: 1.5;">
+              An account has been created for you on Nexus CRM. Use the credentials below to sign in.
+            </p>
+
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background: #F8FAFC; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 28px;">
+              <tr>
+                <td style="padding: 14px 18px; font-size: 12px; color: #64748b;">Username</td>
+                <td style="padding: 14px 18px; font-size: 14px; color: #0F172A; font-weight: bold; text-align: right;">${username}</td>
+              </tr>
+              <tr>
+                <td colspan="2" style="border-top: 1px solid #e2e8f0; line-height: 1px; font-size: 1px;">&nbsp;</td>
+              </tr>
+              <tr>
+                <td style="padding: 14px 18px; font-size: 12px; color: #64748b;">Temporary password</td>
+                <td style="padding: 14px 18px; font-size: 14px; color: #0F172A; font-weight: bold; text-align: right; font-family: 'Courier New', monospace;">${password}</td>
+              </tr>
+            </table>
+
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 0 auto 24px;">
+              <tr>
+                <td style="border-radius: 8px; background: #ED1B24;">
+                  <a href="${loginUrl}" style="display: inline-block; padding: 12px 32px; font-size: 14px; font-weight: bold; color: #ffffff; text-decoration: none;">
+                    Log in to Nexus CRM
+                  </a>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin: 0; font-size: 12.5px; color: #64748b; line-height: 1.5;">
+              You'll be asked to set a new password the first time you sign in. If you weren't
+              expecting this email, you can safely ignore it or contact your administrator.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 20px 8px; text-align: center; font-size: 11.5px; color: #94a3b8;">
+            This is an automated message from Nexus CRM &mdash; please don't reply.
+          </td>
         </tr>
       </table>
-      <p>
-        <a href="${loginUrl}" style="display: inline-block; background: #ED1B24; color: #ffffff; padding: 10px 18px; border-radius: 6px; text-decoration: none; font-weight: bold;">
-          Log in
-        </a>
-      </p>
-      <p style="color: #64748b; font-size: 13px;">You'll be asked to set a new password the first time you sign in.</p>
     </div>
   `;
 }
