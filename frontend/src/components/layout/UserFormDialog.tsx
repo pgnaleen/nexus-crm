@@ -12,12 +12,10 @@ import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { TextField } from "@/components/ui/TextField";
 import { EmailField } from "@/components/ui/EmailField";
-import { PasswordField } from "@/components/ui/PasswordField";
-import { PasswordStrengthHint } from "@/components/ui/PasswordStrengthHint";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { RoleCardPicker } from "@/components/ui/RoleCardPicker";
 import { SearchSelect } from "@/components/ui/SearchSelect";
-import { email, minLength, pattern, required, strongPassword, validate } from "@/lib/validation";
+import { email, minLength, pattern, required, validate } from "@/lib/validation";
 import { t } from "@/lib/i18n";
 
 const USERNAME_REGEX = /^[a-z0-9._-]+$/;
@@ -31,9 +29,11 @@ interface FormState {
   username: string;
   displayName: string;
   loggingEmail: string;
-  password: string;
-  confirmPassword: string;
   status: UserStatus;
+  // Edit mode only -- a new account's password is always server-generated
+  // and unknown to the admin, so this is unconditionally true on create
+  // (see UsersService.create()); only meaningful to toggle once the user
+  // has their own chosen password.
   mustChangePassword: boolean;
   extras: string;
   roleIds: string[];
@@ -46,8 +46,6 @@ function toFormState(user?: UserSummaryResponse): FormState {
     username: user?.username ?? "",
     displayName: user?.displayName ?? "",
     loggingEmail: user?.loggingEmail ?? "",
-    password: "",
-    confirmPassword: "",
     status: user?.status ?? UserStatus.Active,
     mustChangePassword: true,
     extras: "",
@@ -166,13 +164,6 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
         pattern(USERNAME_REGEX, "Lowercase letters, numbers, dots, underscores, and hyphens only"),
       ]);
       if (usernameError) nextErrors.username = usernameError;
-
-      const passwordError = validate(values.password, [required(), minLength(8), strongPassword()]);
-      if (passwordError) nextErrors.password = passwordError;
-
-      if (values.password !== values.confirmPassword) {
-        nextErrors.confirmPassword = "Passwords do not match";
-      }
     }
 
     const displayNameError = validate(values.displayName, [required(), minLength(2)]);
@@ -198,9 +189,7 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
               username: values.username.trim(),
               displayName: values.displayName.trim(),
               loggingEmail: values.loggingEmail.trim(),
-              password: values.password,
               status: values.status,
-              mustChangePassword: values.mustChangePassword,
               extras: values.extras.trim() || undefined,
               roleIds: values.roleIds.length > 0 ? values.roleIds : undefined,
               employeeId: values.employeeId || undefined,
@@ -290,25 +279,10 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
           />
 
           {mode === "create" && (
-            <>
-              <div className="grid grid-cols-2 gap-3.5">
-                <PasswordField
-                  label="Initial Password *"
-                  name="password"
-                  value={values.password}
-                  error={errors.password}
-                  onChange={(e) => setField("password", e.target.value)}
-                />
-                <PasswordField
-                  label="Confirm Password *"
-                  name="confirmPassword"
-                  value={values.confirmPassword}
-                  error={errors.confirmPassword}
-                  onChange={(e) => setField("confirmPassword", e.target.value)}
-                />
-              </div>
-              <PasswordStrengthHint password={values.password} />
-            </>
+            <p className="mb-[18px] text-[12.5px] text-[var(--color-text-muted)]">
+              A temporary password will be generated automatically and emailed to this user --
+              they'll be asked to set their own on first sign-in.
+            </p>
           )}
 
           <div className="mb-[18px]">
@@ -324,14 +298,20 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
             />
           </div>
 
-          <label className="mb-[18px] flex cursor-pointer items-center gap-2.5 text-[13.5px] text-crm-text">
-            <input
-              type="checkbox"
-              checked={values.mustChangePassword}
-              onChange={(e) => setField("mustChangePassword", e.target.checked)}
-            />
-            <span>Require password change on next login</span>
-          </label>
+          {/* Create mode has no toggle here -- a brand-new account's password
+              is always server-generated and unknown to the admin, so this is
+              unconditionally true (see UsersService.create()). Only makes
+              sense to flip once the user has set their own real password. */}
+          {mode === "edit" && (
+            <label className="mb-[18px] flex cursor-pointer items-center gap-2.5 text-[13.5px] text-crm-text">
+              <input
+                type="checkbox"
+                checked={values.mustChangePassword}
+                onChange={(e) => setField("mustChangePassword", e.target.checked)}
+              />
+              <span>Require password change on next login</span>
+            </label>
+          )}
 
           <div className="mb-[18px]">
             <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">

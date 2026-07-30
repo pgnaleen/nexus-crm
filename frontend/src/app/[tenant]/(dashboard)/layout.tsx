@@ -9,6 +9,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { DialogProvider } from "@/components/providers/DialogProvider";
 import { ToastProvider } from "@/components/providers/ToastProvider";
 import { TabSyncListener } from "@/components/providers/TabSyncListener";
+import { ForcedPasswordChangeGate } from "./_components/ForcedPasswordChangeGate";
 
 // Same gradient+dot technique as the login page (frontend/src/app/[tenant]/page.module.css),
 // but anchored to --color-crm-shell (the documented navy shell token) instead of the login
@@ -40,6 +41,16 @@ export default async function DashboardLayout({
 
   if (!session) {
     redirect(`/${params.tenant}`);
+  }
+
+  // A user still on a temporary password (freshly created, or an
+  // admin-initiated reset) can't reach anything else in the app until they
+  // set their own -- no sidebar, no top bar, no children rendered at all.
+  // ChangePasswordForm clears mustChangePassword server-side on success, and
+  // the gate's onSuccess triggers a router.refresh() so this check re-runs
+  // against the now-current session and swaps in the real dashboard below.
+  if (session.user.mustChangePassword) {
+    return <ForcedPasswordChangeGate displayName={session.user.displayName} />;
   }
 
   return (

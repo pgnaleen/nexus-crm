@@ -165,39 +165,12 @@ function suggestUsername(employeeEmail: string, fullName: string): string {
   return fullName.trim().toLowerCase().replace(/\s+/g, ".").replace(/[^a-z0-9._-]/g, "");
 }
 
-// Excludes visually-ambiguous characters (0/O, 1/l/I) since this password is
-// meant to be read off-screen and typed once at first login, not just
-// copy-pasted.
-const TEMP_PASSWORD_CHARS = {
-  lower: "abcdefghijkmnpqrstuvwxyz",
-  upper: "ABCDEFGHJKLMNPQRSTUVWXYZ",
-  digit: "23456789",
-  special: "!@#$%^&*-_",
-};
-
-function secureRandomFloat(): number {
-  const buf = new Uint32Array(1);
-  crypto.getRandomValues(buf);
-  return (buf[0] ?? 0) / (0xffffffff + 1);
-}
-
-// Generates a password satisfying PASSWORD_STRENGTH_REGEX (lib/validation.ts)
-// by construction -- one guaranteed char from each required class, then
-// random fill, then shuffled so the required chars aren't always first.
-function generateTempPassword(): string {
-  const pools = Object.values(TEMP_PASSWORD_CHARS);
-  const all = pools.join("");
-  const pick = (chars: string) => chars[Math.floor(secureRandomFloat() * chars.length)];
-  const chars = [...pools.map(pick), ...Array.from({ length: 10 }, () => pick(all))];
-  for (let i = chars.length - 1; i > 0; i--) {
-    const j = Math.floor(secureRandomFloat() * (i + 1));
-    [chars[i], chars[j]] = [chars[j], chars[i]];
-  }
-  return chars.join("");
-}
-
+// No client-side password generation anymore -- createUser() always has the
+// backend generate the temporary password and email it directly (see
+// UsersService.create()/MailService.sendWelcomeEmail). Nobody in this UI
+// ever sees or handles the plaintext password.
 type LoginResult =
-  | { status: "success"; username: string; password: string }
+  | { status: "success"; username: string; email: string }
   | { status: "error"; message: string };
 
 export function EmployeeFormDialog({
@@ -235,7 +208,6 @@ export function EmployeeFormDialog({
     employee: EmployeeListItemResponse;
     login: LoginResult;
   } | null>(null);
-  const [passwordCopied, setPasswordCopied] = useState(false);
 
   useEffect(() => {
     if (!showAccountTab) return;
@@ -439,18 +411,16 @@ export function EmployeeFormDialog({
       // employee is only handed to onSaved once the admin acknowledges it
       // via "Done", see the postSaveState render branch.
       try {
-        const password = generateTempPassword();
+        const loggingEmail = values.employeeEmail.trim();
         await createUser({
           username: loginUsername.trim(),
           displayName: values.fullName.trim(),
-          loggingEmail: values.employeeEmail.trim(),
-          password,
+          loggingEmail,
           status: UserStatus.Active,
-          mustChangePassword: true,
           roleIds: loginRoleIds,
           employeeId: employee.id,
         });
-        setPostSaveState({ employee, login: { status: "success", username: loginUsername.trim(), password } });
+        setPostSaveState({ employee, login: { status: "success", username: loginUsername.trim(), email: loggingEmail } });
       } catch (err) {
         setPostSaveState({
           employee,
@@ -508,38 +478,18 @@ export function EmployeeFormDialog({
                   </h3>
                 </div>
                 <p className="mb-4 text-[13px] text-[var(--color-text-muted)]">
-                  {t("employees.dialog.account.resultSuccessMessage", { name: employee.fullName })}
+                  {t("employees.dialog.account.resultSuccessMessage", { name: employee.fullName, email: login.email })}
                 </p>
                 <div className="mb-4 rounded-lg border border-[var(--color-border)] bg-[#f8fafc] p-3.5">
-                  <div className="mb-2.5 flex items-center justify-between gap-3">
+                  <div className="flex items-center justify-between gap-3">
                     <span className="text-[12px] font-semibold text-[var(--color-text-muted)]">
                       {t("employees.dialog.account.usernameLabel")}
                     </span>
                     <span className="font-mono text-[13px] text-crm-text">{login.username}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-[12px] font-semibold text-[var(--color-text-muted)]">
-                      {t("employees.dialog.account.passwordLabel")}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[13px] text-crm-text">{login.password}</span>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => {
-                          navigator.clipboard.writeText(login.password);
-                          setPasswordCopied(true);
-                        }}
-                      >
-                        {passwordCopied
-                          ? t("employees.dialog.account.copied")
-                          : t("employees.dialog.account.copyPassword")}
-                      </Button>
-                    </div>
-                  </div>
                 </div>
                 <p className="text-[12px] text-[var(--color-text-muted)]">
-                  {t("employees.dialog.account.passwordNotice")}
+                  {t("employees.dialog.account.passwordEmailedNotice")}
                 </p>
               </>
             ) : (

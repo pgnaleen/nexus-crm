@@ -2,6 +2,7 @@ import { UserStatus } from "@orelia/common";
 import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import * as bcrypt from "bcrypt";
+import { randomInt } from "crypto";
 import { Not, Repository } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { MailService } from "../../core/mail/mail.service";
@@ -17,6 +18,46 @@ import { UsersRepository } from "./users.repository";
 
 const PASSWORD_HASH_ROUNDS = 12;
 const AUDIT_ENTITY_TYPE = "user";
+
+// Ambiguous characters (0/O, 1/l/I) excluded -- the expectation is copy/paste
+// from the welcome email, but this keeps it hand-typeable too. Matches the
+// same strength policy enforced elsewhere (see password-policy.ts: lower,
+// upper, digit, special) by construction rather than by validating after.
+const TEMP_PASSWORD_LOWER = "abcdefghjkmnpqrstuvwxyz";
+const TEMP_PASSWORD_UPPER = "ABCDEFGHJKMNPQRSTUVWXYZ";
+const TEMP_PASSWORD_DIGITS = "23456789";
+const TEMP_PASSWORD_SPECIAL = "!@#%*?-_";
+const TEMP_PASSWORD_ALL = TEMP_PASSWORD_LOWER + TEMP_PASSWORD_UPPER + TEMP_PASSWORD_DIGITS + TEMP_PASSWORD_SPECIAL;
+const TEMP_PASSWORD_LENGTH = 12;
+
+function randomChar(charset: string): string {
+  return charset.charAt(randomInt(charset.length));
+}
+
+// Generates a random temporary password for a newly created user -- the
+// admin never sets or sees it directly (see CreateUserRequest's comment);
+// it's only ever surfaced via the welcome email (MailService.sendWelcomeEmail).
+function generateTemporaryPassword(): string {
+  const required = [
+    randomChar(TEMP_PASSWORD_LOWER),
+    randomChar(TEMP_PASSWORD_UPPER),
+    randomChar(TEMP_PASSWORD_DIGITS),
+    randomChar(TEMP_PASSWORD_SPECIAL),
+  ];
+  const chars = [
+    ...required,
+    ...Array.from({ length: TEMP_PASSWORD_LENGTH - required.length }, () => randomChar(TEMP_PASSWORD_ALL)),
+  ];
+  // Fisher-Yates shuffle (crypto-random) -- otherwise the four required
+  // categories would always sit predictably in the first four characters.
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    const temp = chars[i] as string;
+    chars[i] = chars[j] as string;
+    chars[j] = temp;
+  }
+  return chars.join("");
+}
 
 @Injectable()
 export class UsersService {
@@ -74,24 +115,27 @@ export class UsersService {
   }
 
   async create(dto: CreateUserDto, createdBy: string): Promise<User> {
-    // Never log dto.password -- matches the password/token redaction
-    // precedent used everywhere else in this codebase (RequestLoggerMiddleware).
+    // Never log the generated password -- matches the password/token
+    // redaction precedent used everywhere else in this codebase
+    // (RequestLoggerMiddleware).
     this.logger.debug(`create called by ${createdBy} (username="${dto.username}")`);
     await this.assertUsernameAvailable(dto.username);
 
+    // The server generates the initial password, not the admin -- it's only
+    // ever surfaced via the welcome email below. Since nobody but the new
+    // user ever sees it, mustChangePassword is unconditionally true; there's
+    // no "admin knows the password and turns this off" case anymore.
+    const temporaryPassword = generateTemporaryPassword();
+
     try {
-      const passwordHash = await bcrypt.hash(dto.password, PASSWORD_HASH_ROUNDS);
+      const passwordHash = await bcrypt.hash(temporaryPassword, PASSWORD_HASH_ROUNDS);
       const user = this.usersRepo.createScoped({
         username: dto.username,
         displayName: dto.displayName,
         loggingEmail: dto.loggingEmail,
         passwordHash,
         status: dto.status ?? UserStatus.Active,
-        // The admin sets the initial password directly (mirrors how the
-        // seeded admin account works) rather than the user picking their own
-        // -- it's emailed to them below, and mustChangePassword forces a
-        // change on first login either way.
-        mustChangePassword: dto.mustChangePassword ?? true,
+        mustChangePassword: true,
         extras: dto.extras,
         createdBy,
       });
@@ -119,10 +163,12 @@ export class UsersService {
       }
 
       // Sends the "your account was created" email with the username and the
-      // temp password the admin just set (mustChangePassword forces a change
-      // on first login). Best-effort -- see MailService.sendWelcomeEmail, a
-      // failed or skipped send here must never fail the account creation
-      // above, which has already committed.
+      // server-generated temp password -- this is the ONLY place it's ever
+      // surfaced, so a skipped/failed send here means the account exists but
+      // its password is unknown to anyone until an admin resets it. Still
+      // best-effort by design (see MailService.sendWelcomeEmail): a failed
+      // send must never fail the account creation above, which has already
+      // committed.
       let tenantSlug: string | undefined;
       try {
         tenantSlug = this.tenantContext.getTenantSlug();
@@ -134,7 +180,7 @@ export class UsersService {
           to: dto.loggingEmail,
           displayName: dto.displayName,
           username: dto.username,
-          temporaryPassword: dto.password,
+          temporaryPassword,
           tenantSlug,
         });
       }

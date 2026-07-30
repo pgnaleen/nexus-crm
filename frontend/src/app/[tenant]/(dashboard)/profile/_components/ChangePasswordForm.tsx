@@ -16,7 +16,15 @@ interface FormState {
 
 const EMPTY_FORM: FormState = { currentPassword: "", newPassword: "", confirmNewPassword: "" };
 
-export function ChangePasswordForm() {
+interface ChangePasswordFormProps {
+  // Called after a successful change, in addition to (not instead of) the
+  // inline success message below -- e.g. the forced first-login gate
+  // (ForcedPasswordChangeGate) uses this to refresh the session once
+  // mustChangePassword has actually cleared server-side.
+  onSuccess?: () => void;
+}
+
+export function ChangePasswordForm({ onSuccess }: ChangePasswordFormProps = {}) {
   const [values, setValues] = useState<FormState>(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -56,6 +64,12 @@ export function ChangePasswordForm() {
       setValues(EMPTY_FORM);
       setErrors({});
       setSuccessMessage("Password changed. You've been signed out of your other sessions.");
+      // Brief delay so the success message above is actually visible before
+      // the caller reacts (e.g. the forced-change gate swaps this whole form
+      // out for the real dashboard once mustChangePassword clears).
+      if (onSuccess) {
+        setTimeout(onSuccess, 900);
+      }
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
         setErrors({ currentPassword: "Current password is incorrect" });

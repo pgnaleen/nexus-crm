@@ -2,7 +2,6 @@ import { CreateUserRequest, UserStatus } from "@orelia/common";
 import {
   ArrayUnique,
   IsArray,
-  IsBoolean,
   IsEmail,
   IsEnum,
   IsOptional,
@@ -12,7 +11,6 @@ import {
   MaxLength,
   MinLength,
 } from "class-validator";
-import { PASSWORD_STRENGTH_MESSAGE, PASSWORD_STRENGTH_REGEX } from "./password-policy";
 
 const USERNAME_REGEX = /^[a-z0-9._-]+$/;
 
@@ -31,21 +29,12 @@ export class CreateUserDto implements CreateUserRequest {
   @IsEmail()
   loggingEmail!: string;
 
-  // bcrypt silently truncates input past 72 bytes -- reject longer passwords
-  // outright rather than let them work while being effectively truncated.
-  @IsString()
-  @MinLength(8)
-  @MaxLength(72)
-  @Matches(PASSWORD_STRENGTH_REGEX, { message: PASSWORD_STRENGTH_MESSAGE })
-  password!: string;
+  // No password field -- see CreateUserRequest's comment. UsersService.create()
+  // generates a random temporary password itself.
 
   @IsOptional()
   @IsEnum(UserStatus)
   status?: UserStatus;
-
-  @IsOptional()
-  @IsBoolean()
-  mustChangePassword?: boolean;
 
   @IsOptional()
   @IsString()

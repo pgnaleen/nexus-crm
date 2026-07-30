@@ -27,9 +27,11 @@ export interface CreateUserRequest {
   username: string;
   displayName: string;
   loggingEmail: string;
-  password: string;
+  // No password field -- the server always generates a random temporary
+  // password (mustChangePassword is unconditionally true for a new account,
+  // see UsersService.create()) and emails it via MailService.sendWelcomeEmail.
+  // The admin never sees or sets it directly.
   status?: UserStatus;
-  mustChangePassword?: boolean;
   extras?: string;
   roleIds?: string[];
   // Story 1.6 -- optionally link this new account to an existing Employee.
