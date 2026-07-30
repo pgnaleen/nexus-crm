@@ -5,7 +5,6 @@ import { listDeals, listDealPartnerLinks } from "@/lib/deals/server";
 import { listMainStages } from "@/lib/main-stages/server";
 import {
   listCompaniesPicker,
-  listCompanyCountries,
   listContactsPicker,
   listDealCustomerParties,
   listDealPartnerParties,
@@ -27,7 +26,6 @@ export default async function FunnelPage({ params }: { params: { tenant: string 
     employees,
     contacts,
     departments,
-    countries,
     relationshipTypes,
     industries,
     customerParties,
@@ -43,7 +41,6 @@ export default async function FunnelPage({ params }: { params: { tenant: string 
     listEmployeesPicker(),
     listContactsPicker(),
     listDepartmentsPicker(),
-    listCompanyCountries(),
     listRelationshipTypes(),
     listIndustries(),
     listDealCustomerParties(),
@@ -71,7 +68,6 @@ export default async function FunnelPage({ params }: { params: { tenant: string 
       employees={employees ?? []}
       contacts={contacts ?? []}
       departments={departments ?? []}
-      countries={countries ?? []}
       relationshipTypes={relationshipTypes ?? []}
       industries={industries ?? []}
       customerParties={customerParties ?? { configured: false, companies: [], contacts: [] }}

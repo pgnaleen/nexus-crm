@@ -115,10 +115,6 @@ interface FunnelSourceTabsProps {
   employees: EmployeePickerResponse[];
   contacts: ContactPickerResponse[];
   departments: DepartmentPickerResponse[];
-  // Distinct country values in use across the tenant's companies, for the
-  // Country filter -- there's no dedicated country lookup table, so this is
-  // derived from companies rather than fetched as its own resource.
-  countries: string[];
   relationshipTypes: RelationshipTypeResponse[];
   industries: IndustryResponse[];
   customerParties: RelationshipRolePickerResponse;
@@ -153,7 +149,6 @@ export function FunnelSourceTabs({
   employees,
   contacts,
   departments,
-  countries,
   relationshipTypes,
   industries,
   customerParties,
@@ -260,9 +255,14 @@ export function FunnelSourceTabs({
     { value: "", label: "All" },
     ...departments.map((d) => ({ value: d.id, label: d.name })),
   ];
+  // Derived from the deals themselves -- distinct dealCountry values actually
+  // in use, not the linked companies' own country field (a separate, unrelated
+  // value -- see companyCountry on DealResponse).
   const countryOptions = [
     { value: "", label: "All" },
-    ...countries.map((c) => ({ value: c, label: c })),
+    ...Array.from(new Set(deals.map((d) => d.dealCountry).filter((c): c is string => Boolean(c))))
+      .sort((a, b) => a.localeCompare(b))
+      .map((c) => ({ value: c, label: c })),
   ];
   const tenderOptions = [
     { value: "", label: "All" },
@@ -322,7 +322,7 @@ export function FunnelSourceTabs({
   const activeDeals = deals
     .filter((d) => activeId === "all" || d.sourceId === activeId)
     .filter((d) => !department || d.departmentId === department)
-    .filter((d) => !country || d.companyCountry === country)
+    .filter((d) => !country || d.dealCountry === country)
     .filter((d) => !tender || (tender === "tender" ? d.isTender : !d.isTender))
     .filter((d) => !salesperson || d.ownerId === salesperson)
     .filter((d) => {
