@@ -4,6 +4,8 @@ import { InjectRepository } from "@nestjs/typeorm";
 import * as bcrypt from "bcrypt";
 import { Not, Repository } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
+import { MailService } from "../../core/mail/mail.service";
+import { TenantContextService } from "../../core/tenant";
 import { EmployeesService } from "../employees/employees.service";
 import { RbacService } from "../rbac/rbac.service";
 import { ChangeOwnPasswordDto } from "./dto/change-own-password.dto";
@@ -29,6 +31,8 @@ export class UsersService {
     // Story 1.6 -- the User <-> Employee link lives on employees.user_id and
     // is only ever written from here (User Management), via these methods.
     private readonly employeesService: EmployeesService,
+    private readonly mailService: MailService,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
   findAll(): Promise<User[]> {
@@ -83,8 +87,10 @@ export class UsersService {
         loggingEmail: dto.loggingEmail,
         passwordHash,
         status: dto.status ?? UserStatus.Active,
-        // No invite-email flow exists yet, so the admin sets the initial
-        // password directly -- mirrors how the seeded admin account works.
+        // The admin sets the initial password directly (mirrors how the
+        // seeded admin account works) rather than the user picking their own
+        // -- it's emailed to them below, and mustChangePassword forces a
+        // change on first login either way.
         mustChangePassword: dto.mustChangePassword ?? true,
         extras: dto.extras,
         createdBy,
@@ -110,6 +116,27 @@ export class UsersService {
       if (dto.employeeId) {
         this.logger.debug(`create: linking new user ${saved.id} to employee ${dto.employeeId}`);
         await this.employeesService.linkToUser(dto.employeeId, saved.id, createdBy);
+      }
+
+      // Sends the "your account was created" email with the username and the
+      // temp password the admin just set (mustChangePassword forces a change
+      // on first login). Best-effort -- see MailService.sendWelcomeEmail, a
+      // failed or skipped send here must never fail the account creation
+      // above, which has already committed.
+      let tenantSlug: string | undefined;
+      try {
+        tenantSlug = this.tenantContext.getTenantSlug();
+      } catch {
+        this.logger.warn("create: no tenant context available, skipping welcome email");
+      }
+      if (tenantSlug) {
+        await this.mailService.sendWelcomeEmail({
+          to: dto.loggingEmail,
+          displayName: dto.displayName,
+          username: dto.username,
+          temporaryPassword: dto.password,
+          tenantSlug,
+        });
       }
 
       return saved;

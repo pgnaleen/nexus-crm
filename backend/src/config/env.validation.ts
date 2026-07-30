@@ -43,4 +43,16 @@ export const envValidationSchema = Joi.object({
   NIGHTLY_BACKUP_HOUR: Joi.number().min(0).max(23).default(2),
   PG_DUMP_PATH: Joi.string().default("pg_dump"),
   NIGHTLY_BACKUP_DISABLED: Joi.boolean().default(false),
+
+  // Transactional email (SendGrid) -- currently just the "welcome, here's
+  // your login" email sent when a User is created (see MailService). Same
+  // optional-at-schema-level posture as the S3 vars above: unset means a
+  // fresh clone still boots, MailService just no-ops with a warning log
+  // instead of failing the user-creation request that triggered it.
+  SENDGRID_API_KEY: Joi.string().empty("").optional(),
+  MAIL_FROM_ADDRESS: Joi.string().empty("").optional(),
+  MAIL_FROM_NAME: Joi.string().default("ORELIA CRM"),
+  // Used to build the login link in the welcome email -- the frontend's own
+  // public origin, not the backend's (NEXT_PUBLIC_API_URL is the reverse).
+  APP_BASE_URL: Joi.string().default("http://localhost:3000"),
 });
