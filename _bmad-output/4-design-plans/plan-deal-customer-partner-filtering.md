@@ -4,7 +4,7 @@
 
 Add Deal's Customer field and Partners field currently show every Company/Contact in the
 tenant, unfiltered — this is documented bug **F2** in
-`_bmad-output/implementation-artifacts/todo-master-remaining-work.md`. Neither
+`_bmad-output/6-finished-archive/todo-master-remaining-work.md`. Neither
 `companies.service.ts::findPicker` nor `contacts.service.ts::findPicker` joins
 `relationship_company_contact_map`, so a company tagged "Vendor," or untagged entirely, is
 indistinguishable from one tagged "Customer."
@@ -59,7 +59,7 @@ Ownership split: `RelationshipTypesService` resolves which type id is flagged; `
 - `ContactsRepository`: new `findPickerForRelationshipType(relationshipTypeId)` — matches contacts **either** directly tagged via their own map row **or** owned by a company that has a map row for that type (an OR of two subqueries). This preserves the existing UX where a company-owned contact is independently pickable, and correctly inherits its parent company's tag — company-owned contacts deliberately don't get their own map row per the double-counting fix from 2026-07-22, so without this OR they'd vanish from the filtered list entirely.
 - `PickersController`: two new routes, `GET /pickers/deal-customer-parties` and `GET /pickers/deal-partner-parties`, gated on `[PERMISSIONS.DEALS_VIEW]` only (matches the existing `/pickers/contacts` gate — Add Deal is the only real caller). Each: resolve the role's flagged type id via `RelationshipTypesService.findSystemRoleTypeId`; if null, return `{ configured: false, companies: [], contacts: [] }`; otherwise run both filtered queries in parallel and return `{ configured: true, companies: [...], contacts: [...] }`. Standard debug-log entry/branch/result + try/catch-rethrow throughout.
 - `PickersModule`: add `RelationshipTypesModule` to `imports`. No circular-import risk — confirmed `RelationshipTypesModule` doesn't depend on `PickersModule`/`CompaniesModule`/`ContactsModule` as Nest modules (it already injects `CompaniesRepository`/`ContactsRepository` directly as providers).
-- Update `_bmad-output/implementation-artifacts/api-endpoint-registry.md` with the two new rows in the same change.
+- Update `_bmad-output/2-current-work/api-endpoint-registry.md` with the two new rows in the same change.
 
 ### 5. Tenant-creation seeding
 `TenantsService` currently has no `DataSource` injected (confirmed by reading the file) — add `@InjectDataSource() private readonly dataSource: DataSource`, matching the exact pattern already used in `relationship-types.service.ts::remove()`. Wrap `create()`'s tenant insert and the two seed rows in one `dataSource.transaction(...)`, so a seeding failure rolls back the tenant too rather than leaving it half-provisioned:

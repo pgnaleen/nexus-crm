@@ -7,7 +7,7 @@ touching any backend wiring — RBAC, picker APIs, auto-placement, and full Add-
 persistence all come after, one at a time. Also includes the Funnel-specific slice of two
 supervisor-directed, system-wide changes (permission model, RBAC-vs-picker route classification);
 the rest of those changes, covering every other already-built section, is tracked separately in
-`_bmad-output/implementation-artifacts/todo-system-wide-i18n-and-permissions.md`.
+`_bmad-output/6-finished-archive/todo-system-wide-i18n-and-permissions.md`.
 
 ## Frontend pages involved
 
@@ -127,7 +127,7 @@ screen exists.
 **How:** This is the first real feature to go through this rule, so it also stands up the
 mechanism itself (library choice, file location, language-selection plumbing) — not just Funnel's
 own strings. Coordinate with whoever picks up
-`_bmad-output/implementation-artifacts/todo-system-wide-i18n-and-permissions.md` (Part B) so the
+`_bmad-output/6-finished-archive/todo-system-wide-i18n-and-permissions.md` (Part B) so the
 mechanism decided here is the one every other section retrofits to, not a second competing
 approach.
 
@@ -198,7 +198,7 @@ columns for them, even though viewing the funnel doesn't logically require stage
 **How:** Copy `departments.controller.ts`'s picker route + `findPicker()` service method pattern
 into `main-stages.controller.ts`/`sub-stages.controller.ts`. Since consolidating all pickers into
 one backend module is already logged as its own one-time cleanup in
-`_bmad-output/implementation-artifacts/todo-audit-infrastructure.md`, add these two new picker
+`_bmad-output/6-finished-archive/todo-audit-infrastructure.md`, add these two new picker
 routes to whichever module they land in when that cleanup happens — don't create two more
 one-off scattered controllers if that cleanup is happening soon after.
 

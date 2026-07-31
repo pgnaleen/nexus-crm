@@ -1,7 +1,7 @@
 # Allow multiple Relationship Types to share the same systemRole
 
 **Note:** on approval, step 0 of implementation is committing this plan as
-`_bmad-output/planning-artifacts/plan-multi-type-system-role.md`, matching this project's
+`_bmad-output/4-design-plans/plan-multi-type-system-role.md`, matching this project's
 existing convention — plan mode itself only permits editing this scratch file.
 
 ## Context

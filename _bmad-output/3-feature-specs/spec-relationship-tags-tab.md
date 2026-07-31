@@ -58,7 +58,7 @@ baseline_commit: '6b259a88c228a757b66b1d48dd2f37b1f112e202'
 - `frontend/src/app/[tenant]/(dashboard)/relationships/[id]/_components/CompanyFormDialog.tsx` -- extend `TabId` (line 200) with `"relationships"`
 - `frontend/src/app/[tenant]/(dashboard)/relationships/[id]/_components/ContactFormDialog.tsx` -- add tab scaffold (currently none), existing form becomes `"details"` tab, add `"relationships"` tab
 - `frontend/src/locales/en.json` -- new `relationshipTags` key namespace
-- `_bmad-output/implementation-artifacts/api-endpoint-registry.md` -- 4 new rows under "Relationship Parties" section
+- `_bmad-output/2-current-work/api-endpoint-registry.md` -- 4 new rows under "Relationship Parties" section
 - **Added in review loop 1** — `backend/src/modules/pickers/pickers.controller.ts` -- new `GET /pickers/relationship-types` route (gated on `RELATIONSHIP_*`, the actual consumer's permission), replacing the add-tag picker's reuse of the full admin `GET /relationship-types` (gated on `RELATIONSHIP_TYPE_*`, a different resource's permission)
 - **Added in review loop 1** — `common/src/contracts/pickers.contracts.ts` -- new `RelationshipTypePickerResponse { id, name }`
 - **Added in review loop 1** — `frontend/src/lib/api/pickers.ts` -- new `listRelationshipTypesPicker()`

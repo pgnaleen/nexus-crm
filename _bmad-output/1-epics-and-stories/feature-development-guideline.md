@@ -29,7 +29,7 @@ out of date with `CLAUDE.md`.
 6. Soft-delete cascades are explicit and transactional, setting `deletedBy` on every affected
    dependent row — never a raw DB-level `ON DELETE CASCADE` for soft-deletes.
 7. If the delete has dependents, it needs the red-warning + password-confirm flow (once the
-   shared dialog for this exists — see `todo-audit-infrastructure.md`; until then, flag it as a
+   shared dialog for this exists — see `../6-finished-archive/todo-audit-infrastructure.md`; until then, flag it as a
    known gap rather than shipping a silent one-click cascade).
 8. Consider whether this mutation deserves an `AuditLogService.record(...)` call (once the
    `audit_logs` table exists — see the same todo doc).

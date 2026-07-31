@@ -87,7 +87,7 @@ and these are content-area fills inside one module, never app chrome. The except
 extend beyond that board — buttons, focus rings, nav, and every other surface still follow the rules
 above, and no other module may introduce blue by citing this precedent. Documented so it stops being
 re-flagged as a violation on every review. (Epic 2 of
-`_bmad-output/planning-artifacts/epics-task-management.md`, Story 2.1.)
+`_bmad-output/1-epics-and-stories/epics-task-management.md`, Story 2.1.)
 
 **Single-source-of-truth rule:** never hardcode a raw hex or `rgba()` color value in a component
 for anything that represents one of the tokens above — reference the token instead, either as a
@@ -231,7 +231,7 @@ colours, component customisation, theme controller).
 These apply to every table, service, and API call added from now on — not just new features.
 One-time setup work needed to make these rules fully true (e.g. adding `deletedBy`, creating the
 `audit_logs` table) is tracked separately in
-`_bmad-output/implementation-artifacts/todo-audit-infrastructure.md`, not here. This section is
+`_bmad-output/6-finished-archive/todo-audit-infrastructure.md`, not here. This section is
 the standing rule; that file is the one-time build list.
 
 ### Audit columns on every table
@@ -368,7 +368,7 @@ Reference implementation: `backend/src/modules/pickers/pickers.controller.ts` an
 methods in `companies.service.ts`/`contacts.service.ts`/`employees.service.ts`/
 `departments.service.ts`/`industries.service.ts` — every endpoint there follows this exactly.
 Retrofitting this to every already-built endpoint is tracked as its own item in
-`_bmad-output/implementation-artifacts/todo-audit-infrastructure.md`, not done piecemeal here —
+`_bmad-output/6-finished-archive/todo-audit-infrastructure.md`, not done piecemeal here —
 same "new code follows the rule now, old code catches up later as its own pass" precedent used for
 i18n and the picker-permission split above.
 
@@ -404,7 +404,7 @@ both purposes.
 ## API Endpoint Registry
 
 Every backend endpoint is tracked in a single table-view reference:
-`_bmad-output/implementation-artifacts/api-endpoint-registry.md`. It lists, per endpoint: method,
+`_bmad-output/2-current-work/api-endpoint-registry.md`. It lists, per endpoint: method,
 path, RBAC-vs-picker type, required permission(s), purpose, request data shape, response data
 shape, controller/service location, frontend consumer(s), and whether it's been brought up to the
 "Deep debug logging inside every backend endpoint" standard above. The intent is that someone can
@@ -437,7 +437,7 @@ again later) never requires a matching `Sidebar.tsx` edit.
 
 **Not yet migrated:** `DEAL_STAGES_MANAGE` — a dead wildcard (zero controllers ever checked it)
 superseded by `MAIN_STAGE_*`/`SUB_STAGE_*`'s own granular permissions. Tracked as its own task in
-`_bmad-output/planning-artifacts/plan-funnel-deal-management.md` (Task 4), since it needs no
+`_bmad-output/4-design-plans/plan-funnel-deal-management.md` (Task 4), since it needs no
 migration (nothing to move access to) — just deletion, once picked up.
 
 Companies/Contacts/Deals never had a `_MANAGE` key at all (already 4-permission by design) — the
@@ -469,7 +469,7 @@ endpoints themselves are scattered one per module instead of collected in one pl
 Consolidating them into a single dedicated pickers module/controller (one file mirroring the
 frontend's own `frontend/src/lib/pickers/server.ts`, which already aggregates every picker fetch
 function in one place) is a one-time cleanup — track it in
-`_bmad-output/implementation-artifacts/todo-audit-infrastructure.md` rather than doing it
+`_bmad-output/6-finished-archive/todo-audit-infrastructure.md` rather than doing it
 piecemeal as a side effect of unrelated feature work.
 
 **Rule:** a system-internal/picker route must never be gated behind the resource's own admin
@@ -560,6 +560,6 @@ implementation for retrofitting every other section.
 Retrofitting every other *already-built* section (Tenants/Roles/Users/Teams, Relationship
 Types/Deal Sources/Main Stages/Sub Stages, Relationships, Deals, Employee Management, and shared
 UI primitives' own built-in text) to this is tracked in
-`_bmad-output/implementation-artifacts/todo-system-wide-i18n-and-permissions.md`, not done
+`_bmad-output/6-finished-archive/todo-system-wide-i18n-and-permissions.md`, not done
 piecemeal here. New features from now on must be built with this from the start —
-see `_bmad-output/planning-artifacts/feature-development-guideline.md` for the full checklist.
+see `_bmad-output/1-epics-and-stories/feature-development-guideline.md` for the full checklist.

@@ -1,59 +1,59 @@
 # Deferred Work
 
-- source_spec: `_bmad-output/implementation-artifacts/spec-relationship-tags-tab.md`
+- source_spec: `_bmad-output/3-feature-specs/spec-relationship-tags-tab.md`
   summary: "`RelationshipPartiesService.setActive()` saves an entity loaded with relations (`company`, `company.territoryOwner`, `contact`) -- the same anti-pattern CLAUDE.md's TypeORM Gotcha section documents as having nulled FK columns elsewhere (the Deals bug)."
   evidence: "`setActive()` (`relationship-parties.service.ts` ~L505) calls `findOneOrFail` (which eagerly loads those relations) then mutates `isActive`/`updatedBy` and `saveScoped()`s the same object. Pre-existing -- already the code path behind the existing enable/disable endpoints (verified live per `api-endpoint-registry.md`'s row 9 note, with no observed corruption), not introduced by the Relationship Tags Tab feature. A 2nd review pass caught that this feature's own loop-1 fix had made it worse (widened `findOneOrFail`'s relations to also include `relationshipType`, a NOT NULL column, specifically to reach `setActive` through the new reactivation branch) and that the code comment claiming 'never save()s it' was factually wrong given `setActive` is a real, unchanged caller. **Fixed in loop 2**: reverted the relations widening entirely -- `linkExistingCompanyToType`/`linkExistingContactToType` now attach `relationshipType` manually from an object already fetched earlier in the same method, so nothing about this feature adds risk to `setActive` anymore. The underlying pre-existing pattern in `setActive` itself is unchanged and still deferred here -- worth a focused audit of whether `RelationshipCompanyContactMap`'s specific relation config actually triggers the FK-nulling behavior, and, if so, splitting `setActive` into a bare-load-then-save per the documented TypeORM rule (same fix already applied to `deals.service.ts`)."
 
-- source_spec: `_bmad-output/implementation-artifacts/spec-relationship-tags-tab.md`
+- source_spec: `_bmad-output/3-feature-specs/spec-relationship-tags-tab.md`
   summary: "`RelationshipHubDiagram`'s hub-and-spoke layout has a fixed radius/node size and doesn't reflow for a party tagged under many relationship types."
   evidence: "`RelationshipHubDiagram.tsx` -- `RADIUS`/`SPOKE_NODE_WIDTH`/`SPOKE_NODE_HEIGHT` are constants regardless of `spokes.length`; a company tagged under 6+ types will show visibly overlapping spoke nodes on the fixed 420x260 viewBox. Accepted for v1 since relationship types are an admin-curated reference list, typically small (per the architect's original design framing); revisit if tenants end up with many types in practice."
 
-- source_spec: `_bmad-output/implementation-artifacts/spec-relationship-tags-tab.md`
+- source_spec: `_bmad-output/3-feature-specs/spec-relationship-tags-tab.md`
   summary: "`handleAddTag`'s catch block in both dialogs only routes the 409 case through `t()`; every other `ApiError` (404, 400 company-owned-contact, etc.) displays the raw backend English message verbatim."
   evidence: "`CompanyFormDialog.tsx`/`ContactFormDialog.tsx` `handleAddTag`: `setTagError(err.status === 409 ? t(...) : err.message)`. Not a new pattern introduced by this feature -- matches this codebase's existing convention for `ApiError` messages elsewhere (e.g. `ContactFormDialog`'s own pre-existing `formError` handling does the same thing), so not treated as a regression specific to this diff. Worth a codebase-wide pass on whether backend error messages should route through i18n at all, separate from this feature."
 
-- source_spec: `_bmad-output/implementation-artifacts/spec-relationship-tags-tab.md`
+- source_spec: `_bmad-output/3-feature-specs/spec-relationship-tags-tab.md`
   summary: "The add-tag picker's relationship-type options are fetched once on dialog mount and never refreshed, so a type created/renamed/removed by another user while the dialog stays open won't appear until it's reopened."
   evidence: "`CompanyFormDialog.tsx`/`ContactFormDialog.tsx`'s `relationshipTypeOptions` effect runs once per `[mode, canCreate]` (or `showRelationshipsTab`); `handleAddTag`'s success path only calls `refreshTags()` (the party's own tag list), never re-fetches the picker options. Low-probability window (another admin editing Relationship Types during the exact time this dialog is open) with a low-severity outcome (stale dropdown, not incorrect data)."
 
-- source_spec: `_bmad-output/implementation-artifacts/spec-relationship-tags-tab.md`
+- source_spec: `_bmad-output/3-feature-specs/spec-relationship-tags-tab.md`
   summary: "The tag-list fetch and the relationship-type-picker fetch share one `tagError` state; if both fail in the same render window, whichever settles last silently overwrites the other's message."
   evidence: "`CompanyFormDialog.tsx`/`ContactFormDialog.tsx` both write to the same `setTagError` from two independent `useEffect`s. Requires both fetches to fail near-simultaneously to manifest; worst case is a missing/wrong error message shown, not data loss."
 
-- source_spec: `_bmad-output/implementation-artifacts/spec-relationship-tags-tab.md`
+- source_spec: `_bmad-output/3-feature-specs/spec-relationship-tags-tab.md`
   summary: "`RelationshipHubDiagram` is not accessible to screen readers -- only the center label reaches assistive tech."
   evidence: "The whole SVG collapses to `role=\"img\" aria-label={centerLabel}`; individual relationship-type names and their active/inactive state (conveyed purely by stroke/fill color) never reach a screen reader. No documented project accessibility standard was violated (unlike the RBAC-vs-picker rule, which is explicit in CLAUDE.md), so this wasn't treated as blocking, but it's a real gap for a feature that's otherwise fully keyboard/permission-correct."
 
 
-- source_spec: `_bmad-output/implementation-artifacts/spec-roles-permission-risk-level-filter.md`
+- source_spec: `_bmad-output/3-feature-specs/spec-roles-permission-risk-level-filter.md`
   summary: RolePermissionsDialog's "Clear all" button clears every selected permission across all groups regardless of active search/level/risk filters, with no confirmation step.
   evidence: A user who filters to one group and clicks Clear all silently loses all other groups' selections too; the sibling role-delete action was just upgraded to a confirmed dialog for a less destructive action, so the safety bar is inconsistent within the same feature.
 
-- source_spec: `_bmad-output/implementation-artifacts/spec-roles-permission-risk-level-filter.md`
+- source_spec: `_bmad-output/3-feature-specs/spec-roles-permission-risk-level-filter.md`
   summary: ConfirmDialog and AlertDialog in RolesTableWidget can render simultaneously and both close on a single Escape keypress.
   evidence: Nothing prevents opening a new delete-confirmation while a prior delete's error alert is still shown; a single Escape dismisses both with no distinct feedback for which was intended.
 
-- source_spec: `_bmad-output/implementation-artifacts/spec-roles-permission-risk-level-filter.md`
+- source_spec: `_bmad-output/3-feature-specs/spec-roles-permission-risk-level-filter.md`
   summary: AccountMenu's Log out button uses an inline red style that both breaks the shared hover rule and gives a reversible action the same visual alarm as destructive ones.
   evidence: ".account-menu-item:hover"'s background never shows because the inline style wins, and solid red desensitizes users to the red=danger convention used for actual destructive actions elsewhere.
 
-- source_spec: `_bmad-output/implementation-artifacts/spec-roles-permission-risk-level-filter.md`
+- source_spec: `_bmad-output/3-feature-specs/spec-roles-permission-risk-level-filter.md`
   summary: RoleFormDialog's "Name *" required marker is cosmetic only; the underlying input has no required/aria-required attribute.
   evidence: Assistive tech gets no indication the field is required; the same gap already exists in TenantFormDialog.
 
-- source_spec: `_bmad-output/implementation-artifacts/spec-roles-permission-risk-level-filter.md`
+- source_spec: `_bmad-output/3-feature-specs/spec-roles-permission-risk-level-filter.md`
   summary: The pre-existing .permissions-* CSS block hardcodes literal hex colors instead of the CSS variables (var(--color-border) etc.) used elsewhere in globals.css.
   evidence: Any future theme/color adjustment needs a special-cased hunt through this one block; new risk-tag colors followed the same pre-existing local convention rather than introducing a second inconsistency.
 
-- source_spec: `_bmad-output/implementation-artifacts/spec-roles-permission-risk-level-filter.md`
+- source_spec: `_bmad-output/3-feature-specs/spec-roles-permission-risk-level-filter.md`
   summary: The search input and "Level" filter select in RolePermissionsDialog have no accessible label (placeholder/visual only).
   evidence: A11y regression relative to the rest of the form-heavy codebase, which uses TextField's explicit label pattern; the new Risk select was given an aria-label but these two pre-existing controls were not, since they predate this change.
 
-- source_spec: `_bmad-output/implementation-artifacts/spec-roles-permission-risk-level-filter.md`
+- source_spec: `_bmad-output/3-feature-specs/spec-roles-permission-risk-level-filter.md`
   summary: Resource name prefix-stripping in RolePermissionsDialog (name.replace(`${prefix}:`, '')) assumes exactly one "prefix:rest" occurrence.
   evidence: A resource name without a colon, or where the prefix text recurs later in the string, silently displays the untouched full name with no test coverage for that path.
 
-- source_spec: `_bmad-output/implementation-artifacts/spec-roles-permission-risk-level-filter.md`
+- source_spec: `_bmad-output/3-feature-specs/spec-roles-permission-risk-level-filter.md`
   summary: .permissions-grid is a hardcoded two-column layout with no responsive breakpoint.
   evidence: On a narrower viewport, or if the dialog's maxWidth is ever reduced, groups will cramp instead of reflowing to one column.
 

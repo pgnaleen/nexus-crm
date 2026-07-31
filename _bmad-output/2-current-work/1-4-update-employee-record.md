@@ -1,6 +1,11 @@
 # Story 1.4: Update Employee Record
 
-Status: ready-for-dev
+Status: done
+
+> Corrected 2026-07-31. This file said `ready-for-dev` long after the story shipped. Verified in
+> code: `PATCH /employees/:id` exists (`employees.controller.ts:214`), `EmployeeFormDialog.tsx:151`
+> is commented `Story 1.4 -- both present = edit mode`, and the AC note below claiming
+> `EMPLOYEES_UPDATE` "does not exist yet" is stale — it is at `permissions.ts:84`.
 
 ## Story
 
@@ -49,7 +54,7 @@ so that **I can keep their record accurate as things change — a promotion, upd
 - [ ] Task 8 — i18n (project rule: zero hardcoded user-facing strings)
   - [ ] `frontend/src/locales/en.json`: add `employees.dialog.editTitle`, `employees.detail.editButton` (or similar), and any new error keys. Follow the existing `employees.dialog.*` structure
 - [ ] Task 9 — API Endpoint Registry (project rule: same-change update)
-  - [ ] `_bmad-output/implementation-artifacts/api-endpoint-registry.md` Employees section: add `PATCH /employees/:id` row (RBAC, `EMPLOYEES_UPDATE`, request `UpdateEmployeeRequest`, response `EmployeeDetailResponse`, consumer `EmployeeFormDialog.tsx`, debug-logging ✅); amend the two uploads rows' permission column
+  - [ ] `_bmad-output/2-current-work/api-endpoint-registry.md` Employees section: add `PATCH /employees/:id` row (RBAC, `EMPLOYEES_UPDATE`, request `UpdateEmployeeRequest`, response `EmployeeDetailResponse`, consumer `EmployeeFormDialog.tsx`, debug-logging ✅); amend the two uploads rows' permission column
 - [ ] Task 10 — Verification (no test infra exists yet — see Dev Notes)
   - [ ] `docker compose exec backend sh -c "cd /app/backend && pnpm exec tsc --noEmit"` and `docker compose exec frontend sh -c "cd /app/frontend && pnpm exec tsc --noEmit"` — no NEW errors (pre-existing frontend errors exist in AddDealDialog/RolePermissionsDialog/UserFormDialog/RoleCardPicker — not yours, don't fix, don't add to them)
   - [ ] Manual AC walkthrough (each AC above) as Super Admin (`system`/`admin`/`ChangeMe123!`), plus a role holding `EMPLOYEES_UPDATE` without `EMPLOYEES_VIEW_SENSITIVE` for AC2/AC4 — verify NIC/salary survive in DB: `docker compose exec postgres psql -U orelia -d orelia -c "SELECT nic_passport_number, base_salary FROM employees WHERE id='...'"`
@@ -101,7 +106,7 @@ The entity types it `number` (`employee.entity.ts:87-88`) but a loaded entity ac
 
 ### Testing standards
 
-**This repo has no automated test infrastructure yet** — zero `*.spec.ts`, no `test` script in `backend/package.json` (formal test rollout is tracked separately in `_bmad-output/testing/TESTING-PLAYBOOK.md`, Step 0 not started). Stories 1.1–1.3 shipped with typecheck + manual AC verification; do the same here (Task 10). Do not bolt a test framework onto this story.
+**This repo has no automated test infrastructure yet** — zero `*.spec.ts`, no `test` script in `backend/package.json` (formal test rollout is tracked separately in `_bmad-output/5-testing/TESTING-PLAYBOOK.md`, Step 0 not started). Stories 1.1–1.3 shipped with typecheck + manual AC verification; do the same here (Task 10). Do not bolt a test framework onto this story.
 
 ### Runtime environment
 
@@ -123,12 +128,12 @@ Everything runs in Docker (`docker compose up -d`): backend :3001 (NestJS `--wat
 
 ### References
 
-- Epic source: `_bmad-output/planning-artifacts/epics-hr.md` § Story 1.4 (CONFIRMED)
+- Epic source: `_bmad-output/1-epics-and-stories/epics-hr.md` § Story 1.4 (CONFIRMED)
 - Update pattern to copy: `backend/src/modules/deals/deals.service.ts:183-231`
 - TypeORM gotcha: `CLAUDE.md` § "TypeORM Gotcha: never save() an entity that was loaded with relations"
 - Permission rules: `CLAUDE.md` § "Permission Model" + `common/src/constants/permissions.ts:78-86`
 - Uploads gate TODO honored by this story: `backend/src/modules/uploads/uploads.controller.ts:82-84`
-- Registry: `_bmad-output/implementation-artifacts/api-endpoint-registry.md` § Employees
+- Registry: `_bmad-output/2-current-work/api-endpoint-registry.md` § Employees
 
 ## Dev Agent Record
 
