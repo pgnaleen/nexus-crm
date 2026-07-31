@@ -403,6 +403,7 @@ export function RelationshipViewWidget({
           companies={companies}
           canUpdate={canUpdate}
           canDelete={canDelete}
+          canCreate={canCreate}
           onClose={() => setDialogState(null)}
           onSaved={handleSaved}
         />
@@ -416,6 +417,7 @@ export function RelationshipViewWidget({
           mapId={dialogState.party.id}
           contact={dialogState.party.contact}
           companies={companies}
+          canCreate={canCreate}
           onClose={() => setDialogState(null)}
           onSaved={handleSaved}
         />

@@ -16,14 +16,19 @@ import type {
   ContactResponse,
   EmployeePickerResponse,
   IndustryResponse,
+  RelationshipTagResponse,
+  RelationshipTypePickerResponse,
 } from "@orelia/common";
 import {
+  addCompanyTag,
   createRelationshipPartyCompany,
   createRelationshipPartyContact,
   deleteCompanyContact,
   listCompanyContacts,
+  listCompanyTags,
   updateRelationshipPartyCompany,
 } from "@/lib/api/relationship-parties";
+import { listRelationshipTypesPicker } from "@/lib/api/pickers";
 import { uploadLogo } from "@/lib/api/uploads";
 import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
@@ -31,10 +36,13 @@ import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { CountrySelect } from "@/components/ui/CountrySelect";
+import { SearchSelect } from "@/components/ui/SearchSelect";
+import { RelationshipHubDiagram } from "@/components/ui/RelationshipHubDiagram";
 import { Spinner } from "@/components/ui/Spinner";
 import { EditIcon, PlusIcon, TrashIcon, UploadCloudIcon } from "@/components/ui/icons";
 import { useConfirm, useAlert } from "@/components/providers/DialogProvider";
 import { min, minLength, required, validate } from "@/lib/validation";
+import { t } from "@/lib/i18n";
 import { ContactFields, type ContactFieldsValue } from "./ContactFields";
 import { ContactFormDialog } from "./ContactFormDialog";
 
@@ -197,7 +205,7 @@ function toFormState(company?: CompanyResponse): FormState {
   };
 }
 
-type TabId = "details" | "business" | "contacts";
+type TabId = "details" | "business" | "contacts" | "relationships";
 
 interface CompanyFormDialogProps {
   mode: "create" | "edit" | "view";
@@ -214,6 +222,10 @@ interface CompanyFormDialogProps {
   // straight through, same permissions as everything else in this dialog.
   canUpdate?: boolean;
   canDelete?: boolean;
+  // Gates the "add a relationship type tag" picker on the Relationships tab
+  // (RELATIONSHIP_CREATE) -- separate from canUpdate/canDelete above since
+  // tagging is its own permission, not an update to the company's own fields.
+  canCreate?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -229,6 +241,7 @@ export function CompanyFormDialog({
   companies,
   canUpdate = false,
   canDelete = false,
+  canCreate = false,
   onClose,
   onSaved,
 }: CompanyFormDialogProps) {
@@ -278,6 +291,91 @@ export function CompanyFormDialog({
       cancelled = true;
     };
   }, [mode, mapId, relationshipTypeId]);
+
+  // Relationships tab -- cross-relationship-type tags for this company (see
+  // relationship-tags.controller.ts). Keyed by company.id (the real Company
+  // id), not mapId (this relationship type's own party row id), since a
+  // company's tags span every relationship type it's tagged under.
+  const [tags, setTags] = useState<RelationshipTagResponse[]>([]);
+  const [isLoadingTags, setIsLoadingTags] = useState(mode !== "create");
+  const [relationshipTypeOptions, setRelationshipTypeOptions] = useState<RelationshipTypePickerResponse[]>([]);
+  const [selectedTagTypeId, setSelectedTagTypeId] = useState("");
+  const [isAddingTag, setIsAddingTag] = useState(false);
+  const [tagError, setTagError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mode === "create" || !company) return;
+    let cancelled = false;
+    setIsLoadingTags(true);
+    listCompanyTags(company.id)
+      .then((rows) => {
+        if (!cancelled) setTags(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setTagError(t("relationshipTags.errors.loadFailed"));
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingTags(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, company]);
+
+  // Only fetched when the add-tag picker can actually be used -- edit mode,
+  // with create permission on this resource. Uses the dedicated
+  // /pickers/relationship-types route (gated on RELATIONSHIP_* -- the
+  // consumer's own permission), not the full admin GET /relationship-types
+  // (gated on RELATIONSHIP_TYPE_*) -- a RELATIONSHIP_CREATE holder with no
+  // Relationship-Type admin rights would otherwise 403 here silently
+  // (found in review).
+  useEffect(() => {
+    if (mode !== "edit" || !canCreate) return;
+    let cancelled = false;
+    listRelationshipTypesPicker()
+      .then((rows) => {
+        if (!cancelled) setRelationshipTypeOptions(rows);
+      })
+      .catch(() => {
+        // Surfaced (not swallowed) -- otherwise a fetch failure looks
+        // identical to "every relationship type is already tagged"
+        // (found in review).
+        if (!cancelled) setTagError(t("relationshipTags.errors.loadTypesFailed"));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, canCreate]);
+
+  async function refreshTags() {
+    if (!company) return;
+    try {
+      const rows = await listCompanyTags(company.id);
+      setTags(rows);
+    } catch {
+      // Non-fatal -- the just-added tag already succeeded; the list will
+      // catch up next time this dialog opens.
+    }
+  }
+
+  async function handleAddTag() {
+    if (!company || !selectedTagTypeId) return;
+    setTagError(null);
+    setIsAddingTag(true);
+    try {
+      await addCompanyTag(company.id, { relationshipTypeId: selectedTagTypeId });
+      setSelectedTagTypeId("");
+      await refreshTags();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setTagError(err.status === 409 ? t("relationshipTags.errors.duplicateTag") : err.message);
+      } else {
+        setTagError(t("relationshipTags.errors.addFailed"));
+      }
+    } finally {
+      setIsAddingTag(false);
+    }
+  }
 
   const confirm = useConfirm();
   const { showError } = useAlert();
@@ -497,6 +595,16 @@ export function CompanyFormDialog({
     companies.filter((c) => c.id !== company?.id).map((c) => ({ value: c.id, label: c.name })),
   );
 
+  const tagSpokes = tags.map((tag) => ({ id: tag.mapId, label: tag.relationshipTypeName, isActive: tag.isActive }));
+  // Only ACTIVE tags block re-selection -- found in review: filtering on
+  // every tag (including disabled ones) made a disabled tag's type
+  // permanently unselectable here, so the backend's reactivate-via-setActive
+  // path was never actually reachable from this picker.
+  const taggedTypeIds = new Set(tags.filter((tag) => tag.isActive).map((tag) => tag.relationshipTypeId));
+  const addTagOptions = relationshipTypeOptions
+    .filter((type) => !taggedTypeIds.has(type.id))
+    .map((type) => ({ value: type.id, label: type.name }));
+
   return (
     <Dialog
       open
@@ -533,6 +641,15 @@ export function CompanyFormDialog({
           >
             Contacts{contacts.length + existingContacts.length > 0 ? ` (${contacts.length + existingContacts.length})` : ""}
           </button>
+          {mode !== "create" && (
+            <button
+              type="button"
+              className={`dialog-tab${activeTab === "relationships" ? " dialog-tab-active" : ""}`}
+              onClick={() => setActiveTab("relationships")}
+            >
+              {t("relationshipTags.tabLabel")}
+            </button>
+          )}
         </div>
 
         {formError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{formError}</p>}
@@ -911,6 +1028,50 @@ export function CompanyFormDialog({
                   <PlusIcon size={14} /> Add contact
                 </Button>
               </>
+            )}
+          </div>
+        )}
+
+        {/* ── Tab 4: Relationships ────────────────────────── */}
+        {activeTab === "relationships" && (
+          <div className="h-[min(620px,calc(100vh-250px))] overflow-y-auto pr-1">
+            {tagError && <p className="mb-2 text-[12.5px] text-[var(--color-danger)]">{tagError}</p>}
+            {isLoadingTags ? (
+              <Spinner size={20} />
+            ) : (
+              <RelationshipHubDiagram
+                centerLabel={values.name}
+                spokes={tagSpokes}
+                emptyLabel={t("relationshipTags.emptyState")}
+              />
+            )}
+
+            {!isViewOnly && canCreate && (
+              <div className="mt-4 border-t border-[var(--color-border)] pt-4">
+                <div className="flex items-end gap-2.5">
+                  <div className="flex-1">
+                    <SearchSelect
+                      label={t("relationshipTags.add.label")}
+                      value={selectedTagTypeId}
+                      onChange={setSelectedTagTypeId}
+                      options={addTagOptions}
+                      placeholder={t("relationshipTags.add.placeholder")}
+                      searchPlaceholder={t("relationshipTags.add.searchPlaceholder")}
+                      emptyLabel={t("relationshipTags.add.emptyLabel")}
+                      disabled={isAddingTag}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleAddTag}
+                    isLoading={isAddingTag}
+                    disabled={!selectedTagTypeId}
+                  >
+                    <PlusIcon size={14} /> {t("relationshipTags.add.button")}
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
         )}

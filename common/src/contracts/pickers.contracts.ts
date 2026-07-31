@@ -20,6 +20,11 @@ export interface DepartmentPickerResponse {
   name: string;
 }
 
+export interface RelationshipTypePickerResponse {
+  id: string;
+  name: string;
+}
+
 // Any active user in the tenant -- Priority Tracker's Share/Delegate
 // pickers (Stories 1.5/1.6), gated on "authenticated" only, matching
 // Priority Tasks' own no-RBAC-permission access model.

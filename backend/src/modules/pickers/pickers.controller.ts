@@ -7,6 +7,7 @@ import {
   IndustryResponse,
   PERMISSIONS,
   RelationshipRolePickerResponse,
+  RelationshipTypePickerResponse,
   SystemRole,
   UserPickerResponse,
 } from "@orelia/common";
@@ -230,6 +231,30 @@ export class PickersController {
       return employees.map((employee) => ({ id: employee.id, fullName: employee.fullName }));
     } catch (err) {
       this.logger.error(`GET /pickers/employees failed: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Added for the Relationships tab's "Add relationship type" picker
+  // (CompanyFormDialog/ContactFormDialog) -- found in review: that picker
+  // was reusing GET /relationship-types (relationship-types.controller.ts),
+  // which is gated on RELATIONSHIP_TYPE_* (that resource's own admin
+  // permissions), not RELATIONSHIP_* (the actual consumer's permission,
+  // which is all a user tagging a company/contact is guaranteed to hold).
+  // Per CLAUDE.md's RBAC-vs-picker rule, a picker must be gated on the
+  // consumer's permission, never the looked-up resource's own -- same class
+  // of gap already fixed for companies/contacts/employees above.
+  @UseGuards(PermissionsGuard)
+  @RequirePermission(ANY_RELATIONSHIP_PERMISSION)
+  @Get("relationship-types")
+  async findRelationshipTypes(): Promise<RelationshipTypePickerResponse[]> {
+    this.logger.debug("GET /pickers/relationship-types called");
+    try {
+      const types = await this.relationshipTypesService.findAll();
+      this.logger.debug(`GET /pickers/relationship-types returning ${types.length} row(s)`);
+      return types.map((type) => ({ id: type.id, name: type.name }));
+    } catch (err) {
+      this.logger.error(`GET /pickers/relationship-types failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }

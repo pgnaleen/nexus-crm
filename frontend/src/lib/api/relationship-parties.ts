@@ -1,8 +1,10 @@
 import type {
+  AddRelationshipTagRequest,
   ContactResponse,
   CreateContactRequest,
   CreateRelationshipPartyCompanyRequest,
   RelationshipPartyResponse,
+  RelationshipTagResponse,
   UpdateCompanyRequest,
   UpdateContactRequest,
 } from "@orelia/common";
@@ -114,5 +116,36 @@ export function deleteRelationshipParty(
 ): Promise<{ success: true }> {
   return apiFetch<{ success: true }>(`/relationship-types/${relationshipTypeId}/parties/${mapId}`, {
     method: "DELETE",
+  });
+}
+
+// Cross-relationship-type tags (Relationships tab) -- keyed by the real
+// Company/Contact id, not a single-type mapId, since a party's tags span
+// every relationship type it's tagged under.
+export function listCompanyTags(companyId: string): Promise<RelationshipTagResponse[]> {
+  return apiFetch<RelationshipTagResponse[]>(`/relationship-parties/companies/${companyId}/tags`);
+}
+
+export function addCompanyTag(
+  companyId: string,
+  payload: AddRelationshipTagRequest,
+): Promise<RelationshipTagResponse> {
+  return apiFetch<RelationshipTagResponse>(`/relationship-parties/companies/${companyId}/tags`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listContactTags(contactId: string): Promise<RelationshipTagResponse[]> {
+  return apiFetch<RelationshipTagResponse[]>(`/relationship-parties/contacts/${contactId}/tags`);
+}
+
+export function addContactTag(
+  contactId: string,
+  payload: AddRelationshipTagRequest,
+): Promise<RelationshipTagResponse> {
+  return apiFetch<RelationshipTagResponse>(`/relationship-parties/contacts/${contactId}/tags`, {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }

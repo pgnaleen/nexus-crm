@@ -433,6 +433,24 @@
       "systemRoleHelp": "Flag this as the tenant's Customer or Partner type to make it available in the Deal's Customer/Partners pickers."
     }
   },
+  "relationshipTags": {
+    "tabLabel": "Relationships",
+    "detailsTabLabel": "Person Details",
+    "emptyState": "No relationship type tags yet.",
+    "add": {
+      "label": "Add relationship type",
+      "placeholder": "Select a relationship type...",
+      "searchPlaceholder": "Search relationship types...",
+      "emptyLabel": "No untagged relationship types available",
+      "button": "Add tag"
+    },
+    "errors": {
+      "loadFailed": "Failed to load relationship tags",
+      "loadTypesFailed": "Failed to load relationship types",
+      "duplicateTag": "This is already tagged under this relationship type",
+      "addFailed": "Failed to add relationship type tag"
+    }
+  },
   "addDealDialog": {
     "customer": {
       "notConfigured": "No Customer relationship type has been set up yet. Go to Admin → Relationship Types to flag one.",

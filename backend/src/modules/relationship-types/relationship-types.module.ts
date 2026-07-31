@@ -13,6 +13,7 @@ import { RelationshipType } from "./entities/relationship-type.entity";
 import { RelationshipPartiesController } from "./relationship-parties.controller";
 import { RelationshipPartiesRepository } from "./relationship-parties.repository";
 import { RelationshipPartiesService } from "./relationship-parties.service";
+import { RelationshipTagsController } from "./relationship-tags.controller";
 import { RelationshipTypesController } from "./relationship-types.controller";
 import { RelationshipTypesRepository } from "./relationship-types.repository";
 import { RelationshipTypesService } from "./relationship-types.service";
@@ -30,7 +31,7 @@ import { RelationshipTypesService } from "./relationship-types.service";
     RbacModule,
     DocumentsModule,
   ],
-  controllers: [RelationshipTypesController, RelationshipPartiesController],
+  controllers: [RelationshipTypesController, RelationshipPartiesController, RelationshipTagsController],
   providers: [
     RelationshipTypesService,
     RelationshipTypesRepository,

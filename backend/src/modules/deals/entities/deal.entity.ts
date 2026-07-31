@@ -30,7 +30,7 @@ export class Deal extends AuditedTenantEntity {
   // later, or the customer can be a bare contact with no company of its own
   // (contactId below carries that case).
   @Column({ type: "uuid", nullable: true })
-  companyId?: string;
+  companyId?: string | null;
 
   @ManyToOne(() => Company, { nullable: true, onDelete: "CASCADE" })
   @JoinColumn({ name: "company_id" })
@@ -44,7 +44,7 @@ export class Deal extends AuditedTenantEntity {
   primaryContact?: Contact;
 
   @Column({ type: "uuid", nullable: true })
-  contactId?: string;
+  contactId?: string | null;
 
   @ManyToOne(() => Contact, { nullable: true, onDelete: "SET NULL" })
   @JoinColumn({ name: "contact_id" })

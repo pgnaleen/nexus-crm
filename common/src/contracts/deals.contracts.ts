@@ -12,8 +12,10 @@ export interface CreateDealRequest {
   // ISO 4217 code (e.g. "USD", "LKR") -- a deliberate choice made in the
   // form, same treatment as dealType, not optional.
   currency: string;
-  // The customer: exactly one of companyId (company customer) or contactId
-  // (bare contact, no company) must be provided.
+  // The customer: a company (companyId) or a bare contact with no company of
+  // its own (contactId) -- both optional (a deal can have no customer at
+  // all), and never both at once -- the service clears the other one on
+  // write if a caller ever sends both.
   companyId?: string;
   primaryContactId?: string;
   contactId?: string;
@@ -40,7 +42,7 @@ export interface CreateDealRequest {
   isTender?: boolean;
 }
 
-export type UpdateDealRequest = Partial<Omit<CreateDealRequest, "companyId">>;
+export type UpdateDealRequest = Partial<CreateDealRequest>;
 
 // Exactly one of toStageId (a real Sub Stage) or toMainStageId (a Main Stage
 // with no Sub Stage breakdown) must be provided -- enforced by MoveDealDto,

@@ -55,6 +55,14 @@ export class RelationshipPartiesService {
     const party = await this.partiesRepo.findOneScoped({
       where: { id: mapId, relationshipTypeId },
       // company.territoryOwner loaded read-only for display -- see findAllForType.
+      // Deliberately NOT loading "relationshipType" here even though this
+      // method is display-only for most callers -- found in a second review
+      // pass: setActive() (below) also calls this method, then saveScoped()s
+      // the same object, so adding relations here would widen exactly the
+      // "save an entity loaded with relations" surface CLAUDE.md's TypeORM
+      // rule warns about, on a NOT NULL column this time. linkExisting*ToType
+      // attaches relationshipType manually from an object it already fetched
+      // instead of relying on this method loading it.
       relations: ["company", "company.territoryOwner", "contact"],
     });
     if (!party) {
@@ -525,6 +533,220 @@ export class RelationshipPartiesService {
       return this.findOneOrFail(relationshipTypeId, mapId);
     } catch (err) {
       this.logger.error(`setActive failed for party ${mapId}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // ── Cross-relationship-type tags (Relationships tab) ─────────────────
+  // Everything below is scoped by the real Company/Contact id, not a
+  // single-type mapId -- unlike every method above (which lives inside one
+  // relationship type's own admin page), these back the "show all of one
+  // party's tags across every type" Relationships tab on
+  // CompanyFormDialog/ContactFormDialog.
+
+  // relationshipType is loaded read-only for display (its resolved name) --
+  // this list is never save()'d, so it stays clear of the TypeORM "never
+  // save an entity loaded with relations" rule (see findAllForType above,
+  // same reasoning). Returns BOTH active and inactive tags -- the caller
+  // (RelationshipHubDiagram) renders the distinction with its own spoke
+  // styling rather than the API hiding disabled tags entirely.
+  async findTagsForCompany(companyId: string): Promise<RelationshipCompanyContactMap[]> {
+    this.logger.debug(`findTagsForCompany called for company ${companyId}`);
+    try {
+      const company = await this.companiesRepo.findOneScoped({ where: { id: companyId } });
+      if (!company) {
+        this.logger.debug(`findTagsForCompany: company ${companyId} not found`);
+        throw new NotFoundException("Company not found");
+      }
+      const tags = await this.partiesRepo.findScoped({
+        where: { companyId },
+        relations: ["relationshipType"],
+        order: { createdAt: "ASC" },
+      });
+      this.logger.debug(`findTagsForCompany returning ${tags.length} tag(s) for company ${companyId} (active+inactive)`);
+      return tags;
+    } catch (err) {
+      this.logger.error(`findTagsForCompany failed for company ${companyId}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Same as findTagsForCompany, for a Contact. For a company-owned contact
+  // this always returns an empty list -- company-owned contacts never get
+  // their own tag row (see linkExistingContactToType's guard below), so
+  // their tags live under the company instead. That's expected, not a bug.
+  async findTagsForContact(contactId: string): Promise<RelationshipCompanyContactMap[]> {
+    this.logger.debug(`findTagsForContact called for contact ${contactId}`);
+    try {
+      const contact = await this.contactsRepo.findOneScoped({ where: { id: contactId } });
+      if (!contact) {
+        this.logger.debug(`findTagsForContact: contact ${contactId} not found`);
+        throw new NotFoundException("Contact not found");
+      }
+      const tags = await this.partiesRepo.findScoped({
+        where: { contactId },
+        relations: ["relationshipType"],
+        order: { createdAt: "ASC" },
+      });
+      this.logger.debug(`findTagsForContact returning ${tags.length} tag(s) for contact ${contactId} (active+inactive)`);
+      return tags;
+    } catch (err) {
+      this.logger.error(`findTagsForContact failed for contact ${contactId}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Tags an *existing* Company into an additional Relationship Type, from
+  // the Relationships tab -- distinct from addCompany above, which creates a
+  // brand-new Company row from scratch. The pre-check below is a fast-path
+  // UX nicety, not the real guard -- migration
+  // 1784700000028-AddRelationshipCompanyContactMapUniqueIndexes adds a
+  // partial unique index on (relationship_type_id, company_id), so two
+  // concurrent requests racing past the pre-check both still land on the DB
+  // constraint; the 23505 catch below turns that into the same clean 409
+  // instead of a raw 500 (same precedent as
+  // priority-task-shares.service.ts's add()). A disabled tag for the exact
+  // same pair is reactivated via the existing setActive() rather than
+  // creating a second row -- reusing that method also means the audit trail
+  // for a reactivation stays entityType: "relationship_party" (its normal
+  // audit shape), while a brand-new row below is logged separately as
+  // entityType: "relationship_company_contact_map" (the insert's own audit
+  // shape) -- deliberately different, not drift.
+  async linkExistingCompanyToType(
+    companyId: string,
+    relationshipTypeId: string,
+    userId: string,
+  ): Promise<RelationshipCompanyContactMap> {
+    this.logger.debug(`linkExistingCompanyToType called for company ${companyId} -> type ${relationshipTypeId} by ${userId}`);
+    try {
+      const relationshipType = await this.relationshipTypesService.findOneOrFail(relationshipTypeId);
+      const company = await this.companiesRepo.findOneScoped({ where: { id: companyId } });
+      if (!company) {
+        this.logger.debug(`linkExistingCompanyToType: company ${companyId} not found`);
+        throw new NotFoundException("Company not found");
+      }
+
+      const existing = await this.partiesRepo.findOneScoped({ where: { companyId, relationshipTypeId } });
+      if (existing?.isActive) {
+        this.logger.debug(`Blocked: company ${companyId} already actively tagged under type ${relationshipTypeId}`);
+        throw new ConflictException("This company is already tagged under this relationship type");
+      }
+
+      if (existing) {
+        this.logger.debug(`Reactivating disabled tag ${existing.id} for company ${companyId} -> type ${relationshipTypeId}`);
+        const reactivated = await this.setActive(relationshipTypeId, existing.id, true, userId);
+        // findOneOrFail (used inside setActive's own return) deliberately
+        // doesn't load the relationshipType relation -- see its comment.
+        // Attached here from the object already fetched above instead of a
+        // second query.
+        reactivated.relationshipType = relationshipType;
+        return reactivated;
+      }
+
+      this.logger.debug(`No existing tag found, creating new tag for company ${companyId} -> type ${relationshipTypeId}`);
+      const party = this.partiesRepo.createScoped({ relationshipTypeId, companyId, createdBy: userId });
+      const saved = await this.partiesRepo.saveScoped(party);
+      this.logger.debug(`linkExistingCompanyToType succeeded, new tag ${saved.id}`);
+
+      await this.auditLogService.record({
+        entityType: "relationship_company_contact_map",
+        entityId: saved.id,
+        action: "insert",
+        actorId: userId,
+        changes: { relationshipTypeId, companyId },
+      });
+
+      // Attaches the already-fetched relationshipType directly rather than
+      // re-fetching via findOneOrFail (which deliberately doesn't load that
+      // relation -- see its comment) -- avoids both an extra query and
+      // widening the entity findOneOrFail returns.
+      saved.relationshipType = relationshipType;
+      return saved;
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === "23505") {
+        this.logger.debug(`Concurrent duplicate tag for company ${companyId} -> type ${relationshipTypeId} -> 409`);
+        throw new ConflictException("This company is already tagged under this relationship type");
+      }
+      if (code === "23503") {
+        this.logger.debug(`Concurrent delete of company ${companyId} or type ${relationshipTypeId} -> 404`);
+        throw new NotFoundException("Company or relationship type not found");
+      }
+      if (err instanceof ConflictException || err instanceof NotFoundException) {
+        throw err;
+      }
+      this.logger.error(`linkExistingCompanyToType failed for company ${companyId} -> type ${relationshipTypeId}: ${(err as Error).message}`, (err as Error).stack);
+      throw err;
+    }
+  }
+
+  // Same as linkExistingCompanyToType, for a standalone Contact. Guards
+  // against tagging a company-owned contact independently -- those
+  // deliberately have no relationship_company_contact_map row of their own
+  // (see addCompany/addContact above, the 2026-07-22 double-counting fix);
+  // allowing one here would reopen that exact bug. The frontend already
+  // hides this action for a company-owned contact, but the guard lives here
+  // too since the frontend isn't the source of truth for this rule.
+  async linkExistingContactToType(
+    contactId: string,
+    relationshipTypeId: string,
+    userId: string,
+  ): Promise<RelationshipCompanyContactMap> {
+    this.logger.debug(`linkExistingContactToType called for contact ${contactId} -> type ${relationshipTypeId} by ${userId}`);
+    try {
+      const relationshipType = await this.relationshipTypesService.findOneOrFail(relationshipTypeId);
+      const contact = await this.contactsRepo.findOneScoped({ where: { id: contactId } });
+      if (!contact) {
+        this.logger.debug(`linkExistingContactToType: contact ${contactId} not found`);
+        throw new NotFoundException("Contact not found");
+      }
+      if (contact.companyId) {
+        this.logger.debug(`Blocked: contact ${contactId} belongs to company ${contact.companyId}, cannot tag independently`);
+        throw new BadRequestException("This contact belongs to a company -- tag the company instead of the contact directly");
+      }
+
+      const existing = await this.partiesRepo.findOneScoped({ where: { contactId, relationshipTypeId } });
+      if (existing?.isActive) {
+        this.logger.debug(`Blocked: contact ${contactId} already actively tagged under type ${relationshipTypeId}`);
+        throw new ConflictException("This contact is already tagged under this relationship type");
+      }
+
+      if (existing) {
+        this.logger.debug(`Reactivating disabled tag ${existing.id} for contact ${contactId} -> type ${relationshipTypeId}`);
+        const reactivated = await this.setActive(relationshipTypeId, existing.id, true, userId);
+        reactivated.relationshipType = relationshipType;
+        return reactivated;
+      }
+
+      this.logger.debug(`No existing tag found, creating new tag for contact ${contactId} -> type ${relationshipTypeId}`);
+      const party = this.partiesRepo.createScoped({ relationshipTypeId, contactId, createdBy: userId });
+      const saved = await this.partiesRepo.saveScoped(party);
+      this.logger.debug(`linkExistingContactToType succeeded, new tag ${saved.id}`);
+
+      await this.auditLogService.record({
+        entityType: "relationship_company_contact_map",
+        entityId: saved.id,
+        action: "insert",
+        actorId: userId,
+        changes: { relationshipTypeId, contactId },
+      });
+
+      saved.relationshipType = relationshipType;
+      return saved;
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === "23505") {
+        this.logger.debug(`Concurrent duplicate tag for contact ${contactId} -> type ${relationshipTypeId} -> 409`);
+        throw new ConflictException("This contact is already tagged under this relationship type");
+      }
+      if (code === "23503") {
+        this.logger.debug(`Concurrent delete of contact ${contactId} or type ${relationshipTypeId} -> 404`);
+        throw new NotFoundException("Contact or relationship type not found");
+      }
+      if (err instanceof ConflictException || err instanceof NotFoundException || err instanceof BadRequestException) {
+        throw err;
+      }
+      this.logger.error(`linkExistingContactToType failed for contact ${contactId} -> type ${relationshipTypeId}: ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
   }

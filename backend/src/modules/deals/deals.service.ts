@@ -201,13 +201,35 @@ export class DealsService {
     // into saveScoped() (see findOneBareOrFail's comment).
     const deal = await this.findOneBareOrFail(id);
 
+    // A deal's customer is a company or a bare contact, never both -- track
+    // both FKs regardless of which one the caller sent, since clearing the
+    // other one below (mutual exclusivity) is a real side effect that must
+    // still show up in the audit diff even when the dto itself never
+    // mentions it.
+    const trackedKeys = new Set(Object.keys(dto));
+    trackedKeys.add("companyId");
+    trackedKeys.add("contactId");
+
     const before: Record<string, unknown> = {};
     const dealAsRecord = deal as unknown as Record<string, unknown>;
-    for (const key of Object.keys(dto)) {
+    for (const key of trackedKeys) {
       before[key] = dealAsRecord[key];
     }
 
     try {
+      if (dto.companyId && dto.contactId) {
+        throw new BadRequestException("companyId and contactId cannot both be set");
+      }
+      if (dto.companyId) {
+        this.logger.debug(`update: companyId set to ${dto.companyId}, clearing contactId (mutual exclusivity)`);
+        deal.contactId = null;
+      } else if (dto.contactId) {
+        this.logger.debug(`update: contactId set to ${dto.contactId}, clearing companyId (mutual exclusivity)`);
+        deal.companyId = null;
+      } else {
+        this.logger.debug("update: no customer change requested");
+      }
+
       Object.assign(deal, dto, { updatedBy: userId });
       await this.dealsRepo.saveScoped(deal);
       // Re-fetch (with relations, for the response) rather than return the
@@ -219,7 +241,7 @@ export class DealsService {
 
       const changes: Record<string, { old: unknown; new: unknown }> = {};
       const updatedAsRecord = updated as unknown as Record<string, unknown>;
-      for (const key of Object.keys(dto)) {
+      for (const key of trackedKeys) {
         const newValue = updatedAsRecord[key];
         if (before[key] !== newValue) {
           changes[key] = { old: before[key], new: newValue };

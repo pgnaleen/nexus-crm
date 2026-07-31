@@ -37,6 +37,10 @@ export class UpdateDealDto implements UpdateDealRequest {
 
   @IsOptional()
   @IsUUID()
+  companyId?: string;
+
+  @IsOptional()
+  @IsUUID()
   primaryContactId?: string;
 
   @IsOptional()

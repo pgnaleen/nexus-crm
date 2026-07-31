@@ -425,6 +425,15 @@ export function AddDealDialog({
     setField("primaryContactId", "");
   }
 
+  // The customer: a company (companyId) or a bare contact with no company of
+  // its own (contactId) -- never both, matching the single "Other Party"
+  // selection. Shared by create and edit -- both send whichever one is set.
+  function deriveCustomerFields(party: OtherParty | null): { companyId?: string; contactId?: string } {
+    if (party?.kind === "company") return { companyId: party.id };
+    if (party?.kind === "contact") return { contactId: party.id };
+    return {};
+  }
+
   async function refreshPickers() {
     try {
       const [freshCompanies, freshContacts, freshCustomerParties, freshPartnerParties] = await Promise.all([
@@ -627,8 +636,7 @@ export function AddDealDialog({
           name: values.name.trim(),
           isTender: values.isTender,
           currency: values.currency,
-          // Customer itself is locked, but which contact-at-that-company is
-          // primary is still a legitimate, editable field.
+          ...deriveCustomerFields(otherParty),
           primaryContactId: otherParty?.kind === "company" ? values.primaryContactId || undefined : undefined,
           sourceId: values.sourceId || undefined,
           ownerId: values.salesPersonId,
@@ -787,7 +795,26 @@ export function AddDealDialog({
     ];
   }
 
-  const otherPartyOptions: SearchSelectOption[] = toPartyOptions(customerParties);
+  // The picker only lists currently-active Customer-tagged parties. When
+  // editing a deal whose customer has since been deactivated/untagged,
+  // append it so the field keeps showing its current value instead of going
+  // blank -- same fallback pattern as salesPersonOptions/activeDealSources
+  // below (can't be re-selected once changed, which is intended).
+  const otherPartyOptions: SearchSelectOption[] = (() => {
+    const base = toPartyOptions(customerParties);
+    if (!isEdit || !deal || !otherParty) return base;
+    if (base.some((o) => o.value === partyValue(otherParty))) return base;
+    const label = otherParty.kind === "company" ? deal.companyName : deal.contactName;
+    return [
+      ...base,
+      {
+        value: partyValue(otherParty),
+        label: label ?? "Unknown",
+        sublabel: otherParty.kind === "company" ? "Company" : "Person",
+        icon: otherParty.kind === "company" ? <BuildingIcon size={14} /> : <UserIcon size={14} />,
+      },
+    ];
+  })();
 
   // Excludes whichever party is already the deal's customer, and (in edit
   // mode) whichever parties are already linked as partners -- a company or
@@ -977,12 +1004,7 @@ export function AddDealDialog({
               <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
                 Customer (Company or Contact)
               </label>
-              {isEdit ? (
-                <div className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-[13.5px] text-[var(--color-text-muted)]">
-                  {otherParty?.kind === "company" ? <BuildingIcon size={14} /> : <UserIcon size={14} />}
-                  {deal?.companyName ?? deal?.contactName ?? "—"}
-                </div>
-              ) : !customerParties.configured ? (
+              {!customerParties.configured ? (
                 <p className="text-[12.5px] text-[var(--color-danger)]">{t("addDealDialog.customer.notConfigured")}</p>
               ) : otherPartyOptions.length === 0 ? (
                 <p className="text-[12.5px] text-[var(--color-text-muted)]">{t("addDealDialog.customer.noneTagged")}</p>

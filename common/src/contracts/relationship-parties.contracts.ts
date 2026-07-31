@@ -23,3 +23,22 @@ export interface RelationshipPartyResponse {
   company: CompanyResponse | null;
   contact: ContactResponse | null;
 }
+
+// Cross-relationship-type tag summary for a single Company/Contact -- used
+// by the Relationships tab (RelationshipHubDiagram) to show every type a
+// party is tagged under, active or disabled, in one call instead of
+// fetching each relationship type's own /parties list and filtering
+// client-side. `mapId` is the relationship_company_contact_map row id
+// (needed to target enable/disable/remove later if that's ever surfaced
+// here); `relationshipTypeName` is resolved server-side so the frontend
+// never needs a second lookup just to label a spoke.
+export interface RelationshipTagResponse {
+  mapId: string;
+  relationshipTypeId: string;
+  relationshipTypeName: string;
+  isActive: boolean;
+}
+
+export interface AddRelationshipTagRequest {
+  relationshipTypeId: string;
+}
