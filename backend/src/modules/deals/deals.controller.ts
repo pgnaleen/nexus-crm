@@ -127,7 +127,7 @@ export class DealsController {
       dealType: deal.dealType,
       companyId: deal.companyId ?? null,
       companyName: deal.company?.name,
-      companyCountry: deal.company?.country ?? null,
+      companyCountries: deal.company?.countries ?? null,
       primaryContactId: deal.primaryContactId ?? null,
       primaryContactName: deal.primaryContact?.fullName ?? null,
       contactId: deal.contactId ?? null,

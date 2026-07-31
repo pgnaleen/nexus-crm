@@ -78,7 +78,7 @@ export class PickersController {
     ]);
     return {
       configured: true,
-      companies: companies.map((company) => ({ id: company.id, name: company.name, country: company.country ?? null })),
+      companies: companies.map((company) => ({ id: company.id, name: company.name, countries: company.countries ?? null })),
       contacts: contacts.map((contact) => ({
         id: contact.id,
         fullName: contact.fullName,
@@ -153,7 +153,7 @@ export class PickersController {
     try {
       const companies = await this.companiesService.findPicker(search, excludeId);
       this.logger.debug(`GET /pickers/companies returning ${companies.length} row(s)`);
-      return companies.map((company) => ({ id: company.id, name: company.name, country: company.country ?? null }));
+      return companies.map((company) => ({ id: company.id, name: company.name, countries: company.countries ?? null }));
     } catch (err) {
       this.logger.error(`GET /pickers/companies failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;

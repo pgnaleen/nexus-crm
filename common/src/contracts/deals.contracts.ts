@@ -60,7 +60,9 @@ export interface DealDependentsCountResponse {
 
 export interface DealResponse extends IDeal {
   companyName?: string;
-  companyCountry?: string | null;
+  // Derived from the linked company, which can now operate in several
+  // countries -- distinct from the deal's own single dealCountry.
+  companyCountries?: string[] | null;
   mainStageName?: string;
   currentStageName?: string;
   ownerName?: string;

@@ -58,7 +58,12 @@ function partyName(party: RelationshipPartyResponse): string {
 
 function partyDetail(party: RelationshipPartyResponse): string {
   if (party.kind === "company") {
-    return party.company?.country ?? party.company?.url ?? "";
+    // A company can span several countries now. Joined rather than truncated to
+    // the first -- this is a one-line subtitle, and silently showing only one of
+    // three countries would read as "this is the country", which is wrong.
+    const countries = party.company?.countries;
+    if (countries?.length) return countries.join(", ");
+    return party.company?.url ?? "";
   }
   return party.contact?.email ?? party.contact?.mobileNo ?? "";
 }

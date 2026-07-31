@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { CompaniesRepository } from "../companies/companies.repository";
+import { CompanyIndustry } from "../companies/entities/company-industry.entity";
 import { Company } from "../companies/entities/company.entity";
 import { ContactsRepository } from "../contacts/contacts.repository";
 import { Contact } from "../contacts/entities/contact.entity";
@@ -24,6 +25,7 @@ import { RelationshipTypesService } from "./relationship-types.service";
       RelationshipType,
       RelationshipCompanyContactMap,
       Company,
+      CompanyIndustry,
       Contact,
       Employee,
       Department,

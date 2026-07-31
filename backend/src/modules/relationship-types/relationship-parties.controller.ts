@@ -282,6 +282,9 @@ export class RelationshipPartiesController {
     // Logo now lives in the shared documents table -- the row itself only
     // ever stores the bare S3 key (logoDoc.s3Key).
     const logoDoc = await this.documentsService.findCurrentScoped(DocumentOwnerType.CompanyLogo, company.id);
+    // industryNames ships alongside the ids so a list/table renders without a
+    // second round trip, same reasoning as territoryOwnerName below.
+    const industries = await this.partiesService.findIndustriesForCompany(company.id);
     return {
       id: company.id,
       tenantId: company.tenantId,
@@ -291,7 +294,8 @@ export class RelationshipPartiesController {
       // A fresh signed URL, generated on every response.
       logoDisplayUrl: logoDoc ? await this.s3.getSignedGetUrl(logoDoc.s3Key) : null,
       brands: company.brands ?? null,
-      industryId: company.industryId ?? null,
+      industryIds: industries.map((industry) => industry.id),
+      industryNames: industries.map((industry) => industry.name),
       subIndustry: company.subIndustry ?? null,
       accountTier: company.accountTier ?? null,
       employeeCount: company.employeeCount ?? null,
@@ -301,7 +305,7 @@ export class RelationshipPartiesController {
       stockTicker: company.stockTicker ?? null,
       fiscalYearEnd: company.fiscalYearEnd ?? null,
       region: company.region ?? null,
-      country: company.country ?? null,
+      countries: company.countries ?? null,
       hqCityAddress: company.hqCityAddress ?? null,
       branches: company.branches ?? null,
       parentCompanyId: company.parentCompanyId ?? null,

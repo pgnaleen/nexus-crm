@@ -19,6 +19,10 @@ interface MultiSelectProps {
   searchPlaceholder?: string;
   addNewLabel?: string;
   onAddNew?: () => void;
+  // Read-only rendering: chips still show, but the menu can't open and the
+  // per-chip remove buttons disappear. Added so view-mode dialogs can reuse
+  // this component directly instead of falling back to .field-locked-value.
+  disabled?: boolean;
 }
 
 export function MultiSelect({
@@ -30,6 +34,7 @@ export function MultiSelect({
   searchPlaceholder = "Search...",
   addNewLabel,
   onAddNew,
+  disabled = false,
 }: MultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -78,8 +83,9 @@ export function MultiSelect({
     <div className="multi-select-wrapper" ref={ref}>
       {label && <label className="field-label">{label}</label>}
       <div
-        className={`multi-select-trigger ${isOpen ? "is-open" : ""}`}
-        onClick={() => setIsOpen(!isOpen)}
+        className={`multi-select-trigger ${isOpen ? "is-open" : ""} ${disabled ? "is-disabled" : ""}`}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        aria-disabled={disabled || undefined}
       >
         <div className="multi-select-chips">
           {selectedOptions.length === 0 ? (
@@ -89,14 +95,16 @@ export function MultiSelect({
               <span key={opt.value} className="multi-select-chip">
                 {opt.icon}
                 {opt.label}
-                <button
-                  type="button"
-                  className="multi-select-chip-remove"
-                  onClick={(e) => removeOption(e, opt.value)}
-                  aria-label={`Remove ${opt.label}`}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
+                {!disabled && (
+                  <button
+                    type="button"
+                    className="multi-select-chip-remove"
+                    onClick={(e) => removeOption(e, opt.value)}
+                    aria-label={`Remove ${opt.label}`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  </button>
+                )}
               </span>
             ))
           )}
@@ -106,7 +114,7 @@ export function MultiSelect({
         </div>
       </div>
 
-      {isOpen && (
+      {isOpen && !disabled && (
         <div className="multi-select-menu">
           <div className="search-select-search-box" onClick={(e) => e.stopPropagation()}>
             <SearchIcon size={14} />

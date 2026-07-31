@@ -1,11 +1,12 @@
 import { DocumentOwnerType } from "@orelia/common";
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { InjectDataSource } from "@nestjs/typeorm";
-import { DataSource } from "typeorm";
+import { InjectDataSource, InjectRepository } from "@nestjs/typeorm";
+import { DataSource, In, Repository } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { assertKeyBelongsToTenant, LOGO_SEGMENT } from "../../core/storage/storage.constants";
 import { TenantContextService } from "../../core/tenant";
 import { CompaniesRepository } from "../companies/companies.repository";
+import { CompanyIndustry } from "../companies/entities/company-industry.entity";
 import { Company } from "../companies/entities/company.entity";
 import { ContactsRepository } from "../contacts/contacts.repository";
 import { Contact } from "../contacts/entities/contact.entity";
@@ -32,6 +33,11 @@ export class RelationshipPartiesService {
     private readonly tenantContext: TenantContextService,
     private readonly auditLogService: AuditLogService,
     private readonly documentsService: DocumentsService,
+    // A plain repository, not a tenant-scoped one: company_industries has no
+    // tenant_id of its own (see the entity's own comment) -- it inherits scope
+    // through the Company, which every caller here has already resolved via a
+    // tenant-scoped lookup before touching this.
+    @InjectRepository(CompanyIndustry) private readonly companyIndustriesRepo: Repository<CompanyIndustry>,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
@@ -49,6 +55,29 @@ export class RelationshipPartiesService {
     });
     this.logger.debug(`findAllForType returning ${results.length} row(s)`);
     return results;
+  }
+
+  // Industry links are read through their own repository rather than a
+  // relation on Company, deliberately -- Company is the entity updateCompany()
+  // mutates and saves, and CLAUDE.md's TypeORM rule is that such an entity
+  // must never carry relations. One query per company, matching the per-company
+  // logo lookup the response mapper already does right beside this call.
+  async findIndustriesForCompany(companyId: string): Promise<{ id: string; name: string }[]> {
+    const links = await this.companyIndustriesRepo.find({
+      where: { companyId },
+      relations: ["industry"],
+      order: { createdAt: "ASC" },
+    });
+    // A link whose industry row is missing is skipped rather than surfaced as
+    // a null-named entry. The FK is ON DELETE RESTRICT so this should be
+    // unreachable -- log it if it ever happens instead of rendering a blank.
+    const resolved = links.filter((link) => link.industry != null);
+    if (resolved.length !== links.length) {
+      this.logger.error(
+        `findIndustriesForCompany: company ${companyId} has ${links.length - resolved.length} industry link(s) with no industry row`,
+      );
+    }
+    return resolved.map((link) => ({ id: link.industryId, name: link.industry!.name }));
   }
 
   async findOneOrFail(relationshipTypeId: string, mapId: string): Promise<RelationshipCompanyContactMap> {
@@ -79,10 +108,14 @@ export class RelationshipPartiesService {
     this.logger.debug(`addCompany called for relationship type ${relationshipTypeId} by ${userId} (name="${dto.name}")`);
     await this.relationshipTypesService.findOneOrFail(relationshipTypeId);
     const tenantId = this.tenantContext.getTenantId();
-    const { contacts, logo, ...companyFields } = dto;
+    // industryIds is NOT a company column -- it lives in company_industries and
+    // must be destructured off before companyFields ever reaches
+    // companyRepo.create(), same as contacts and logo.
+    const { contacts, logo, industryIds, ...companyFields } = dto;
     if (logo) {
       assertKeyBelongsToTenant(logo, LOGO_SEGMENT, this.tenantContext.getTenantSlug());
     }
+    const uniqueIndustryIds = [...new Set(industryIds ?? [])];
 
     try {
       // The company and every inline contact must land together or not at
@@ -96,9 +129,22 @@ export class RelationshipPartiesService {
         const companyRepo = manager.getRepository(Company);
         const contactRepo = manager.getRepository(Contact);
         const partyRepo = manager.getRepository(RelationshipCompanyContactMap);
+        const companyIndustryRepo = manager.getRepository(CompanyIndustry);
 
         const company = companyRepo.create({ ...companyFields, tenantId, createdBy: userId });
         const savedCompany = await companyRepo.save(company);
+
+        // Inside the same transaction as the company itself -- a company that
+        // saved but lost its industry links would be silently wrong, the same
+        // reasoning the inline-contacts loop below already relies on. A bad
+        // industry id trips the FK here and rolls the whole thing back.
+        if (uniqueIndustryIds.length > 0) {
+          await companyIndustryRepo.save(
+            uniqueIndustryIds.map((industryId) =>
+              companyIndustryRepo.create({ companyId: savedCompany.id, industryId, createdBy: userId }),
+            ),
+          );
+        }
 
         const companyParty = partyRepo.create({
           relationshipTypeId,
@@ -141,7 +187,9 @@ export class RelationshipPartiesService {
         entityId: savedCompanyId,
         action: "insert",
         actorId: userId,
-        changes: { relationshipTypeId, ...companyFields, logo },
+        // industryIds is restated explicitly -- it was destructured out of
+        // companyFields above, so the spread cannot carry it.
+        changes: { relationshipTypeId, ...companyFields, industryIds: uniqueIndustryIds, logo },
       });
       for (const contactId of savedContactIds) {
         await this.auditLogService.record({
@@ -383,7 +431,12 @@ export class RelationshipPartiesService {
     userId: string,
   ): Promise<RelationshipCompanyContactMap> {
     this.logger.debug(`updateCompany called for party ${mapId} on relationship type ${relationshipTypeId} by ${userId}`);
-    const { logo, ...companyDto } = dto;
+    // industryIds is destructured off for the same reason logo is: it is not a
+    // company column. Leaving it in companyDto would put it through
+    // Object.assign onto a bare-loaded entity that then gets saveScoped() --
+    // exactly the shape CLAUDE.md's TypeORM gotcha documents as nulling FK
+    // columns. The links are written separately, below.
+    const { logo, industryIds, ...companyDto } = dto;
     if (logo) {
       assertKeyBelongsToTenant(logo, LOGO_SEGMENT, this.tenantContext.getTenantSlug());
     }
@@ -406,10 +459,54 @@ export class RelationshipPartiesService {
       ? await this.documentsService.findCurrentScoped(DocumentOwnerType.CompanyLogo, company.id)
       : null;
 
+    // Captured before the write so the audit diff below has something to
+    // compare against -- the generic Object.keys(companyDto) loop cannot see
+    // industryIds, since it was destructured out.
+    //
+    // Array.isArray, NOT `"industryIds" in dto`: class-transformer materializes
+    // every declared DTO property on the instance, so the `in` check is true
+    // even for a key the client never sent. Using it made an unrelated PATCH
+    // (e.g. {hqCityAddress}) silently delete every industry link -- caught in
+    // live verification, not by typecheck. An actual array means "the client
+    // sent a set"; [] clears, undefined/null means "not submitted".
+    const industriesTouched = Array.isArray(industryIds);
+    const oldIndustryIds = industriesTouched
+      ? (await this.companyIndustriesRepo.find({ where: { companyId: company.id }, order: { createdAt: "ASC" } }))
+          .map((link) => link.industryId)
+      : [];
+
     try {
       Object.assign(company, companyDto, { updatedBy: userId });
       await this.companiesRepo.saveScoped(company);
       this.logger.debug(`updateCompany succeeded for company ${company.id}`);
+
+      // Replace, not merge: the picker submits the complete intended set, so
+      // an id absent from it means "unlinked". Delete-then-insert only the
+      // actual difference, so untouched links keep their original createdAt
+      // and createdBy rather than being silently reattributed to this editor.
+      let newIndustryIds = oldIndustryIds;
+      if (industriesTouched) {
+        newIndustryIds = [...new Set(industryIds!)];
+        const removed = oldIndustryIds.filter((id) => !newIndustryIds.includes(id));
+        const added = newIndustryIds.filter((id) => !oldIndustryIds.includes(id));
+        if (removed.length > 0) {
+          this.logger.debug(`updateCompany: unlinking ${removed.length} industry/industries from company ${company.id}`);
+          await this.companyIndustriesRepo.delete({ companyId: company.id, industryId: In(removed) });
+        }
+        if (added.length > 0) {
+          this.logger.debug(`updateCompany: linking ${added.length} new industry/industries to company ${company.id}`);
+          await this.companyIndustriesRepo.save(
+            added.map((industryId) =>
+              this.companyIndustriesRepo.create({ companyId: company.id, industryId, createdBy: userId }),
+            ),
+          );
+        }
+        if (removed.length === 0 && added.length === 0) {
+          this.logger.debug(`updateCompany: industry links submitted but unchanged for company ${company.id}`);
+        }
+      } else {
+        this.logger.debug(`updateCompany: industryIds not submitted, leaving company ${company.id}'s links untouched`);
+      }
 
       // Logo replace/clear -- hard-retires the old one (no history), per the
       // client's "pictures can just replace" call.
@@ -431,6 +528,12 @@ export class RelationshipPartiesService {
       }
       if ("logo" in dto && (oldLogoDoc?.s3Key ?? null) !== (logo ?? null)) {
         changes.logo = { old: oldLogoDoc?.s3Key ?? null, new: logo ?? null };
+      }
+      // Order-insensitive: re-submitting the same industries in a different
+      // order is not a change, and logging it as one would make the audit
+      // trail noisier without being more truthful.
+      if (industriesTouched && [...oldIndustryIds].sort().join() !== [...newIndustryIds].sort().join()) {
+        changes.industryIds = { old: oldIndustryIds, new: newIndustryIds };
       }
       if (Object.keys(changes).length > 0) {
         await this.auditLogService.record({

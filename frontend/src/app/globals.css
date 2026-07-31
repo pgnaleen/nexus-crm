@@ -988,6 +988,17 @@ body {
   border-color: var(--color-brand);
 }
 
+/* Read-only state. The trigger is a div, not a button, so `:disabled` never
+   applies here -- this mirrors SearchSelect's `disabled:opacity-60
+   disabled:cursor-default` by hand. The hover rule above is overridden too,
+   otherwise a disabled control still lights up on hover. */
+.multi-select-trigger.is-disabled,
+.multi-select-trigger.is-disabled:hover {
+  opacity: 0.6;
+  cursor: default;
+  border-color: var(--color-border);
+}
+
 .multi-select-chips {
   display: flex;
   flex-wrap: wrap;

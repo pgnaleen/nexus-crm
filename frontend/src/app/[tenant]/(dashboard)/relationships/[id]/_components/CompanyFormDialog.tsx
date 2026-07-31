@@ -35,7 +35,8 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import { CustomSelect } from "@/components/ui/CustomSelect";
-import { CountrySelect } from "@/components/ui/CountrySelect";
+import { CountryMultiSelect } from "@/components/ui/CountryMultiSelect";
+import { MultiSelect } from "@/components/ui/MultiSelect";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { RelationshipHubDiagram } from "@/components/ui/RelationshipHubDiagram";
 import { Spinner } from "@/components/ui/Spinner";
@@ -158,7 +159,9 @@ interface FormState {
   url: string;
   logo: string;
   brands: string;
-  industryId: string;
+  // Arrays, not the comma-joined strings brands/branches use -- these are
+  // picker-driven (a fixed option list), so free-text parsing has nothing to do.
+  industryIds: string[];
   subIndustry: string;
   accountTier: AccountTier | "";
   employeeCount: EmployeeCountBand | "";
@@ -168,7 +171,7 @@ interface FormState {
   stockTicker: string;
   fiscalYearEnd: FiscalYearEndMonth | "";
   region: Region | "";
-  country: string;
+  countries: string[];
   hqCityAddress: string;
   branches: string;
   parentCompanyId: string;
@@ -184,7 +187,7 @@ function toFormState(company?: CompanyResponse): FormState {
     url: company?.url ?? "",
     logo: company?.logo ?? "",
     brands: company?.brands?.join(", ") ?? "",
-    industryId: company?.industryId ?? "",
+    industryIds: company?.industryIds ?? [],
     subIndustry: company?.subIndustry ?? "",
     accountTier: company?.accountTier ?? "",
     employeeCount: company?.employeeCount ?? "",
@@ -194,7 +197,7 @@ function toFormState(company?: CompanyResponse): FormState {
     stockTicker: company?.stockTicker ?? "",
     fiscalYearEnd: company?.fiscalYearEnd ?? "",
     region: company?.region ?? "",
-    country: company?.country ?? "",
+    countries: company?.countries ?? [],
     hqCityAddress: company?.hqCityAddress ?? "",
     branches: company?.branches?.join(", ") ?? "",
     parentCompanyId: company?.parentCompanyId ?? "",
@@ -484,7 +487,7 @@ export function CompanyFormDialog({
           url: values.url.trim() || undefined,
           logo: values.logo.trim() || undefined,
           brands: toListOrUndefined(values.brands),
-          industryId: values.industryId || undefined,
+          industryIds: values.industryIds.length ? values.industryIds : undefined,
           subIndustry: values.subIndustry.trim() || undefined,
           accountTier: values.accountTier || undefined,
           employeeCount: values.employeeCount || undefined,
@@ -494,7 +497,7 @@ export function CompanyFormDialog({
           stockTicker: values.stockTicker.trim() || undefined,
           fiscalYearEnd: values.fiscalYearEnd || undefined,
           region: values.region || undefined,
-          country: values.country.trim() || undefined,
+          countries: values.countries.length ? values.countries : undefined,
           hqCityAddress: values.hqCityAddress.trim() || undefined,
           branches: toListOrUndefined(values.branches),
           parentCompanyId: values.parentCompanyId || undefined,
@@ -526,7 +529,11 @@ export function CompanyFormDialog({
           url: values.url.trim(),
           logo: values.logo.trim(),
           brands: toListOrUndefined(values.brands) ?? [],
-          industryId: values.industryId || undefined,
+          // Always sent, never undefined -- an emptied picker has to reach the
+          // server as [] to actually clear the links. Omitting the key means
+          // "leave untouched" server-side, which would silently ignore a
+          // deliberate clear (the same trap parentCompanyName hit below).
+          industryIds: values.industryIds,
           subIndustry: values.subIndustry.trim(),
           accountTier: values.accountTier || null,
           employeeCount: values.employeeCount || null,
@@ -536,7 +543,8 @@ export function CompanyFormDialog({
           stockTicker: values.stockTicker.trim(),
           fiscalYearEnd: values.fiscalYearEnd || null,
           region: values.region || null,
-          country: values.country.trim(),
+          // Always sent for the same reason as industryIds above.
+          countries: values.countries,
           hqCityAddress: values.hqCityAddress.trim(),
           branches: toListOrUndefined(values.branches) ?? [],
           parentCompanyId: values.parentCompanyId || null,
@@ -581,7 +589,10 @@ export function CompanyFormDialog({
     }
   }
 
-  const industryOptions = withNotSet(industries.map((i) => ({ value: i.id, label: i.name })));
+  // No withNotSet() here, unlike the single-select fields below: a multi-select
+  // expresses "not set" as an empty chip list, and a literal "Not set" option
+  // would be selectable as a chip alongside real industries.
+  const industryOptions = industries.map((i) => ({ value: i.id, label: i.name }));
   const employeeOptions = withNotSet(employees.map((e) => ({ value: e.id, label: e.fullName })));
   // The employees picker excludes exited (terminated/resigned) staff. When
   // editing a company whose territory owner has since exited, they're no longer
@@ -678,13 +689,13 @@ export function CompanyFormDialog({
 
             <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <div className="mb-[18px]">
-                <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Industry</label>
-                <CustomSelect
-                  fullWidth
-                  label=""
-                  value={values.industryId}
-                  onChange={(val) => setField("industryId", val)}
+                <MultiSelect
+                  label={t("companyForm.industries.label")}
+                  values={values.industryIds}
+                  onChange={(vals) => setField("industryIds", vals)}
                   options={industryOptions}
+                  placeholder={t("companyForm.industries.placeholder")}
+                  searchPlaceholder={t("companyForm.industries.searchPlaceholder")}
                   disabled={isViewOnly}
                 />
               </div>
@@ -748,11 +759,12 @@ export function CompanyFormDialog({
             </div>
 
             <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-              <CountrySelect
-                label="Country"
-                value={values.country}
-                onChange={(val) => setField("country", val)}
-                placeholder="Search countries..."
+              <CountryMultiSelect
+                label={t("companyForm.countries.label")}
+                values={values.countries}
+                onChange={(vals) => setField("countries", vals)}
+                placeholder={t("companyForm.countries.placeholder")}
+                searchPlaceholder={t("companyForm.countries.searchPlaceholder")}
                 disabled={isViewOnly}
               />
               <TextField

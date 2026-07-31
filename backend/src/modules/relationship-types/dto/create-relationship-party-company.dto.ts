@@ -42,8 +42,9 @@ export class CreateRelationshipPartyCompanyDto implements CreateRelationshipPart
   brands?: string[];
 
   @IsOptional()
-  @IsUUID()
-  industryId?: string;
+  @IsArray()
+  @IsUUID("4", { each: true })
+  industryIds?: string[];
 
   @IsOptional()
   @IsString()
@@ -82,8 +83,9 @@ export class CreateRelationshipPartyCompanyDto implements CreateRelationshipPart
   region?: Region;
 
   @IsOptional()
-  @IsString()
-  country?: string;
+  @IsArray()
+  @IsString({ each: true })
+  countries?: string[];
 
   @IsOptional()
   @IsString()

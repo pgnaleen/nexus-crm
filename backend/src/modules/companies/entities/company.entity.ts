@@ -10,7 +10,6 @@ import {
 import { Column, Entity, JoinColumn, ManyToOne } from "typeorm";
 import { AuditedTenantEntity } from "../../../core/tenant";
 import { Employee } from "../../employees/entities/employee.entity";
-import { Industry } from "../../tenants/entities/industry.entity";
 
 @Entity("companies")
 export class Company extends AuditedTenantEntity {
@@ -26,12 +25,12 @@ export class Company extends AuditedTenantEntity {
   @Column({ type: "jsonb", nullable: true })
   brands?: string[];
 
-  @Column({ type: "uuid", nullable: true })
-  industryId?: string;
-
-  @ManyToOne(() => Industry, { nullable: true, onDelete: "SET NULL" })
-  @JoinColumn({ name: "industry_id" })
-  industry?: Industry;
+  // Industries are a many-to-many through `company_industries`, deliberately
+  // NOT modelled as a @ManyToMany here. updateCompany() Object.assign()s the
+  // DTO onto a bare-loaded entity and saveScoped()s it -- a relation on this
+  // class would put that write path squarely in CLAUDE.md's TypeORM gotcha
+  // (saving an entity carrying relations nulls its FK columns). The join rows
+  // are managed explicitly through CompanyIndustry's own repository instead.
 
   @Column({ nullable: true })
   subIndustry?: string;
@@ -60,8 +59,11 @@ export class Company extends AuditedTenantEntity {
   @Column({ type: "enum", enum: Region, nullable: true })
   region?: Region;
 
-  @Column({ nullable: true })
-  country?: string;
+  // Plain ISO country names from the frontend COUNTRIES list -- there is no
+  // countries table, so a jsonb array matches brands/branches above rather
+  // than inventing a lookup. Consumed by findDistinctCountries().
+  @Column({ type: "jsonb", nullable: true })
+  countries?: string[];
 
   @Column({ nullable: true })
   hqCityAddress?: string;

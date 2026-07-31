@@ -6,7 +6,7 @@ export interface CreateCompanyRequest {
   url?: string;
   logo?: string;
   brands?: string[];
-  industryId?: string;
+  industryIds?: string[];
   subIndustry?: string;
   accountTier?: AccountTier;
   employeeCount?: EmployeeCountBand;
@@ -16,7 +16,7 @@ export interface CreateCompanyRequest {
   stockTicker?: string;
   fiscalYearEnd?: FiscalYearEndMonth;
   region?: Region;
-  country?: string;
+  countries?: string[];
   hqCityAddress?: string;
   branches?: string[];
   parentCompanyId?: string;
@@ -31,7 +31,8 @@ export interface UpdateCompanyRequest {
   url?: string;
   logo?: string;
   brands?: string[];
-  industryId?: string;
+  // An empty array clears every industry link; omitted leaves them untouched.
+  industryIds?: string[];
   subIndustry?: string;
   // null explicitly clears these; undefined/omitted leaves them untouched.
   accountTier?: AccountTier | null;
@@ -42,7 +43,8 @@ export interface UpdateCompanyRequest {
   stockTicker?: string;
   fiscalYearEnd?: FiscalYearEndMonth | null;
   region?: Region | null;
-  country?: string;
+  // An empty array clears every country; omitted leaves them untouched.
+  countries?: string[];
   hqCityAddress?: string;
   branches?: string[];
   parentCompanyId?: string | null;

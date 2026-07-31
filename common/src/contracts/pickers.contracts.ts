@@ -6,7 +6,7 @@ export interface EmployeePickerResponse {
 export interface CompanyPickerResponse {
   id: string;
   name: string;
-  country?: string | null;
+  countries?: string[] | null;
 }
 
 export interface ContactPickerResponse {

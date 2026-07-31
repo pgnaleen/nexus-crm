@@ -460,6 +460,18 @@
       "addFailed": "Failed to add relationship type tag"
     }
   },
+  "companyForm": {
+    "industries": {
+      "label": "Industries",
+      "placeholder": "Select industries...",
+      "searchPlaceholder": "Search industries..."
+    },
+    "countries": {
+      "label": "Countries",
+      "placeholder": "Select countries...",
+      "searchPlaceholder": "Search countries..."
+    }
+  },
   "addDealDialog": {
     "customer": {
       "notConfigured": "No Customer relationship type has been set up yet. Go to Admin → Relationship Types to flag one.",
@@ -480,10 +492,26 @@
       "notImportant": "Not important"
     },
     "quadrants": {
-      "do": { "number": "Q1", "label": "Do", "sublabel": "Urgent & Important" },
-      "decide": { "number": "Q2", "label": "Decide", "sublabel": "Not Urgent & Important" },
-      "delegate": { "number": "Q3", "label": "Delegate", "sublabel": "Urgent & Not Important" },
-      "delete": { "number": "Q4", "label": "Delete", "sublabel": "Not Urgent & Not Important" }
+      "do": {
+        "number": "Q1",
+        "label": "Do",
+        "sublabel": "Urgent & Important"
+      },
+      "decide": {
+        "number": "Q2",
+        "label": "Decide",
+        "sublabel": "Not Urgent & Important"
+      },
+      "delegate": {
+        "number": "Q3",
+        "label": "Delegate",
+        "sublabel": "Urgent & Not Important"
+      },
+      "delete": {
+        "number": "Q4",
+        "label": "Delete",
+        "sublabel": "Not Urgent & Not Important"
+      }
     },
     "quadrantCountAriaLabel": "{count} tasks in {quadrant}",
     "badge": {

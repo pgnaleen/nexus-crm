@@ -39,9 +39,11 @@ export class UpdateRelationshipPartyCompanyDto implements UpdateCompanyRequest {
   @IsString({ each: true })
   brands?: string[];
 
+  // An empty array clears every link; omitting the key leaves them untouched.
   @IsOptional()
-  @IsUUID()
-  industryId?: string;
+  @IsArray()
+  @IsUUID("4", { each: true })
+  industryIds?: string[];
 
   @IsOptional()
   @IsString()
@@ -82,9 +84,11 @@ export class UpdateRelationshipPartyCompanyDto implements UpdateCompanyRequest {
   @IsEnum(Region)
   region?: Region | null;
 
+  // An empty array clears every country; omitting the key leaves them alone.
   @IsOptional()
-  @IsString()
-  country?: string;
+  @IsArray()
+  @IsString({ each: true })
+  countries?: string[];
 
   @IsOptional()
   @IsString()
