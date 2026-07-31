@@ -17,13 +17,11 @@ Severity: 🔴 Critical (security / data integrity) · 🟠 High (real bug or bl
 
 ## Ranked
 
-> ⚠️ **Uncommitted work in the tree, 2026-07-31.** Items 1 and 2 below are implemented across
-> 9 files (`mail.service.ts`, `users.service.ts`, `users.controller.ts`, `users.contracts.ts`,
-> `mail.contracts.ts` (new), `contracts/index.ts`, `UserFormDialog.tsx`, `lib/api/users.ts`,
-> `en.json`) plus `.env`, and **have not been committed**. `git stash`, a bad checkout, or a reset
-> loses them. This is not hypothetical: a `git stash push -u` / `stash drop` during this very
-> session deleted the untracked bug-list file, recovered only because the doc reorganisation had
-> already copied it to `archive/`. Commit this work.
+> ✅ **Resolved 2026-07-31.** Items 1 and 2 were sitting uncommitted across 9 files plus `.env`;
+> they are now committed. The warning is kept as a note rather than deleted because the risk was
+> real, not hypothetical: a `git stash push -u` / `stash drop` during that session deleted the
+> untracked bug-list file, recovered only because the doc reorganisation had already copied it to
+> `archive/`. Commit work of this size before starting anything on top of it.
 
 | # | Item | Sev | Epic / story | Where |
 |---|---|:--:|---|---|
@@ -102,3 +100,26 @@ These were still listed as open in the old files. Code says otherwise:
 | Enforce `createdBy` NOT NULL at the DB level | **Correctly abandoned**, not deferred — the CHECK constraint broke login for seeded rows and was reverted. Do not retry without a real "system actor" concept |
 | Permission model `_MANAGE` migration (11 unchecked boxes) | **Done.** Only `DEAL_STAGES_MANAGE` remains, and it's item 20 |
 | Add a resource display-name map to the Roles dialog | **Built** — `RESOURCE_DISPLAY_NAME` (`RolePermissionsDialog.tsx:36`) |
+
+---
+
+## Found and fixed 2026-07-31 — company multi-country/multi-industry
+
+Two defects introduced by `03e778d` (multi-country/multi-industry) and fixed in `06ca6d9`.
+Recorded here rather than dropped silently: both were found by **probing the running endpoints**
+after the code was already committed and pushed, and neither was catchable by a typecheck. They
+are the concrete argument for item 15 (the testing track has never started).
+
+| Sev | Bug | Fix |
+|:--:|---|---|
+| 🟡 | A well-formed but non-existent `industryId` reached the `company_industries` FK and surfaced as a **500**, on both the create and update paths | `validateIndustryIds()` resolves every submitted id up front and throws `NotFoundException` naming the missing ones — the posture `deals.service.ts::validateReferences` already applies to every FK on a Deal |
+| 🟠 | **Silent data loss.** `updateCompany` replaced industry links with a delete-then-insert and **no transaction around the pair**. A failing insert left the delete committed, stripping the company of every industry it had. Reproduced live: one bad id took a company from 1 link to 0 | The replacement now runs inside `dataSource.transaction`. Validation alone was not sufficient — an industry deleted between the check and the insert would still race |
+
+**The generalisable rule** — replacing a set of join rows is a delete plus an insert, and it is only
+correct inside one transaction. Added to `CLAUDE.md` so the next join table doesn't repeat it.
+
+**Related, still open:** the realistic trigger for the second bug is a stale picker — an industry
+deleted between the form loading its options and the user saving. That staleness is a live item in
+[deferred-work.md](./deferred-work.md), whose entry rated its worst case as "stale dropdown, not
+incorrect data." That assessment was wrong for as long as this bug existed; the destructive half is
+now fixed, but the staleness itself is still unaddressed.

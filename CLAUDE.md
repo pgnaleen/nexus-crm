@@ -401,6 +401,38 @@ needs relations for its own display purposes, split it into two methods the way
 `findOneBareOrFail` for the entity that actually gets mutated and saved), never one method serving
 both purposes.
 
+## Replacing a set of join rows must be atomic, and its ids validated first
+
+**Rule: "replace this record's links" is a delete plus an insert, and it is only correct inside one
+transaction. Validate every submitted foreign key before the first write.**
+
+Discovered 2026-07-31, hours after shipping, by probing the endpoint — not by any typecheck.
+`RelationshipPartiesService.updateCompany()` replaced a company's `company_industries` rows with a
+`delete(removed)` followed by a `save(added)`, unwrapped. When the insert failed on a bad
+`industry_id` FK, **the delete stayed committed and the company was left with no industries at
+all** — reproduced live, one bad id took a company from 1 link to 0, with nothing shown to the
+user. The same missing validation also turned a well-formed but non-existent uuid into a `500`
+instead of a `404`, on both the create and update paths.
+
+Both halves matter and neither substitutes for the other:
+
+- **Validate up front.** Resolve every submitted FK before any write and throw
+  `NotFoundException` naming the misses — the shape `deals.service.ts::validateReferences` already
+  uses for every FK on a Deal, and `relationship-parties.service.ts::validateIndustryIds` now
+  mirrors. This turns the common case (a stale picker offering an id that was deleted since the
+  form loaded) into a clear 404 rather than a 500.
+- **Wrap delete+insert in one transaction.** Validation alone cannot save you: a row deleted
+  between the check and the insert still races. The transaction is what makes the failure
+  non-destructive instead of merely unlikely.
+
+The trigger is not exotic. Pickers in this codebase fetch their options once on mount and never
+refresh (a known, deferred issue — see `_bmad-output/2-current-work/deferred-work.md`), so a form
+left open across someone else's admin edit submits a stale id as a matter of course.
+
+**Before shipping any new "replace the set" write path, prove it by sending a deliberately bad id
+and confirming two things: the response is a 4xx naming the problem, and the record's existing
+links are still there afterward.** A passing typecheck says nothing about either.
+
 ## API Endpoint Registry
 
 Every backend endpoint is tracked in a single table-view reference:
