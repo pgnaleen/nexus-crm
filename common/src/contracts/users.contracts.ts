@@ -1,3 +1,4 @@
+import { MailDeliveryResult } from "./mail.contracts";
 import { UserStatus } from "../enums";
 
 /** List-view shape for User Management — gated by users:manage. */
@@ -21,6 +22,20 @@ export interface UserResponse extends UserSummaryResponse {
   // The link lives on employees.user_id and is only ever created/changed
   // from User Management; Employee Management shows it read-only.
   linkedEmployee: { id: string; fullName: string } | null;
+}
+
+/**
+ * POST /users only.
+ *
+ * A new account's temporary password is surfaced in exactly one place -- the
+ * welcome email -- so if that email doesn't go out, the account exists with a
+ * password nobody knows and nobody can log into. The send is best-effort by
+ * design and never fails the (already-committed) account creation, which means
+ * the outcome has to be reported here instead: the admin must not be told
+ * "user created" with no qualification when the credential went nowhere.
+ */
+export interface CreateUserResponse extends UserResponse {
+  welcomeEmail: MailDeliveryResult;
 }
 
 export interface CreateUserRequest {

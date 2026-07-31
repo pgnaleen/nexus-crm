@@ -1,4 +1,4 @@
-import { UserStatus } from "@orelia/common";
+import { MailDeliveryResult, UserStatus } from "@orelia/common";
 import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import * as bcrypt from "bcrypt";
@@ -114,7 +114,11 @@ export class UsersService {
     return user;
   }
 
-  async create(dto: CreateUserDto, createdBy: string): Promise<User> {
+  // Returns the delivery outcome alongside the account, not just the account.
+  // The temporary password is surfaced in exactly one place -- the welcome
+  // email -- so "created the row" and "the human can actually get in" are two
+  // different outcomes, and the caller has to be able to tell them apart.
+  async create(dto: CreateUserDto, createdBy: string): Promise<{ user: User; welcomeEmail: MailDeliveryResult }> {
     // Never log the generated password -- matches the password/token
     // redaction precedent used everywhere else in this codebase
     // (RequestLoggerMiddleware).
@@ -168,24 +172,35 @@ export class UsersService {
       // its password is unknown to anyone until an admin resets it. Still
       // best-effort by design (see MailService.sendWelcomeEmail): a failed
       // send must never fail the account creation above, which has already
-      // committed.
+      // committed. The outcome is returned to the caller so the admin is told
+      // about it, rather than shown an unqualified success.
       let tenantSlug: string | undefined;
       try {
         tenantSlug = this.tenantContext.getTenantSlug();
       } catch {
         this.logger.warn("create: no tenant context available, skipping welcome email");
       }
+
+      let welcomeEmail: MailDeliveryResult;
       if (tenantSlug) {
-        await this.mailService.sendWelcomeEmail({
+        welcomeEmail = await this.mailService.sendWelcomeEmail({
           to: dto.loggingEmail,
           displayName: dto.displayName,
           username: dto.username,
           temporaryPassword,
           tenantSlug,
         });
+      } else {
+        welcomeEmail = { sent: false, reason: "no_tenant_context" };
+      }
+      if (!welcomeEmail.sent) {
+        this.logger.warn(
+          `create: user ${saved.id} was created but the welcome email was NOT delivered ` +
+            `(reason=${welcomeEmail.reason}) -- its temporary password is now unknown to anyone`,
+        );
       }
 
-      return saved;
+      return { user: saved, welcomeEmail };
     } catch (err) {
       // assertUsernameAvailable above is not atomic with the insert -- two
       // concurrent creates for the same username race past it and one hits

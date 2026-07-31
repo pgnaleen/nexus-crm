@@ -1,3 +1,4 @@
+import { MailDeliveryResult } from "@orelia/common";
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import sgMail from "@sendgrid/mail";
@@ -46,11 +47,17 @@ export class MailService {
   // Best-effort, same posture as AuditLogService.record() and S3Service's
   // deleteObjectBestEffort() -- a failed or skipped send must never fail the
   // real user-creation request that triggered it, so this never throws.
-  async sendWelcomeEmail(input: WelcomeEmailInput): Promise<void> {
+  //
+  // It does, however, RETURN the outcome. Never throwing and returning void
+  // are two different things, and conflating them was a real bug: the caller
+  // had no way to distinguish "emailed" from "silently dropped", so the admin
+  // got an unqualified success for an account whose one and only copy of the
+  // temporary password went nowhere. Callers must surface a false `sent`.
+  async sendWelcomeEmail(input: WelcomeEmailInput): Promise<MailDeliveryResult> {
     this.logger.debug(`sendWelcomeEmail called for ${input.to} (user "${input.username}")`);
     if (!this.isEnabled()) {
       this.logger.warn("sendWelcomeEmail skipped: SENDGRID_API_KEY/MAIL_FROM_ADDRESS not configured");
-      return;
+      return { sent: false, reason: "not_configured" };
     }
     try {
       this.ensureSdkInitialized();
@@ -63,8 +70,19 @@ export class MailService {
         html: buildWelcomeHtml(input, loginUrl),
       });
       this.logger.debug(`sendWelcomeEmail succeeded for ${input.to}`);
+      return { sent: true };
     } catch (err) {
-      this.logger.error(`sendWelcomeEmail failed for ${input.to}: ${(err as Error).message}`, (err as Error).stack);
+      // SendGrid puts the actionable detail (unverified sender, bad key,
+      // invalid recipient) in response.body.errors, not in `message` -- which
+      // is just "Forbidden"/"Bad Request". Log both, or diagnosing a failed
+      // send from the terminal is guesswork.
+      const detail = (err as { response?: { body?: unknown } }).response?.body;
+      this.logger.error(
+        `sendWelcomeEmail failed for ${input.to}: ${(err as Error).message}` +
+          (detail ? ` -- provider said: ${JSON.stringify(detail)}` : ""),
+        (err as Error).stack,
+      );
+      return { sent: false, reason: "send_failed" };
     }
   }
 }

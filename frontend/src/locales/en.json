@@ -424,6 +424,15 @@
         "placeholder": "Select an employee (optional)...",
         "searchPlaceholder": "Search employees..."
       }
+    },
+    "welcomeEmailFailed": {
+      "title": "Account created — but the email was not sent",
+      "body": "{displayName}'s account exists, but the welcome email carrying their temporary password could not be delivered to {email}. That password is not stored anywhere in readable form and nobody can recover it, so they cannot sign in yet.",
+      "reasonNotConfigured": "Email sending is not configured on the server (missing SendGrid credentials). This needs an administrator to set it up before any account can receive its password.",
+      "reasonSendFailed": "The email provider rejected the message. Common causes: the sender address is not verified with the provider, or the recipient address does not exist.",
+      "reasonNoTenantContext": "The server could not determine which workspace this account belongs to, so it could not build the sign-in link.",
+      "nextStep": "Once email is working, use Reset password on this user to generate and send a fresh temporary password.",
+      "acknowledge": "Got it"
     }
   },
   "relationshipTypes": {

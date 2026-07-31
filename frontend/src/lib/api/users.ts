@@ -1,4 +1,4 @@
-import type { ChangeOwnPasswordRequest, CreateUserRequest, ResetPasswordRequest, UpdateUserRequest, UserResponse } from "@orelia/common";
+import type { ChangeOwnPasswordRequest, CreateUserRequest, CreateUserResponse, ResetPasswordRequest, UpdateUserRequest, UserResponse } from "@orelia/common";
 import { apiFetch } from "./client";
 
 export function getUser(id: string): Promise<UserResponse> {
@@ -16,8 +16,12 @@ export function resetUserPassword(id: string, payload: ResetPasswordRequest): Pr
   });
 }
 
-export function createUser(payload: CreateUserRequest): Promise<UserResponse> {
-  return apiFetch<UserResponse>("/users", {
+// Returns CreateUserResponse, not UserResponse -- the extra `welcomeEmail`
+// field reports whether the temporary password actually reached the new user.
+// A 201 here means "the account row exists", NOT "they can log in": callers
+// must check welcomeEmail.sent and tell the admin when it's false.
+export function createUser(payload: CreateUserRequest): Promise<CreateUserResponse> {
+  return apiFetch<CreateUserResponse>("/users", {
     method: "POST",
     body: JSON.stringify(payload),
   });

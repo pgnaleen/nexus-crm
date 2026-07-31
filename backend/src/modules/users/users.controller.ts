@@ -1,4 +1,4 @@
-import { PERMISSIONS, UserResponse, UserSummaryResponse } from "@orelia/common";
+import { CreateUserResponse, PERMISSIONS, UserResponse, UserSummaryResponse } from "@orelia/common";
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Logger, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
 import { REFRESH_COOKIE } from "../auth/auth.constants";
@@ -65,13 +65,20 @@ export class UsersController {
   async create(
     @Body() dto: CreateUserDto,
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<UserResponse> {
+  ): Promise<CreateUserResponse> {
     // Never log dto directly -- it carries a plaintext password.
     this.logger.debug(`POST /users called by ${user.sub} (username="${dto.username}")`);
     try {
-      const created = await this.usersService.create(dto, user.sub);
-      this.logger.debug(`POST /users succeeded for user ${created.id}`);
-      return this.toResponse(created);
+      const { user: created, welcomeEmail } = await this.usersService.create(dto, user.sub);
+      // Still a 201 when the mail didn't go out -- the account genuinely was
+      // created, and failing the request would misreport a committed write as
+      // a failure and invite a duplicate-username retry. The caveat rides in
+      // the body instead, for the UI to surface.
+      this.logger.debug(
+        `POST /users succeeded for user ${created.id} (welcomeEmail.sent=${welcomeEmail.sent}` +
+          `${welcomeEmail.sent ? "" : `, reason=${welcomeEmail.reason}`})`,
+      );
+      return { ...(await this.toResponse(created)), welcomeEmail };
     } catch (err) {
       this.logger.error(`POST /users failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;

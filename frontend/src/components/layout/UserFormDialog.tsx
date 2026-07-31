@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { UserStatus } from "@orelia/common";
-import type { EmployeeLinkPickerResponse, RbacRoleResponse, UserResponse, UserSummaryResponse } from "@orelia/common";
+import type { EmployeeLinkPickerResponse, MailDeliveryResult, RbacRoleResponse, UserResponse, UserSummaryResponse } from "@orelia/common";
 import { createUser, getUser, getUserRoleIds, updateUser } from "@/lib/api/users";
 import { listLinkableEmployees } from "@/lib/api/employees";
 import { listRoles } from "@/lib/api/roles";
@@ -19,6 +19,15 @@ import { email, minLength, pattern, required, validate } from "@/lib/validation"
 import { t } from "@/lib/i18n";
 
 const USERNAME_REGEX = /^[a-z0-9._-]+$/;
+
+// Maps the backend's MailDeliveryFailureReason onto its explanation key. Keyed
+// exhaustively so a new reason added to the contract fails the build here
+// rather than silently rendering a raw key string to the admin.
+const REASON_KEYS: Record<NonNullable<MailDeliveryResult["reason"]>, string> = {
+  not_configured: "users.welcomeEmailFailed.reasonNotConfigured",
+  send_failed: "users.welcomeEmailFailed.reasonSendFailed",
+  no_tenant_context: "users.welcomeEmailFailed.reasonNoTenantContext",
+};
 
 const STATUS_OPTIONS = Object.values(UserStatus).map((status) => ({
   value: status,
@@ -66,6 +75,13 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  // Set when an account was created successfully but its welcome email (the
+  // only copy of the temporary password) never went out. Replaces the form
+  // with a warning panel rather than closing on a silent success -- the admin
+  // has to know the new user cannot actually sign in yet.
+  const [undelivered, setUndelivered] = useState<
+    { displayName: string; email: string; reason: MailDeliveryResult["reason"] } | null
+  >(null);
 
   const [availableRoles, setAvailableRoles] = useState<RbacRoleResponse[]>([]);
   const [isLoadingRoles, setIsLoadingRoles] = useState(true);
@@ -183,30 +199,45 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
 
     setIsSaving(true);
     try {
-      const saved =
-        mode === "create"
-          ? await createUser({
-              username: values.username.trim(),
-              displayName: values.displayName.trim(),
-              loggingEmail: values.loggingEmail.trim(),
-              status: values.status,
-              extras: values.extras.trim() || undefined,
-              roleIds: values.roleIds.length > 0 ? values.roleIds : undefined,
-              employeeId: values.employeeId || undefined,
-            })
-          : await updateUser(user!.id, {
-              displayName: values.displayName.trim(),
-              loggingEmail: values.loggingEmail.trim(),
-              status: values.status,
-              mustChangePassword: values.mustChangePassword,
-              // Always sent as-is (never undefined) in edit mode -- a
-              // cleared textbox must actually clear the stored value, not
-              // be treated as "field omitted, leave untouched".
-              extras: values.extras.trim(),
-              roleIds: values.roleIds,
-              // Same reasoning: null = explicitly unlinked, never omitted.
-              employeeId: values.employeeId || null,
-            });
+      if (mode === "create") {
+        const created = await createUser({
+          username: values.username.trim(),
+          displayName: values.displayName.trim(),
+          loggingEmail: values.loggingEmail.trim(),
+          status: values.status,
+          extras: values.extras.trim() || undefined,
+          roleIds: values.roleIds.length > 0 ? values.roleIds : undefined,
+          employeeId: values.employeeId || undefined,
+        });
+        // The account is committed either way, so the list must refresh even
+        // when the email failed -- otherwise the admin can't see the very row
+        // the warning is about.
+        onSaved(created);
+        if (created.welcomeEmail.sent) {
+          onClose();
+        } else {
+          setUndelivered({
+            displayName: created.displayName,
+            email: created.loggingEmail,
+            reason: created.welcomeEmail.reason,
+          });
+        }
+        return;
+      }
+
+      const saved = await updateUser(user!.id, {
+        displayName: values.displayName.trim(),
+        loggingEmail: values.loggingEmail.trim(),
+        status: values.status,
+        mustChangePassword: values.mustChangePassword,
+        // Always sent as-is (never undefined) in edit mode -- a cleared
+        // textbox must actually clear the stored value, not be treated as
+        // "field omitted, leave untouched".
+        extras: values.extras.trim(),
+        roleIds: values.roleIds,
+        // Same reasoning: null = explicitly unlinked, never omitted.
+        employeeId: values.employeeId || null,
+      });
       onSaved(saved);
       onClose();
     } catch (err) {
@@ -218,7 +249,32 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
 
   return (
     <Dialog open title={mode === "create" ? "Add User" : "Edit User"} onClose={onClose} maxWidth="640px">
-      {isLoadingDetail ? (
+      {undelivered ? (
+        <div>
+          <div className="rounded-lg border border-crm-primary/30 bg-crm-primary-tint p-4">
+            <h3 className="mb-2 text-sm font-semibold text-crm-text">
+              {t("users.welcomeEmailFailed.title")}
+            </h3>
+            <p className="mb-3 text-[13px] leading-relaxed text-crm-text">
+              {t("users.welcomeEmailFailed.body", {
+                displayName: undelivered.displayName,
+                email: undelivered.email,
+              })}
+            </p>
+            <p className="mb-3 text-[13px] leading-relaxed text-[var(--color-text-muted)]">
+              {t(REASON_KEYS[undelivered.reason ?? "send_failed"])}
+            </p>
+            <p className="text-[13px] leading-relaxed text-[var(--color-text-muted)]">
+              {t("users.welcomeEmailFailed.nextStep")}
+            </p>
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button type="button" onClick={onClose}>
+              {t("users.welcomeEmailFailed.acknowledge")}
+            </Button>
+          </div>
+        </div>
+      ) : isLoadingDetail ? (
         <div className="dialog-loading">
           <Spinner size={28} />
         </div>
