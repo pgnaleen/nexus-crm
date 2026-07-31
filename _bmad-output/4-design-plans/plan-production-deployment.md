@@ -20,10 +20,18 @@ DNS, and the deploy process itself (`git pull` + `docker compose up -d --build`)
 healthy at the time of the incident.
 
 **Root cause:** the password stored in the backend's `~/nexus-crm/.env` file
-(`DB_PASSWORD=0c094a5d5ee7bd152f62414f6f9e2cc9`) did not match the actual password set on the
+(`DB_PASSWORD=<redacted>`) did not match the actual password set on the
 Postgres role `nexus_user`. Every new database connection the backend opened was rejected by
 Postgres with `password authentication failed for user "nexus_user"`, which surfaced to users as
 a generic 500 on login (and on any other request needing a fresh DB connection).
+
+> **Redacted 2026-07-31.** This paragraph previously quoted the literal `DB_PASSWORD` value. The
+> value was never relevant to the postmortem — the finding is that the stored password *didn't
+> match* the role's, not what it was. **Redacting it here does not undo the exposure:** it was
+> committed in `31a9640` and pushed to a remote, so it remains in git history and must be treated
+> as compromised. Rotating the credential is the only real fix — tracked as item 10 in
+> [../2-current-work/open-items.md](../2-current-work/open-items.md), along with the two JWT
+> secrets. Do not paste secrets into these documents; reference the variable name only.
 
 **Why this was confusing to diagnose:** an initial test connecting via `localhost` succeeded
 using the same password, which looked like proof the password was correct — it wasn't. Postgres's
