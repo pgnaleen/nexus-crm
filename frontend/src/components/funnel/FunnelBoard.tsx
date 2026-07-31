@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type FunnelLead } from "@/lib/data/funnel";
 import { DealStatus } from "@orelia/common";
 import { ActivityIcon, BuildingIcon, UserIcon } from "@/components/ui/icons";
@@ -53,6 +53,23 @@ const COLUMN_PALETTE: { accent: string; bg: string }[] = [
 ];
 
 const DEFAULT_COLUMN_COLOR = { accent: "#64748b", bg: "#f1f5f9" };
+
+// Auto-scroll while dragging a card near the board's left/right edge -- with
+// enough Main Stage columns to overflow, there was previously no way to drag
+// a card from the first column to an off-screen one without dropping,
+// scrolling manually, and re-dragging. EDGE_ZONE_PX is how close to the edge
+// (in pixels) triggers scrolling; speed ramps up linearly from 0 at the edge
+// of the zone to MAX_SCROLL_SPEED_PX right at (or past) the board's boundary.
+const EDGE_ZONE_PX = 70;
+const MAX_SCROLL_SPEED_PX = 18;
+
+// 0 at the outer edge of the zone, ramping up to 1 at/past the boundary --
+// distanceFromEdge is allowed to go negative (cursor dragged past the
+// board's actual edge, e.g. over the sidebar) without overshooting speed.
+function edgeScrollSpeed(distanceFromEdge: number): number {
+  const clamped = Math.max(0, Math.min(EDGE_ZONE_PX, distanceFromEdge));
+  return MAX_SCROLL_SPEED_PX * (1 - clamped / EDGE_ZONE_PX);
+}
 
 function colorForIndex(index: number): { accent: string; bg: string } {
   return COLUMN_PALETTE[index % COLUMN_PALETTE.length] ?? DEFAULT_COLUMN_COLOR;
@@ -307,6 +324,12 @@ export function FunnelBoard({
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const dragIdRef = useRef<string | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // -1 = scrolling left, 0 = not scrolling, 1 = scrolling right. A ref, not
+  // state -- updated on every dragover (which can fire many times a second)
+  // and read every animation frame, neither of which should trigger re-renders.
+  const scrollDirectionRef = useRef(0);
+  const scrollSpeedRef = useRef(0);
 
   function handleDragStart(id: string) {
     dragIdRef.current = id;
@@ -334,8 +357,54 @@ export function FunnelBoard({
     setDragOverStage(null);
   }
 
+  // dragover bubbles up from whichever column/card is under the cursor, so
+  // this one handler on the scroll container (not each column) is enough to
+  // track how close the cursor is to the left/right edge for auto-scrolling.
+  function handleContainerDragOver(e: React.DragEvent) {
+    if (!canDrag) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const distanceFromLeft = e.clientX - rect.left;
+    const distanceFromRight = rect.right - e.clientX;
+
+    if (distanceFromLeft < EDGE_ZONE_PX) {
+      scrollDirectionRef.current = -1;
+      scrollSpeedRef.current = edgeScrollSpeed(distanceFromLeft);
+    } else if (distanceFromRight < EDGE_ZONE_PX) {
+      scrollDirectionRef.current = 1;
+      scrollSpeedRef.current = edgeScrollSpeed(distanceFromRight);
+    } else {
+      scrollDirectionRef.current = 0;
+    }
+  }
+
+  // Runs a rAF loop only while a card is actively being dragged (draggingId
+  // set) -- decoupled from dragover's own firing rate (which pauses while the
+  // cursor is stationary in some browsers) so the scroll stays smooth for as
+  // long as the cursor sits in the edge zone, not just while it's moving.
+  useEffect(() => {
+    if (!draggingId) {
+      scrollDirectionRef.current = 0;
+      return;
+    }
+    let frameId: number;
+    function step() {
+      const container = scrollContainerRef.current;
+      if (container && scrollDirectionRef.current !== 0) {
+        container.scrollLeft += scrollDirectionRef.current * scrollSpeedRef.current;
+      }
+      frameId = requestAnimationFrame(step);
+    }
+    frameId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frameId);
+  }, [draggingId]);
+
   return (
-    <div className="flex min-h-[calc(100vh-260px)] flex-1 items-stretch rounded-b-[14px] border border-t-0 border-[var(--color-border)] bg-white overflow-auto [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--color-border)]">
+    <div
+      ref={scrollContainerRef}
+      onDragOver={handleContainerDragOver}
+      className="flex min-h-[calc(100vh-260px)] flex-1 items-stretch rounded-b-[14px] border border-t-0 border-[var(--color-border)] bg-white overflow-auto [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--color-border)]">
       {columns.map((column, index) => {
         const { accent, bg } = colorForIndex(index);
         return (
