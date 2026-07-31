@@ -187,6 +187,16 @@ export class UsersService {
 
       return saved;
     } catch (err) {
+      // assertUsernameAvailable above is not atomic with the insert -- two
+      // concurrent creates for the same username race past it and one hits
+      // the UNIQUE(tenant_id, username) index. Translate that Postgres
+      // unique-violation (23505) into a clean 409 rather than a raw 500,
+      // same pattern as priority-task-shares.service.ts /
+      // relationship-parties.service.ts.
+      if ((err as { code?: string }).code === "23505") {
+        this.logger.debug(`Concurrent duplicate username "${dto.username}" -> 409`);
+        throw new ConflictException(`Username "${dto.username}" is already in use`);
+      }
       this.logger.error(`create failed for username "${dto.username}": ${(err as Error).message}`, (err as Error).stack);
       throw err;
     }
