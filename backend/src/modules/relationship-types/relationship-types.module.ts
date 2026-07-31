@@ -8,6 +8,7 @@ import { Contact } from "../contacts/entities/contact.entity";
 import { Department } from "../departments/entities/department.entity";
 import { DocumentsModule } from "../documents/documents.module";
 import { Employee } from "../employees/entities/employee.entity";
+import { Industry } from "../tenants/entities/industry.entity";
 import { RbacModule } from "../rbac/rbac.module";
 import { RelationshipCompanyContactMap } from "./entities/relationship-company-contact-map.entity";
 import { RelationshipType } from "./entities/relationship-type.entity";
@@ -26,6 +27,7 @@ import { RelationshipTypesService } from "./relationship-types.service";
       RelationshipCompanyContactMap,
       Company,
       CompanyIndustry,
+      Industry,
       Contact,
       Employee,
       Department,

@@ -13,6 +13,7 @@ import { Contact } from "../contacts/entities/contact.entity";
 import { DealPartnersMap } from "../deals/entities/deal-partners-map.entity";
 import { Deal } from "../deals/entities/deal.entity";
 import { DocumentsService } from "../documents/documents.service";
+import { Industry } from "../tenants/entities/industry.entity";
 import { CreateRelationshipPartyCompanyDto } from "./dto/create-relationship-party-company.dto";
 import { CreateRelationshipPartyContactDto } from "./dto/create-relationship-party-contact.dto";
 import { UpdateRelationshipPartyCompanyDto } from "./dto/update-relationship-party-company.dto";
@@ -38,6 +39,7 @@ export class RelationshipPartiesService {
     // through the Company, which every caller here has already resolved via a
     // tenant-scoped lookup before touching this.
     @InjectRepository(CompanyIndustry) private readonly companyIndustriesRepo: Repository<CompanyIndustry>,
+    @InjectRepository(Industry) private readonly industriesRepo: Repository<Industry>,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
@@ -55,6 +57,30 @@ export class RelationshipPartiesService {
     });
     this.logger.debug(`findAllForType returning ${results.length} row(s)`);
     return results;
+  }
+
+  // Resolves every submitted industry id before it reaches the join table.
+  // Without this a well-formed but non-existent uuid hit the FK constraint and
+  // surfaced as a 500 Internal Server Error instead of a 404 -- verified live.
+  // Same posture as deals.service.ts::validateReferences, which does this for
+  // every FK on a Deal. `industries` is a platform-level lookup (AuditedEntity,
+  // not tenant-scoped), so this is an existence check, not a tenancy check --
+  // there is deliberately no per-tenant industry list to leak across.
+  private async validateIndustryIds(industryIds: string[]): Promise<void> {
+    if (industryIds.length === 0) {
+      this.logger.debug("validateIndustryIds: none submitted, skipping");
+      return;
+    }
+    const found = await this.industriesRepo.find({ where: { id: In(industryIds) }, select: { id: true } });
+    const foundIds = new Set(found.map((industry) => industry.id));
+    const missing = industryIds.filter((id) => !foundIds.has(id));
+    if (missing.length > 0) {
+      this.logger.debug(`validateIndustryIds: ${missing.length} id(s) do not resolve: ${missing.join(", ")}`);
+      throw new NotFoundException(
+        `Industry not found: ${missing.join(", ")}. It may have been removed since this form was opened.`,
+      );
+    }
+    this.logger.debug(`validateIndustryIds: all ${industryIds.length} id(s) resolved`);
   }
 
   // Industry links are read through their own repository rather than a
@@ -116,6 +142,9 @@ export class RelationshipPartiesService {
       assertKeyBelongsToTenant(logo, LOGO_SEGMENT, this.tenantContext.getTenantSlug());
     }
     const uniqueIndustryIds = [...new Set(industryIds ?? [])];
+    // Before the transaction, so a bad id is a clean 404 rather than an FK
+    // violation surfacing as a 500 from inside the rollback.
+    await this.validateIndustryIds(uniqueIndustryIds);
 
     try {
       // The company and every inline contact must land together or not at
@@ -470,6 +499,10 @@ export class RelationshipPartiesService {
     // live verification, not by typecheck. An actual array means "the client
     // sent a set"; [] clears, undefined/null means "not submitted".
     const industriesTouched = Array.isArray(industryIds);
+    if (industriesTouched) {
+      // Before any write, so a bad id cannot reach the replacement below.
+      await this.validateIndustryIds([...new Set(industryIds!)]);
+    }
     const oldIndustryIds = industriesTouched
       ? (await this.companyIndustriesRepo.find({ where: { companyId: company.id }, order: { createdAt: "ASC" } }))
           .map((link) => link.industryId)
@@ -489,19 +522,29 @@ export class RelationshipPartiesService {
         newIndustryIds = [...new Set(industryIds!)];
         const removed = oldIndustryIds.filter((id) => !newIndustryIds.includes(id));
         const added = newIndustryIds.filter((id) => !oldIndustryIds.includes(id));
-        if (removed.length > 0) {
-          this.logger.debug(`updateCompany: unlinking ${removed.length} industry/industries from company ${company.id}`);
-          await this.companyIndustriesRepo.delete({ companyId: company.id, industryId: In(removed) });
-        }
-        if (added.length > 0) {
-          this.logger.debug(`updateCompany: linking ${added.length} new industry/industries to company ${company.id}`);
-          await this.companyIndustriesRepo.save(
-            added.map((industryId) =>
-              this.companyIndustriesRepo.create({ companyId: company.id, industryId, createdBy: userId }),
-            ),
-          );
-        }
-        if (removed.length === 0 && added.length === 0) {
+        // The delete and the insert MUST be one transaction. Without it a
+        // failing insert (e.g. an industry deleted between the picker loading
+        // and this save) left the delete committed and the company stripped of
+        // every industry it had -- silent data loss, reproduced live before
+        // this was added. validateIndustryIds above makes that failure
+        // unlikely; the transaction makes it non-destructive when it happens
+        // anyway, which validation alone cannot guarantee against a concurrent
+        // delete.
+        if (removed.length > 0 || added.length > 0) {
+          await this.dataSource.transaction(async (manager) => {
+            const linkRepo = manager.getRepository(CompanyIndustry);
+            if (removed.length > 0) {
+              this.logger.debug(`updateCompany: unlinking ${removed.length} industry/industries from company ${company.id}`);
+              await linkRepo.delete({ companyId: company.id, industryId: In(removed) });
+            }
+            if (added.length > 0) {
+              this.logger.debug(`updateCompany: linking ${added.length} new industry/industries to company ${company.id}`);
+              await linkRepo.save(
+                added.map((industryId) => linkRepo.create({ companyId: company.id, industryId, createdBy: userId })),
+              );
+            }
+          });
+        } else {
           this.logger.debug(`updateCompany: industry links submitted but unchanged for company ${company.id}`);
         }
       } else {
