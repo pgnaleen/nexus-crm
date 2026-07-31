@@ -25,10 +25,17 @@ holds 7 of the 9 highest-severity items in the project. Full ranked list:
 | 4 | Priority Deck — Prototype v2 Parity | 12/12 | ✅ done | [epics-task-management.md](1-epics-and-stories/epics-task-management.md) |
 | 5 | Priority Tracker — Event-Sourced Flow, Chat & Realtime | 5/5 | ✅ done | [epics-task-management.md](1-epics-and-stories/epics-task-management.md) |
 | 6 | User Management — Provisioning & Credential Lifecycle | 0/8 | 🔨 in progress | [epics-user-management.md](1-epics-and-stories/epics-user-management.md) |
+| 7 | Activity Log — Audit Trail Visibility & Auth Events | 0/6 | 📋 backlog | [epics-activity-log.md](1-epics-and-stories/epics-activity-log.md) |
 
-**46 of 57 stories done**, 10 backlog, 1 in review. The 11 open ones: `2-5` migrate modals,
-`2-6` responsive QA, `2-7` final QA, and all eight of epic 6 — of which `6-4` is built and
-verified but uncommitted, hence `review` rather than `done`.
+**46 of 63 stories done**, 16 backlog, 1 in review. The 17 open ones: `2-5` migrate modals,
+`2-6` responsive QA, `2-7` final QA, all eight of epic 6 — of which `6-4` is built and
+verified but uncommitted, hence `review` rather than `done` — and all six of epic 7.
+
+Epic 7 was opened 2026-07-31 from a codebase exploration that established two things: the audit
+trail has been written across **23 entity types** since early in the project and **has never been
+readable** (no controller, no route — `core/audit-log/` is an entity and a service), and
+**authentication is not audited at all**. Its behavioural contract is
+[spec-activity-log.md](3-feature-specs/spec-activity-log.md).
 
 > The four epic files each call their own epic "Epic 1". BMad needs globally-unique epic numbers,
 > so they're renumbered 1–6 above and in `sprint-status.yaml`. The mapping is documented in that

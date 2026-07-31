@@ -50,6 +50,15 @@ Severity: 🔴 Critical (security / data integrity) · 🟠 High (real bug or bl
 | 21 | New user-facing strings in the credential work are hardcoded, against the i18n rule | ⚪ | — | — |
 | 22 | `ResetPasswordRequest` still carries an admin-supplied password | ⚪ | `6-3` | — |
 | 23 | Per-action row labels in the Roles dialog still show the raw suffix | ⚪ | — | `RolePermissionsDialog.tsx` |
+| 24 | `audit_logs` grows unbounded and nothing ever deletes from it — no retention policy, no partitioning. Surfaced by Epic 7, which makes the table readable for the first time | 🟡 | `7-*` (deferred) | [../3-feature-specs/spec-activity-log.md](../3-feature-specs/spec-activity-log.md) |
+| 25 | `AuthService`, `DocumentsService`, `UploadsController`, `IndustriesService`, `DbBackupService` write **zero** audit rows; `CompaniesService`/`ContactsService` write none of their own (only the relationship services do). Epic 7 closes the `AuthService` half; the rest stays open | 🟡 | — | `backend/src/modules/{companies,contacts,documents,uploads}/` |
+| 26 | `main.ts` never sets `trust proxy`, so `req.ip` is the nginx proxy's address, not the client's. Blocks any meaningful IP capture | 🟡 | `7-6` | `backend/src/main.ts` |
+
+**Item 24 note.** Deliberately *not* solved by a delete button: there is no `AUDIT_LOG_DELETE`
+permission by design, so retention stays an operator concern (env var + cron, default off) rather
+than a UI action. If volume ever becomes a real problem the right answer is monthly `RANGE`
+partitioning on `occurred_at` — cheap `DETACH` instead of `DELETE` — which is a far bigger migration
+on an already-large table. **Decide it before the table is big, not after.**
 
 Items 1–7, 16, 17, 21, 22 are the eleven bugs from the user-provisioning architecture review —
 full evidence for each is preserved in

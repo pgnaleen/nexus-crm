@@ -46,6 +46,7 @@
 #   epic-4 → epics-task-management.md "Epic 2: Priority Deck — Prototype v2 Parity"
 #   epic-5 → epics-task-management.md "Epic 3: Event-Sourced Flow, Task Chat & Real-Time Sync"
 #   epic-6 → epics-user-management.md "Epic 1: User Management — Account Provisioning"
+#   epic-7 → epics-activity-log.md     "Epic 1: Activity Log — Audit Trail Visibility"
 #
 # Story numbers inside each epic are unchanged (epic-3's 3-7 is that file's Story 1.7).
 
@@ -173,6 +174,33 @@ development_status:
   6-7-login-email-change-requires-reverification: backlog
   6-8-self-service-password-reset: backlog
   epic-6-retrospective: optional
+
+  # ── epic-7 — Activity Log: Audit Trail Visibility & Authentication Events ───
+  # Source: 1-epics-and-stories/epics-activity-log.md (opened 2026-07-31)
+  # Spec:   3-feature-specs/spec-activity-log.md
+  #
+  # Verified before opening: audit_logs has been written across 23 entity types
+  # since early in the project and has NEVER been readable -- core/audit-log/
+  # holds an entity and a service, no controller/module/route. The only read
+  # path in the codebase is AuditLogService.findForEntity(), used by exactly one
+  # caller (PriorityTasksService.getHistory). Separately, AuthService does not
+  # inject AuditLogService at all, and `users` keeps only last_logging_at /
+  # logging_attempts / locked_until -- current state that is overwritten on the
+  # next attempt -- so failed logins are never persisted anywhere.
+  #
+  # Story order follows the mock-first rule: 7-1 is UI on local state and must
+  # be signed off before 7-4/7-5 wire anything. 7-6 is last on purpose -- it
+  # modifies AuthService, the highest-blast-radius file in the app, so every
+  # other story is proven working first and a login regression is unambiguously
+  # attributable.
+  epic-7: backlog
+  7-1-activity-log-page-on-mock-data: backlog
+  7-2-permission-and-navigation: backlog
+  7-3-schema-indexes-and-auth-events-table: backlog
+  7-4-read-api-filtered-paginated-tenant-scoped: backlog
+  7-5-wire-the-page-to-the-api: backlog
+  7-6-record-authentication-events: backlog
+  epic-7-retrospective: optional
 
 # Action items committed during retrospectives (section created by the retrospective workflow)
 action_items: []
