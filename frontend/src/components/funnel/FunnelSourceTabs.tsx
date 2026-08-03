@@ -202,6 +202,7 @@ export function FunnelSourceTabs({
   const [historyDealId, setHistoryDealId] = useState<string | null>(null);
   const [viewDealId, setViewDealId] = useState<string | null>(null);
   const [editDeal, setEditDeal] = useState<DealResponse | null>(null);
+  const [isCompact, setIsCompact] = useState(false);
 
   const { showToast, dismissToast, flushToast } = useToast();
   const { showError } = useAlert();
@@ -554,6 +555,18 @@ export function FunnelSourceTabs({
                 searchPlaceholder="Search partners..."
               />
             </div>
+
+            <div className="flex items-center gap-2 h-[38px] pl-3 border-l border-slate-200">
+              <label className="flex items-center gap-2 cursor-pointer select-none text-[12.5px] font-semibold text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={isCompact}
+                  onChange={(e) => setIsCompact(e.target.checked)}
+                  className="rounded border-slate-350 text-crm-primary focus:ring-crm-primary cursor-pointer w-3.5 h-3.5 accent-crm-primary"
+                />
+                <span>Compact View</span>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -616,6 +629,7 @@ export function FunnelSourceTabs({
             onMove={handleMove}
             columns={columns}
             canDrag={canUpdateDeals}
+            isCompact={isCompact}
             onShowHistory={(dealId) => setHistoryDealId(dealId)}
             onViewDeal={(dealId) => setViewDealId(dealId)}
           />

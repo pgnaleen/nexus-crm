@@ -99,6 +99,7 @@ function DealCard({
   accent,
   isDragging,
   canDrag,
+  isCompact,
   onDragStart,
   onDragEnd,
   onShowHistory,
@@ -108,6 +109,7 @@ function DealCard({
   accent: string;
   isDragging: boolean;
   canDrag: boolean;
+  isCompact: boolean;
   onDragStart: () => void;
   onDragEnd: () => void;
   onShowHistory?: (dealId: string) => void;
@@ -115,6 +117,30 @@ function DealCard({
 }) {
   const countryCode = lead.country ? COUNTRY_CODE_BY_NAME.get(lead.country) : undefined;
   const Flag = countryCode ? Flags[countryCode as keyof typeof Flags] : undefined;
+
+  if (isCompact) {
+    return (
+      <div
+        className={`select-none rounded-lg border-l-[3px] bg-white px-2.5 py-1.5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition-[box-shadow,opacity,transform] duration-150 hover:shadow-[0_2px_6px_rgba(16,24,40,0.08)] hover:-translate-y-px${
+          canDrag ? " cursor-grab active:cursor-grabbing" : ""
+        }${isDragging ? " opacity-40 scale-[0.97]" : ""}`}
+        draggable={canDrag}
+        onDragStart={canDrag ? onDragStart : undefined}
+        onDragEnd={canDrag ? onDragEnd : undefined}
+        onClick={() => onViewDeal?.(lead.id)}
+        style={{ borderLeftColor: accent }}
+      >
+        <div className="flex items-center justify-between gap-1.5 min-w-0">
+          <span className="truncate text-[12.5px] font-semibold leading-normal text-[var(--color-text)]" title={lead.name}>
+            {lead.name}
+          </span>
+          <span className="text-[11px] font-bold text-slate-500 shrink-0">
+            {fmt(lead.value, lead.currency ?? "USD")}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -213,6 +239,7 @@ function KanbanColumn({
   isOver,
   draggingId,
   canDrag,
+  isCompact,
   onDragOver,
   onDragLeave,
   onDrop,
@@ -228,6 +255,7 @@ function KanbanColumn({
   isOver: boolean;
   draggingId: string | null;
   canDrag: boolean;
+  isCompact: boolean;
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: () => void;
   onDrop: () => void;
@@ -276,6 +304,7 @@ function KanbanColumn({
             accent={accent}
             isDragging={lead.id === draggingId}
             canDrag={canDrag}
+            isCompact={isCompact}
             onDragStart={() => onDragStart(lead.id)}
             onDragEnd={onDragEnd}
             onShowHistory={onShowHistory}
@@ -309,6 +338,7 @@ interface FunnelBoardProps {
   // other caller keeps today's behavior; the Funnel board is the only one
   // that actually needs to turn it off for a view-only user.
   canDrag?: boolean;
+  isCompact?: boolean;
   onShowHistory?: (dealId: string) => void;
   onViewDeal?: (dealId: string) => void;
 }
@@ -318,6 +348,7 @@ export function FunnelBoard({
   onMove,
   columns,
   canDrag = true,
+  isCompact = false,
   onShowHistory,
   onViewDeal,
 }: FunnelBoardProps) {
@@ -417,6 +448,7 @@ export function FunnelBoard({
             isOver={dragOverStage === column.id}
             draggingId={draggingId}
             canDrag={canDrag}
+            isCompact={isCompact}
             onDragOver={(e) => handleDragOver(e, column.id)}
             onDragLeave={() => {
               if (dragOverStage === column.id) setDragOverStage(null);
