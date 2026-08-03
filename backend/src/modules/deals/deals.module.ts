@@ -15,6 +15,8 @@ import { Employee } from "../employees/entities/employee.entity";
 import { RbacModule } from "../rbac/rbac.module";
 import { DealPartnersMap } from "./entities/deal-partners-map.entity";
 import { DealNote } from "./entities/deal-note.entity";
+import { DealRole } from "./entities/deal-role.entity";
+import { DealRoleAssignment } from "./entities/deal-role-assignment.entity";
 import { DealTenderDetails } from "./entities/deal-tender-details.entity";
 import { Deal } from "./entities/deal.entity";
 import { MainStageHistory } from "./entities/main-stage-history.entity";
@@ -40,6 +42,8 @@ import { DealsService } from "./deals.service";
       Deal,
       DealNote,
       DealPartnersMap,
+      DealRole,
+      DealRoleAssignment,
       DealTenderDetails,
       SubStageHistory,
       MainStageHistory,
