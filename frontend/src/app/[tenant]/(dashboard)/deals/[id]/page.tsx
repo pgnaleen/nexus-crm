@@ -65,17 +65,29 @@ export default async function MainStageDealsPage({
     notFound();
   }
 
+  // Sub Stages have no weight of their own -- every column here shows this
+  // page's one enclosing Main Stage's weightPercent, repeated across all of
+  // them (deliberate, not a bug: see funnel-main-stage-progress.md AC3).
   const columns = (subStages ?? [])
     .filter((stage) => stage.mainStageId === params.id)
     .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((stage) => ({ id: stage.id, name: stage.name, mainStageId: stage.mainStageId }));
+    .map((stage) => ({
+      id: stage.id,
+      name: stage.name,
+      mainStageId: stage.mainStageId,
+      weightPercent: mainStage.weightPercent,
+    }));
 
   return (
     <FunnelSourceTabs
       dealSources={dealSources ?? []}
       columns={columns}
       stageField="currentStageName"
-      mainStages={(mainStages ?? []).map((stage) => ({ id: stage.id, name: stage.name }))}
+      mainStages={(mainStages ?? []).map((stage) => ({
+        id: stage.id,
+        name: stage.name,
+        weightPercent: stage.weightPercent,
+      }))}
       subStages={(subStages ?? []).map((stage) => ({
         id: stage.id,
         name: stage.name,

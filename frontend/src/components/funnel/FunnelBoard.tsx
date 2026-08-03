@@ -33,6 +33,11 @@ export interface FunnelColumn {
   // its sequence in the funnel, used to detect when a drag-and-drop move
   // skips over one or more stages in between.
   position?: number;
+  // The owning Main Stage's admin-configured progress weight (0-100) --
+  // drives the column header badge and each deal card's progress bar. On
+  // the per-Main-Stage board (columns = Sub Stages), every column carries
+  // the same value: its one enclosing Main Stage's weight.
+  weightPercent?: number | null;
 }
 
 /* ── Column colours ─────────────────────────────────────────── */
@@ -100,6 +105,7 @@ function DealCard({
   isDragging,
   canDrag,
   isCompact,
+  weightPercent,
   onDragStart,
   onDragEnd,
   onShowHistory,
@@ -110,6 +116,10 @@ function DealCard({
   isDragging: boolean;
   canDrag: boolean;
   isCompact: boolean;
+  // The owning Main Stage's progress weight -- renders as a thin filled bar
+  // in the full card variant, omitted entirely when null/undefined (no
+  // weight configured for that stage) and never shown in compact mode.
+  weightPercent?: number | null;
   onDragStart: () => void;
   onDragEnd: () => void;
   onShowHistory?: (dealId: string) => void;
@@ -226,6 +236,14 @@ function DealCard({
           </button>
         )}
       </div>
+      {weightPercent != null && (
+        <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-[var(--color-border)]">
+          <div
+            className="h-full rounded-full"
+            style={{ width: `${weightPercent}%`, background: accent }}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -240,6 +258,7 @@ function KanbanColumn({
   draggingId,
   canDrag,
   isCompact,
+  weightPercent,
   onDragOver,
   onDragLeave,
   onDrop,
@@ -256,6 +275,7 @@ function KanbanColumn({
   draggingId: string | null;
   canDrag: boolean;
   isCompact: boolean;
+  weightPercent?: number | null;
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: () => void;
   onDrop: () => void;
@@ -288,6 +308,14 @@ function KanbanColumn({
           >
             {leads.length}
           </span>
+          {weightPercent != null && (
+            <span
+              className="inline-flex h-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold"
+              style={{ background: bg, color: accent }}
+            >
+              {weightPercent}%
+            </span>
+          )}
         </div>
       </div>
 
@@ -305,6 +333,7 @@ function KanbanColumn({
             isDragging={lead.id === draggingId}
             canDrag={canDrag}
             isCompact={isCompact}
+            weightPercent={weightPercent}
             onDragStart={() => onDragStart(lead.id)}
             onDragEnd={onDragEnd}
             onShowHistory={onShowHistory}
@@ -449,6 +478,7 @@ export function FunnelBoard({
             draggingId={draggingId}
             canDrag={canDrag}
             isCompact={isCompact}
+            weightPercent={column.weightPercent}
             onDragOver={(e) => handleDragOver(e, column.id)}
             onDragLeave={() => {
               if (dragOverStage === column.id) setDragOverStage(null);

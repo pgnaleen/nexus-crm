@@ -25,6 +25,9 @@ export interface IMainStage {
   position: number;
   isWon: boolean;
   isLost: boolean;
+  // Admin-configurable progress weight (0-100), shown on the Funnel board's
+  // column header and deal cards -- null when the admin hasn't set one yet.
+  weightPercent: number | null;
   createdAt: string;
   updatedAt: string;
 }

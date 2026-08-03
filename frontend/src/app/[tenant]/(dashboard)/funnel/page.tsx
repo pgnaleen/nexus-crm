@@ -58,12 +58,17 @@ export default async function FunnelPage({ params }: { params: { tenant: string 
     id: stage.id,
     name: stage.name,
     position: stage.position,
+    weightPercent: stage.weightPercent,
   }));
   return (
     <FunnelSourceTabs
       dealSources={dealSources ?? []}
       columns={columns}
-      mainStages={(mainStages ?? []).map((stage) => ({ id: stage.id, name: stage.name }))}
+      mainStages={(mainStages ?? []).map((stage) => ({
+        id: stage.id,
+        name: stage.name,
+        weightPercent: stage.weightPercent,
+      }))}
       subStages={(subStages ?? []).map((stage) => ({
         id: stage.id,
         name: stage.name,
