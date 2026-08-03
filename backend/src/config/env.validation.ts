@@ -56,6 +56,15 @@ export const envValidationSchema = Joi.object({
   // public origin, not the backend's (NEXT_PUBLIC_API_URL is the reverse).
   APP_BASE_URL: Joi.string().default("http://localhost:3000"),
 
+  // Exchange-rate provider (exchangerate-api.com v6) for the Sales Pipeline
+  // Dashboard's cross-currency KPIs (see FxRatesService). Same optional-at-
+  // schema-level posture as the S3/SendGrid vars above: unset means a fresh
+  // clone still boots, the daily refresh just no-ops with a warning log and
+  // any currency with no known rate is reported back as a conversion
+  // warning rather than the dashboard endpoint failing outright.
+  FX_RATE_API_KEY: Joi.string().empty("").optional(),
+  FX_RATE_API_BASE_URL: Joi.string().default("https://v6.exchangerate-api.com/v6"),
+
   // How many trusted reverse-proxy hops sit in front of this app -- see
   // main.ts's app.set("trust proxy", ...) comment. 0 (default) means don't
   // trust X-Forwarded-For at all; raise only in an environment with a real

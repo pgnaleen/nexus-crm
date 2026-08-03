@@ -7,6 +7,8 @@ import { AuditLog } from "./audit-log/audit-log.entity";
 import { AuditLogService } from "./audit-log/audit-log.service";
 import { AuthEvent } from "./audit-log/auth-event.entity";
 import { AuthEventService } from "./audit-log/auth-event.service";
+import { FxRate } from "./fx-rates/entities/fx-rate.entity";
+import { FxRatesService } from "./fx-rates/fx-rates.service";
 import { MailService } from "./mail/mail.service";
 import { RealtimeGateway, RealtimeService } from "./realtime";
 import { S3Service } from "./storage/s3.service";
@@ -21,7 +23,7 @@ import { SystemTenantCache, TenantContextInterceptor, TenantContextService } fro
   // TenantsModule/AuthModule. JwtModule.register({}) takes no secret here --
   // secrets are passed per sign()/verify() call, so re-registering it is
   // cheap and doesn't duplicate config (AuthModule already does the same).
-  imports: [TypeOrmModule.forFeature([Tenant, AuditLog, AuthEvent]), JwtModule.register({})],
+  imports: [TypeOrmModule.forFeature([Tenant, AuditLog, AuthEvent, FxRate]), JwtModule.register({})],
   providers: [
     TenantContextService,
     SystemTenantCache,
@@ -29,6 +31,7 @@ import { SystemTenantCache, TenantContextInterceptor, TenantContextService } fro
     AuthEventService,
     S3Service,
     MailService,
+    FxRatesService,
     RealtimeGateway,
     RealtimeService,
     {
@@ -36,6 +39,15 @@ import { SystemTenantCache, TenantContextInterceptor, TenantContextService } fro
       useClass: TenantContextInterceptor,
     },
   ],
-  exports: [TenantContextService, SystemTenantCache, AuditLogService, AuthEventService, S3Service, MailService, RealtimeService],
+  exports: [
+    TenantContextService,
+    SystemTenantCache,
+    AuditLogService,
+    AuthEventService,
+    S3Service,
+    MailService,
+    FxRatesService,
+    RealtimeService,
+  ],
 })
 export class CoreModule {}
