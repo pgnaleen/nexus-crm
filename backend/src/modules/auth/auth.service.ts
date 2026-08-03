@@ -86,7 +86,13 @@ export class AuthService {
       }
 
       user.loggingAttempts = 0;
-      user.lockedUntil = undefined;
+      // Explicit null, not undefined -- TypeORM's save() silently skips a
+      // column when the property is undefined, so this previously left a
+      // stale lockedUntil in the DB after every successful post-lockout
+      // login. Harmless in practice (the login check is a time comparison,
+      // so an expired timestamp is already ignored either way), but real
+      // stale data -- see user.entity.ts's comment on this column.
+      user.lockedUntil = null;
       user.lastLoggingAt = new Date();
       await this.userRepo.save(user);
       this.logger.debug(`login succeeded for user ${user.id}`);

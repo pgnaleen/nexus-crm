@@ -54,8 +54,13 @@ export class User extends TenantOwnedEntity {
   @Column({ type: "int", default: 0 })
   loggingAttempts!: number;
 
+  // Explicitly `| null` (not just optional/undefined) -- TypeORM's save()
+  // skips a column entirely when the property is `undefined`, only a real
+  // `null` assignment actually clears it. Both auth.service.ts (successful
+  // login) and UsersService.resetPassword (admin unlock) need to genuinely
+  // clear this, not just leave it stale in memory for the current request.
   @Column({ type: "timestamptz", nullable: true })
-  lockedUntil?: Date;
+  lockedUntil?: Date | null;
 
   @Column({ default: false })
   mustChangePassword!: boolean;

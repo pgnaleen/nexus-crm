@@ -33,8 +33,9 @@ export class UsersController {
     this.logger.debug("GET /users called");
     try {
       const users = await this.usersService.findAll();
+      const roleNamesByUserId = await this.rbacService.getRoleNamesForUsers(users.map((u) => u.id));
       this.logger.debug(`GET /users returning ${users.length} row(s)`);
-      return users.map((user) => this.toSummaryResponse(user));
+      return users.map((user) => this.toSummaryResponse(user, roleNamesByUserId[user.id] ?? []));
     } catch (err) {
       this.logger.error(`GET /users failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -51,8 +52,9 @@ export class UsersController {
     this.logger.debug(`GET /users/${id} called`);
     try {
       const user = await this.usersService.findOneOrFail(id);
+      const roleNames = await this.rbacService.getRoleNamesForUser(id);
       this.logger.debug(`GET /users/${id} succeeded`);
-      return this.toResponse(user);
+      return this.toResponse(user, roleNames);
     } catch (err) {
       this.logger.error(`GET /users/${id} failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -78,7 +80,8 @@ export class UsersController {
         `POST /users succeeded for user ${created.id} (welcomeEmail.sent=${welcomeEmail.sent}` +
           `${welcomeEmail.sent ? "" : `, reason=${welcomeEmail.reason}`})`,
       );
-      return { ...(await this.toResponse(created)), welcomeEmail };
+      const roleNames = await this.rbacService.getRoleNamesForUser(created.id);
+      return { ...(await this.toResponse(created, roleNames)), welcomeEmail };
     } catch (err) {
       this.logger.error(`POST /users failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -96,8 +99,9 @@ export class UsersController {
     this.logger.debug(`PATCH /users/${id} called by ${user.sub}`);
     try {
       const updated = await this.usersService.update(id, dto, user.sub);
+      const roleNames = await this.rbacService.getRoleNamesForUser(id);
       this.logger.debug(`PATCH /users/${id} succeeded`);
-      return this.toResponse(updated);
+      return this.toResponse(updated, roleNames);
     } catch (err) {
       this.logger.error(`PATCH /users/${id} failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -173,8 +177,9 @@ export class UsersController {
     this.logger.debug(`PATCH /users/${id}/disable called by ${user.sub}`);
     try {
       const updated = await this.usersService.disable(id, user.sub);
+      const roleNames = await this.rbacService.getRoleNamesForUser(id);
       this.logger.debug(`PATCH /users/${id}/disable succeeded`);
-      return this.toResponse(updated);
+      return this.toResponse(updated, roleNames);
     } catch (err) {
       this.logger.error(`PATCH /users/${id}/disable failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -191,8 +196,9 @@ export class UsersController {
     this.logger.debug(`PATCH /users/${id}/enable called by ${user.sub}`);
     try {
       const updated = await this.usersService.enable(id, user.sub);
+      const roleNames = await this.rbacService.getRoleNamesForUser(id);
       this.logger.debug(`PATCH /users/${id}/enable succeeded`);
-      return this.toResponse(updated);
+      return this.toResponse(updated, roleNames);
     } catch (err) {
       this.logger.error(`PATCH /users/${id}/enable failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -217,7 +223,7 @@ export class UsersController {
     }
   }
 
-  private toSummaryResponse(user: User): UserSummaryResponse {
+  private toSummaryResponse(user: User, roleNames: string[]): UserSummaryResponse {
     return {
       id: user.id,
       username: user.username,
@@ -225,15 +231,16 @@ export class UsersController {
       status: user.status,
       loggingEmail: user.loggingEmail,
       lastLoggingAt: user.lastLoggingAt ? user.lastLoggingAt.toISOString() : null,
+      roleNames,
     };
   }
 
   // Story 1.6 -- async because linkedEmployee is resolved from
   // employees.user_id (the link's single source of truth), not a User column.
-  private async toResponse(user: User): Promise<UserResponse> {
+  private async toResponse(user: User, roleNames: string[]): Promise<UserResponse> {
     const linkedEmployee = await this.employeesService.findByUserId(user.id);
     return {
-      ...this.toSummaryResponse(user),
+      ...this.toSummaryResponse(user, roleNames),
       tenantId: user.tenantId,
       loggingAttempts: user.loggingAttempts,
       lockedUntil: user.lockedUntil ? user.lockedUntil.toISOString() : null,

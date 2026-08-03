@@ -293,21 +293,35 @@ export class UsersService {
     this.logger.debug(`resetPassword called for user ${id} by ${updatedBy}`);
     const user = await this.findOneOrFail(id);
     try {
+      const wasLockedOut = !!(user.lockedUntil && user.lockedUntil > new Date());
       user.passwordHash = await bcrypt.hash(newPassword, PASSWORD_HASH_ROUNDS);
       // Admin-initiated reset always forces a change on next login -- the
       // admin only sets a temporary password, they shouldn't be the one who
       // gets to pick the user's actual ongoing password.
       user.mustChangePassword = true;
+      // A reset is the admin's "get this person unstuck" action -- it must
+      // also clear any active brute-force lockout (see auth.service.ts's
+      // LOGIN_LOCKOUT_THRESHOLD/LOGIN_LOCKOUT_DURATION_MS), or a correctly
+      // reset password still can't be used until the 15-minute lock expires
+      // on its own. Nothing else in this codebase ever clears
+      // loggingAttempts/lockedUntil early -- confirmed by grep, this was a
+      // real gap (no admin-facing "unlock" existed at all before this).
+      // Explicit `null`, not `undefined` -- see the entity's own comment on
+      // why `undefined` silently no-ops here.
+      user.loggingAttempts = 0;
+      user.lockedUntil = null;
       user.updatedBy = updatedBy;
       await this.usersRepo.saveScoped(user);
-      this.logger.debug(`resetPassword succeeded for user ${id}`);
+      this.logger.debug(
+        `resetPassword succeeded for user ${id}${wasLockedOut ? " (also cleared an active lockout)" : ""}`,
+      );
       // Deliberately no password/hash in changes -- only that a reset happened.
       await this.auditLogService.record({
         entityType: AUDIT_ENTITY_TYPE,
         entityId: id,
         action: "update",
         actorId: updatedBy,
-        changes: { passwordReset: true, mustChangePassword: true },
+        changes: { passwordReset: true, mustChangePassword: true, lockoutCleared: wasLockedOut },
       });
     } catch (err) {
       this.logger.error(`resetPassword failed for user ${id}: ${(err as Error).message}`, (err as Error).stack);

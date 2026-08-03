@@ -67,6 +67,8 @@ export function UserDetailsDialog({ user, onClose }: UserDetailsDialogProps) {
           <DetailItem label="Display Name" value={detail.displayName} />
 
           <DetailItem label="Status" value={<UserStatusBadge status={detail.status} />} />
+          <DetailItem label="Roles" value={detail.roleNames.length > 0 ? detail.roleNames.join(", ") : null} />
+
           <DetailItem label="Login Email" value={detail.loggingEmail} />
 
           <DetailItem

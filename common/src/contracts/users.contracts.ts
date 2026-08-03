@@ -9,6 +9,10 @@ export interface UserSummaryResponse {
   status: UserStatus;
   loggingEmail: string;
   lastLoggingAt: string | null;
+  // Role names (not ids) -- this is a display-only field for the Users
+  // table/detail view, resolved server-side via RbacService.getRoleNamesForUser(s).
+  // Always present, empty when the user holds no roles yet.
+  roleNames: string[];
 }
 
 /** Full record — served only by GET /users/:id, gated separately from the list. */

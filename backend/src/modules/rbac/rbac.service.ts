@@ -40,6 +40,28 @@ export class RbacService {
     return names;
   }
 
+  // Batch version of getRoleNamesForUser -- one query for the whole list
+  // (UsersController.findAll's row count) instead of N, same reasoning as
+  // every other bulk picker in this codebase. Every id in userIds is present
+  // in the result (possibly with an empty array), so callers never need an
+  // extra `?? []` fallback.
+  async getRoleNamesForUsers(userIds: string[]): Promise<Record<string, string[]>> {
+    this.logger.debug(`getRoleNamesForUsers called for ${userIds.length} user(s)`);
+    const result: Record<string, string[]> = {};
+    for (const id of userIds) result[id] = [];
+    if (userIds.length === 0) return result;
+
+    const maps = await this.roleUserMapRepo.find({
+      where: { userId: In(userIds) },
+      relations: ["role"],
+    });
+    for (const map of maps) {
+      result[map.userId]!.push(map.role!.name);
+    }
+    this.logger.debug(`getRoleNamesForUsers resolved role names for ${maps.length} mapping(s)`);
+    return result;
+  }
+
   async getPermissionsForUser(userId: string): Promise<string[]> {
     this.logger.debug(`getPermissionsForUser called for user ${userId}`);
     const roleMaps = await this.roleUserMapRepo.find({ where: { userId } });

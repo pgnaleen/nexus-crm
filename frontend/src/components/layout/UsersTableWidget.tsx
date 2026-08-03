@@ -192,6 +192,9 @@ export function UsersTableWidget({
                   Display Name
                 </th>
                 <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  Role
+                </th>
+                <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
                   Status
                 </th>
                 <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
@@ -218,6 +221,13 @@ export function UsersTableWidget({
                 >
                   <td className="border-b border-[var(--color-border)] p-3 text-crm-text">{user.username}</td>
                   <td className="border-b border-[var(--color-border)] p-3 text-crm-text">{user.displayName}</td>
+                  <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
+                    {user.roleNames.length > 0 ? (
+                      user.roleNames.join(", ")
+                    ) : (
+                      <span className="text-[var(--color-text-muted)]">No role assigned</span>
+                    )}
+                  </td>
                   <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
                     <UserStatusBadge status={user.status} />
                   </td>
