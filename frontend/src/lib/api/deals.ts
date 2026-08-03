@@ -4,6 +4,7 @@ import type {
   CreateDealNoteRequest,
   CreateDealRequest,
   CreateDealRoleRequest,
+  DealActivityLogEntryResponse,
   DealDependentsCountResponse,
   DealDocumentResponse,
   DealNoteResponse,
@@ -53,6 +54,10 @@ export function moveDeal(id: string, payload: MoveDealStageRequest): Promise<Dea
 
 export function listDealStageHistory(id: string): Promise<DealStageHistoryResponse[]> {
   return apiFetch<DealStageHistoryResponse[]>(`/deals/${id}/stage-history`);
+}
+
+export function listDealActivityLog(id: string): Promise<DealActivityLogEntryResponse[]> {
+  return apiFetch<DealActivityLogEntryResponse[]>(`/deals/${id}/activity-log`);
 }
 
 export function listDealDocuments(dealId: string): Promise<DealDocumentResponse[]> {

@@ -361,6 +361,7 @@ export function AddDealDialog({
   const { showToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const [documents, setDocuments] = useState<StagedDocument[]>([]);
+  const [editingDocId, setEditingDocId] = useState<string | null>(null);
   const [competitors, setCompetitors] = useState<CompetitorEntry[]>(
     () => deal?.competitors?.map((c) => ({ id: crypto.randomUUID(), name: c.name, details: c.details })) ?? [],
   );
@@ -1897,47 +1898,87 @@ export function AddDealDialog({
                 {documents.map((doc) => (
                   <div
                     key={doc.id}
-                    className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 hover:border-slate-300 transition-colors duration-150"
+                    className="flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white transition-all duration-300"
                   >
-                    <span className="flex flex-shrink-0 text-crm-primary">
-                      <FileIcon size={18} />
-                    </span>
-                    <div className="min-w-0 flex-1 flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={doc.name}
-                        placeholder={doc.file.name}
-                        onChange={(e) => updateStagedDocument(doc.id, "name", e.target.value)}
-                        className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[13.5px] font-semibold text-crm-text focus:outline-none focus:border-[var(--color-crm-primary)]"
-                        aria-label="Document name"
-                      />
-                      <input
-                        type="text"
-                        value={doc.version}
-                        placeholder="1.0"
-                        onChange={(e) => updateStagedDocument(doc.id, "version", e.target.value)}
-                        className="w-20 flex-shrink-0 rounded-md border border-slate-200 bg-white px-2 py-1 text-[13px] text-crm-text focus:outline-none focus:border-[var(--color-crm-primary)]"
-                        aria-label="Document version"
-                      />
-                    </div>
-                    {isEdit && (
+                    <div className="flex items-center gap-3 px-3.5 py-2.5 hover:bg-slate-50 transition-colors duration-150">
+                      <span className="flex flex-shrink-0 text-crm-primary">
+                        <FileIcon size={18} />
+                      </span>
+                      <div className="min-w-0 flex-1 flex flex-col justify-center">
+                        <div className="truncate text-[13.5px] font-semibold text-crm-text">
+                          {doc.name || doc.file.name}
+                        </div>
+                        <div className="text-[11px] text-[var(--color-text-muted)] mt-0.5">
+                          {doc.version ? `v${doc.version}` : "v1.0"}
+                        </div>
+                      </div>
+                      
                       <button
                         type="button"
-                        disabled={isUploadingDocs}
-                        className="flex-shrink-0 rounded-md border-0 bg-crm-primary px-2.5 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-crm-primary-hover disabled:opacity-50"
-                        onClick={() => uploadStagedDocument(doc.id)}
+                        onClick={() => setEditingDocId(editingDocId === doc.id ? null : doc.id)}
+                        className={`flex flex-shrink-0 cursor-pointer rounded-md border-0 p-1.5 transition-colors duration-150 ${
+                          editingDocId === doc.id 
+                            ? "bg-crm-primary-tint text-crm-primary"
+                            : "bg-transparent text-[var(--color-text-muted)] hover:bg-slate-100"
+                        }`}
+                        aria-label="Edit Details"
+                        title="Edit Details"
                       >
-                        Upload
+                        <EditIcon size={14} />
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      className="flex flex-shrink-0 cursor-pointer rounded-md border-0 bg-transparent p-1.5 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#fdf0ee] hover:text-[var(--color-danger)]"
-                      aria-label={`Remove ${doc.file.name}`}
-                      onClick={() => removeDocument(doc.id)}
+
+                      {isEdit && (
+                        <button
+                          type="button"
+                          disabled={isUploadingDocs}
+                          className="flex-shrink-0 rounded-md border-0 bg-crm-primary px-2.5 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-crm-primary-hover disabled:opacity-50"
+                          onClick={() => uploadStagedDocument(doc.id)}
+                        >
+                          Upload
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="flex flex-shrink-0 cursor-pointer rounded-md border-0 bg-transparent p-1.5 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#fdf0ee] hover:text-[var(--color-danger)]"
+                        aria-label={`Remove ${doc.file.name}`}
+                        onClick={() => removeDocument(doc.id)}
+                      >
+                        <TrashIcon size={14} />
+                      </button>
+                    </div>
+
+                    <div
+                      className={`grid transition-all duration-300 ease-in-out ${
+                        editingDocId === doc.id ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                      }`}
                     >
-                      <TrashIcon size={14} />
-                    </button>
+                      <div className="overflow-hidden">
+                        <div className="border-t border-slate-100 bg-slate-50/50 p-3 flex items-start gap-3">
+                          <div className="flex-1 space-y-3">
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Document Name</label>
+                              <input
+                                type="text"
+                                value={doc.name}
+                                placeholder={doc.file.name}
+                                onChange={(e) => updateStagedDocument(doc.id, "name", e.target.value)}
+                                className="w-full rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-crm-text focus:outline-none focus:border-crm-primary focus:shadow-[0_0_0_3px_var(--color-crm-primary-glow)] transition-all"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Version</label>
+                              <input
+                                type="text"
+                                value={doc.version}
+                                placeholder="1.0"
+                                onChange={(e) => updateStagedDocument(doc.id, "version", e.target.value)}
+                                className="w-32 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[13px] text-crm-text focus:outline-none focus:border-crm-primary focus:shadow-[0_0_0_3px_var(--color-crm-primary-glow)] transition-all"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

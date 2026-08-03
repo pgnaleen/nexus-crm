@@ -274,6 +274,54 @@ is this task.
 
 ---
 
+## Task 8 — Deal Activity Log (in the existing History tab)
+
+**What:** Surface "who changed what on this deal, and when" inside the deal's existing History
+tab, alongside the already-built `DealStageHistoryRoadmap` (stage-move-only history) — no new
+tab. Backed entirely by data already being written: `deals.service.ts` already calls
+`AuditLogService.record()` on every deal create/update/delete/status-change, and
+`AuditLogService.findForEntity()` already exists to read a single entity's trail back — but no
+HTTP endpoint exposes it per-entity today, and no frontend component renders it.
+
+**Why:** The only place audit data is currently visible is the tenant-wide Settings → Audits
+page (`backend/src/modules/activity-log/`), which has no per-entity filter and sits behind the
+narrow `AUDIT_LOG_VIEW` permission — a user who can view a deal but isn't an audit-log
+administrator has no way to see that deal's own edit history today, even though the data already
+exists.
+
+**How:**
+
+- **Backend:** add `findForEntityWithActors(entityType, entityId)` to `AuditLogService`
+  (`backend/src/core/audit-log/audit-log.service.ts`), alongside — not replacing — the existing
+  `findForEntity` (which `PriorityTasksService.getHistory()` depends on). Mirror the inline
+  `leftJoin("users", "actor", "actor.id = al.actor_id")` pattern already used in
+  `activity-log.service.ts:141-162`, ordered `occurredAt DESC` (newest-first). Add
+  `GET /deals/:id/activity-log` to `deals.controller.ts`, gated by `PERMISSIONS.DEALS_VIEW` (the
+  same permission the deal-detail GET itself uses) — **not** `AUDIT_LOG_VIEW`, since this is
+  deal-scoped data, not the system-wide audit page. Follow the standing deep-debug-logging rule
+  (entry/branch/result-count + try/catch/rethrow) and update
+  `_bmad-output/2-current-work/api-endpoint-registry.md` in the same change.
+- **Frontend:** add `listDealActivityLog(dealId)` next to `listDealStageHistory`. New
+  `DealActivityLog.tsx` component in `frontend/src/components/funnel/`, structured exactly like
+  `DealStageHistoryRoadmap.tsx` (self-contained client component, fetch-on-`dealId`-change,
+  loading/empty/error states). Renders an action badge (Created/Updated/Deleted/Status Changed) +
+  timestamp + actor name per entry; `update` entries list each changed field as
+  `Label: old → new` using a small field-key → display-label map (unmapped keys fall back to the
+  raw key, never hidden). Wired into `ViewDealDialog.tsx`'s existing `activeTab === "history"`
+  block, directly below `<DealStageHistoryRoadmap dealId={dealId} />`, inside the same fixed-height
+  scroll container per the multi-tab-dialog sizing rule (no second scroll container). New
+  `dealActivityLog` i18n namespace in `en.json` — no hardcoded strings.
+- **Scope decisions locked in:** raw old/new values are shown as-is (ids, not resolved names) —
+  FK-to-name resolution of changed *values* is explicitly deferred, not part of this task. Stage
+  moves stay in `DealStageHistoryRoadmap` as their own section; this task does not merge the two
+  into one timeline (they're already tracked in two different stores per the known
+  `deal_*_stage_history` split noted elsewhere in this doc).
+
+**Status:** Real gap — no per-entity read endpoint or UI exists yet, though the underlying
+`audit_logs` writes and the `findForEntity` read method are already in place. Not started.
+
+---
+
 ## Already done — no work needed
 
 **Deal stage move persistence + 30-second undo grace period + stage history.** Verified against

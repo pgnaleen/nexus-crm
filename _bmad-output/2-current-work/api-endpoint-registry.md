@@ -183,6 +183,12 @@ non-primary assignments via `assign`, plus the dedicated `setPrimary` promotion 
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | GET | `/deals/:dealId/stage-history` | RBAC | `DEALS_VIEW` | List every Sub Stage + Main Stage move recorded for a deal. | none | `DealStageHistoryResponse[]` | `findAll` → `deal-stage-history.service.ts::listForDeal` | `DealStageHistoryDialog.tsx`, `DealStageHistoryRoadmap.tsx` | ✅ | **2026-07-22**: added entry/result debug logging. Deliberately **no** `audit_logs` entry for this service's own writes (`recordSubStageMove`/`recordMainStageMove`) — the history rows themselves already are the permanent audit trail for stage moves; a second `audit_logs` row recording "a history row was written" would be circular. |
 
+## Deal Activity Log (`deal-activity-log.controller.ts`, route `deals/:dealId/activity-log`)
+
+| # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | GET | `/deals/:dealId/activity-log` | RBAC | `DEALS_VIEW` | Read the `audit_logs` trail already written for this deal (create/update/delete/status-change), newest-first, with the actor's display name resolved via a single `LEFT JOIN`. | none | `DealActivityLogEntryResponse[]` | `findAll` → `audit-log.service.ts::findForEntityWithActors` | `DealActivityLog.tsx` (History tab, `ViewDealDialog.tsx`) | ✅ | New (Task 8, `plan-funnel-deal-management.md`). Gated on `DEALS_VIEW`, not `AUDIT_LOG_VIEW` — this is deal-scoped data, not the tenant-wide Settings → Audits page. Reuses the same `audit_logs` rows `deals.service.ts` already writes; adds no new write path. `findForEntityWithActors` is a separate method from `AuditLogService.findForEntity()` (used by `PriorityTasksService.getHistory()`) — kept separate rather than changed, since that one is oldest-first with no actor-name join. |
+
 ## Deal Notes (`backend/src/modules/deals/deal-notes.controller.ts`, route `deals/:dealId/notes`)
 
 New 2026-07-21, alongside the Add Deal backend build — the Notes tab's comment thread. Mirrors

@@ -166,6 +166,15 @@ export interface DealStageHistoryResponse {
   note: string | null;
 }
 
+export interface DealActivityLogEntryResponse {
+  id: string;
+  action: "insert" | "update" | "delete";
+  actorId: string | null;
+  actorName: string | null;
+  occurredAt: string;
+  changes: Record<string, unknown> | null;
+}
+
 export interface CreateDealNoteRequest {
   text: string;
 }

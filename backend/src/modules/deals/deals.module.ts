@@ -31,6 +31,7 @@ import { DealRoleAssignmentsService } from "./deal-role-assignments.service";
 import { DealTeamController } from "./deal-team.controller";
 import { DealStageHistoryController } from "./deal-stage-history.controller";
 import { DealStageHistoryService } from "./deal-stage-history.service";
+import { DealActivityLogController } from "./deal-activity-log.controller";
 import { DealTenderDetailsController } from "./deal-tender-details.controller";
 import { DealTenderDetailsRepository } from "./deal-tender-details.repository";
 import { DealTenderDetailsService } from "./deal-tender-details.service";
@@ -66,6 +67,7 @@ import { DealsService } from "./deals.service";
     DealRolesController,
     DealTeamController,
     DealStageHistoryController,
+    DealActivityLogController,
     DealTenderDetailsController,
   ],
   providers: [

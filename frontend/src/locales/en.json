@@ -497,6 +497,45 @@
       "rawData": "Raw data"
     }
   },
+  "dealActivityLog": {
+    "heading": "Activity Log",
+    "loading": "Loading activity…",
+    "empty": "No activity recorded yet.",
+    "errors": {
+      "loadFailed": "Failed to load activity log"
+    },
+    "actorUnknown": "Unknown user",
+    "actionVerbs": {
+      "insert": "created this deal",
+      "update": "updated this deal",
+      "delete": "deleted this deal"
+    },
+    "showMoreChanges": "+{count} more change{plural}",
+    "noValue": "—",
+    "fields": {
+      "name": "Deal Name",
+      "dealType": "Deal Type",
+      "currency": "Currency",
+      "companyId": "Company",
+      "primaryContactId": "Primary Contact",
+      "contactId": "Contact",
+      "sourceId": "Deal Source",
+      "mainStageId": "Main Stage",
+      "currentStageId": "Sub Stage",
+      "departmentId": "Department",
+      "dealCountry": "Deal Country",
+      "customerPainPoint": "Customer Pain Point",
+      "product": "Product",
+      "services": "Services",
+      "estimatedValue": "Estimated Value",
+      "internalCosts": "Internal Costs",
+      "externalCosts": "External Costs",
+      "expectedCloseDate": "Expected Close Date",
+      "competitors": "Competitors",
+      "isTender": "Is Tender",
+      "status": "Status"
+    }
+  },
   "relationshipTypes": {
     "dialog": {
       "systemRoleLabel": "System Role",

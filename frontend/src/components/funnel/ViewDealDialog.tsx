@@ -21,6 +21,7 @@ import { BuildingIcon, EditIcon, ExternalLinkIcon, FileIcon, FunnelIcon, LegalIc
 import { useAlert, useCascadeDeleteConfirm, useConfirm } from "@/components/providers/DialogProvider";
 import { computeCosting, formatLkr, formatNoteTime, formatPercent, getInitials } from "@/lib/deals/deal-display";
 import { DealStageHistoryRoadmap } from "./DealStageHistoryRoadmap";
+import { DealActivityLog } from "./DealActivityLog";
 
 const TEXTAREA_CLASS =
   "w-full resize-y rounded-lg border border-[var(--color-border)] px-3 py-2.5 font-[inherit] text-sm transition-colors duration-150 focus:outline-none focus:border-[var(--color-crm-primary)] focus:shadow-[0_0_0_3px_var(--color-crm-primary-glow)]";
@@ -754,6 +755,7 @@ export function ViewDealDialog({
       {activeTab === "history" && (
         <div className="h-[min(620px,calc(100vh-250px))] overflow-y-auto pr-1">
           <DealStageHistoryRoadmap dealId={dealId} />
+          <DealActivityLog dealId={dealId} />
         </div>
       )}
 

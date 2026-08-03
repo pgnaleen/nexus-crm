@@ -23,7 +23,7 @@ import { DealRoleAssignment } from "./entities/deal-role-assignment.entity";
 import { DealStageHistoryService } from "./deal-stage-history.service";
 import { DealsRepository } from "./deals.repository";
 
-const AUDIT_ENTITY_TYPE = "deal";
+export const AUDIT_ENTITY_TYPE = "deal";
 
 @Injectable()
 export class DealsService {

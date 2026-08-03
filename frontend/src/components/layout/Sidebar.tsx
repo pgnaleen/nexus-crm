@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { NexusLogo } from "@/components/brand/NexusLogo";
 import { ChevronDownIcon, ChevronRightIcon, DashboardIcon, DealRegistrationIcon, FinanceIcon, FunnelIcon, LeadsIcon, LegalIcon, PriorityIcon, SettingsIcon, SlidersIcon, UsersGroupIcon, UserIcon, ActivityIcon } from "@/components/ui/icons";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
+import { hasAnyPermissionForPrefix } from "@/lib/permissions";
 import { PERMISSIONS } from "@orelia/common";
 import type { RelationshipTypeResponse, MainStageResponse } from "@orelia/common";
 
@@ -14,16 +15,6 @@ interface SidebarProps {
   permissions: string[];
   relationshipTypes: RelationshipTypeResponse[];
   mainStages: MainStageResponse[];
-}
-
-// Items are gated by resource *prefix* (e.g. "department"), not a specific permission key --
-// a user sees the section if they hold ANY permission under that prefix (view/create/update/
-// delete, or manage while it still exists on some resources). This mirrors the same grouping
-// logic RolePermissionsDialog already uses, and means this file never needs editing again just
-// because a resource's specific permission set changes (e.g. Manage being removed).
-function hasAnyPermissionForPrefix(permissions: string[], prefix: string | string[]): boolean {
-  const prefixes = Array.isArray(prefix) ? prefix : [prefix];
-  return prefixes.some((p) => permissions.some((permission) => permission.startsWith(`${p}:`)));
 }
 
 // Below this width the sidebar auto-collapses to the icon-only rail (unless

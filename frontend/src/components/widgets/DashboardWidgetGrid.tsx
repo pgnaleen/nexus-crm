@@ -11,11 +11,9 @@ import { Dialog } from "@/components/ui/Dialog";
 // Layout + which widgets are currently visible both persist to localStorage only for now, not
 // the backend -- this is still a dummy-data mock phase (per the project's mock-first workflow).
 //
-// Tying each widget to whichever section/permission its data belongs to (so a viewer only ever
-// sees widgets for sections they actually have access to) is real permission-driven work for a
-// later stage -- no per-widget permission concept exists yet, so the picker panel below lists
-// every widget to everyone. That's the one piece deliberately not built yet; the panel mechanism
-// itself is real, not deferred.
+// Permission filtering (which widgets a viewer is even offered) now happens one layer up, in
+// dashboard/page.tsx via widget-registry.tsx -- this component only ever sees the `widgets` map
+// it's handed, which is already filtered to what the signed-in user has access to.
 const LAYOUT_STORAGE_KEY = "orelia-dashboard-layout-v4";
 const VISIBLE_STORAGE_KEY = "orelia-dashboard-visible-v1";
 
@@ -184,10 +182,6 @@ export function DashboardWidgetGrid({ widgets, defaultLayout }: DashboardWidgetG
       </div>
 
       <Dialog open={isPanelOpen} title="Add widgets" onClose={() => setIsPanelOpen(false)} maxWidth="420px">
-        <p className="mb-3 text-[13px] text-[var(--color-text-muted)]">
-          Every widget is listed here for now — showing only the ones your access allows is a
-          later step, not built yet.
-        </p>
         <div className="max-h-[60vh] overflow-y-auto">
           {hiddenKeys.length === 0 ? (
             <p className="text-[13px] text-[var(--color-text-muted)]">
