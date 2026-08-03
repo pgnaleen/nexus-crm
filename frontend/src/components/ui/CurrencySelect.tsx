@@ -1,12 +1,43 @@
 "use client";
 
+import * as Flags from "country-flag-icons/react/3x2";
 import { CURRENCIES, formatCurrencyLabel } from "@/lib/currencies";
 import { SearchSelect, type SearchSelectOption } from "./SearchSelect";
 
-const CURRENCY_OPTIONS: SearchSelectOption[] = CURRENCIES.map((code) => ({
-  value: code,
-  label: formatCurrencyLabel(code),
-}));
+const CURRENCY_TO_COUNTRY: Record<string, string> = {
+  USD: "US",
+  EUR: "EU",
+  GBP: "GB",
+  LKR: "LK",
+  INR: "IN",
+  AUD: "AU",
+  CAD: "CA",
+  SGD: "SG",
+  JPY: "JP",
+  CNY: "CN",
+  CHF: "CH",
+  AED: "AE",
+  SAR: "SA",
+  QAR: "QA",
+  OMR: "OM",
+  BHD: "BH",
+  KWD: "KW",
+  NZD: "NZ",
+  HKD: "HK",
+  ZAR: "ZA",
+};
+
+const CURRENCY_OPTIONS: SearchSelectOption[] = CURRENCIES.map((code) => {
+  const countryCode = CURRENCY_TO_COUNTRY[code];
+  const Flag = countryCode ? Flags[countryCode as keyof typeof Flags] : undefined;
+  return {
+    value: code,
+    label: formatCurrencyLabel(code),
+    icon: Flag ? (
+      <Flag aria-hidden="true" className="w-5 shrink-0 rounded-[2px]" />
+    ) : undefined,
+  };
+});
 
 interface CurrencySelectProps {
   label?: string;

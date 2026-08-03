@@ -322,9 +322,9 @@ export function AddDealDialog({
     product: deal?.product ?? "",
     services: deal?.services ?? "",
     currency: deal?.currency ?? "USD",
-    projectValue: deal?.estimatedValue != null ? String(deal.estimatedValue) : "",
-    internalCosts: deal?.internalCosts != null ? String(deal.internalCosts) : "",
-    externalCosts: deal?.externalCosts != null ? String(deal.externalCosts) : "",
+    projectValue: deal?.estimatedValue != null ? Number(deal.estimatedValue).toLocaleString("en-US") : "",
+    internalCosts: deal?.internalCosts != null ? Number(deal.internalCosts).toLocaleString("en-US") : "",
+    externalCosts: deal?.externalCosts != null ? Number(deal.externalCosts).toLocaleString("en-US") : "",
     salesPersonUserId: deal?.primarySalesPersonUserId ?? "",
     // Tender fields aren't on DealResponse -- fetched separately below and
     // merged in once loaded (edit mode only, when the deal is a tender).
@@ -412,8 +412,8 @@ export function AddDealDialog({
           tenderReference: row.tenderReference,
           issuingBody: row.issuingBody,
           bidBondRequired: row.bidBondRequired,
-          bidBondAmount: row.bidBondAmount != null ? String(row.bidBondAmount) : "",
-          emdAmount: row.emdAmount != null ? String(row.emdAmount) : "",
+          bidBondAmount: row.bidBondAmount != null ? Number(row.bidBondAmount).toLocaleString("en-US") : "",
+          emdAmount: row.emdAmount != null ? Number(row.emdAmount).toLocaleString("en-US") : "",
           submissionMode: row.submissionMode ?? "",
           evaluationType: row.evaluationType ?? "",
         }));
@@ -436,7 +436,21 @@ export function AddDealDialog({
   }, [values.isTender, activeTab]);
 
   function setField<K extends keyof DetailsFormState>(field: K, value: DetailsFormState[K]) {
-    setValues((current) => ({ ...current, [field]: value }));
+    let finalValue = value;
+    if (
+      typeof value === "string" &&
+      ["bidBondAmount", "emdAmount", "projectValue", "internalCosts", "externalCosts"].includes(field)
+    ) {
+      const clean = value.replace(/[^\d.]/g, "");
+      if (clean === "") {
+        finalValue = "" as DetailsFormState[K];
+      } else {
+        const [integer, decimal] = clean.split(".");
+        const formattedInteger = integer ? Number(integer).toLocaleString("en-US") : "";
+        finalValue = (decimal !== undefined ? `${formattedInteger}.${decimal}` : formattedInteger) as DetailsFormState[K];
+      }
+    }
+    setValues((current) => ({ ...current, [field]: finalValue }));
   }
 
   function handleOtherPartyChange(value: string) {
@@ -636,8 +650,8 @@ export function AddDealDialog({
       tenderReference: values.tenderReference.trim(),
       issuingBody: values.issuingBody.trim(),
       bidBondRequired: values.bidBondRequired,
-      bidBondAmount: values.bidBondAmount.trim() ? Number(values.bidBondAmount) : undefined,
-      emdAmount: values.emdAmount.trim() ? Number(values.emdAmount) : undefined,
+      bidBondAmount: values.bidBondAmount.trim() ? Number(values.bidBondAmount.replace(/,/g, "")) : undefined,
+      emdAmount: values.emdAmount.trim() ? Number(values.emdAmount.replace(/,/g, "")) : undefined,
       submissionMode: values.submissionMode || undefined,
       evaluationType: values.evaluationType || undefined,
     };
@@ -667,9 +681,9 @@ export function AddDealDialog({
           expectedCloseDate: values.expectedCloseDate || undefined,
           product: values.product || undefined,
           services: values.services || undefined,
-          estimatedValue: values.projectValue ? Number(values.projectValue) : undefined,
-          internalCosts: values.internalCosts ? Number(values.internalCosts) : undefined,
-          externalCosts: values.externalCosts ? Number(values.externalCosts) : undefined,
+          estimatedValue: values.projectValue ? Number(values.projectValue.replace(/,/g, "")) : undefined,
+          internalCosts: values.internalCosts ? Number(values.internalCosts.replace(/,/g, "")) : undefined,
+          externalCosts: values.externalCosts ? Number(values.externalCosts.replace(/,/g, "")) : undefined,
           competitors:
             competitors.length > 0 ? competitors.map((c) => ({ name: c.name, details: c.details })) : undefined,
         });
@@ -748,9 +762,9 @@ export function AddDealDialog({
         expectedCloseDate: values.expectedCloseDate || undefined,
         product: values.product || undefined,
         services: values.services || undefined,
-        estimatedValue: values.projectValue ? Number(values.projectValue) : undefined,
-        internalCosts: values.internalCosts ? Number(values.internalCosts) : undefined,
-        externalCosts: values.externalCosts ? Number(values.externalCosts) : undefined,
+        estimatedValue: values.projectValue ? Number(values.projectValue.replace(/,/g, "")) : undefined,
+        internalCosts: values.internalCosts ? Number(values.internalCosts.replace(/,/g, "")) : undefined,
+        externalCosts: values.externalCosts ? Number(values.externalCosts.replace(/,/g, "")) : undefined,
         competitors: competitors.length > 0
           ? competitors.map((c) => ({ name: c.name, details: c.details }))
           : undefined,

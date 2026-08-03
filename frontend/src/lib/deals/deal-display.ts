@@ -19,9 +19,13 @@ export function computeCosting(
   internalCosts: number | string,
   externalCosts: number | string,
 ): CostingSummary {
-  const value = Number(projectValue) || 0;
-  const internal = Number(internalCosts) || 0;
-  const external = Number(externalCosts) || 0;
+  const clean = (val: number | string) => {
+    if (typeof val === "number") return val;
+    return Number(val.replace(/,/g, "")) || 0;
+  };
+  const value = clean(projectValue);
+  const internal = clean(internalCosts);
+  const external = clean(externalCosts);
   const totalCost = internal + external;
   const profit = value - totalCost;
   const markupPercent = totalCost > 0 ? (profit / totalCost) * 100 : 0;
