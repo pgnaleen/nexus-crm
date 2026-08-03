@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { FunnelSourceTabs } from "@/components/funnel/FunnelSourceTabs";
 import { getServerSession } from "@/lib/auth/session";
 import { listDealSources } from "@/lib/deal-sources/server";
-import { listDeals, listDealPartnerLinks } from "@/lib/deals/server";
+import { listDeals, listDealPartnerLinks, listDealRoles } from "@/lib/deals/server";
 import { listMainStages } from "@/lib/main-stages/server";
 import {
   listCompaniesPicker,
@@ -12,6 +12,7 @@ import {
   listDepartmentsPicker,
   listEmployeesPicker,
   listIndustries,
+  listUsersPicker,
 } from "@/lib/pickers/server";
 import { listRelationshipTypes } from "@/lib/relationship-types/server";
 import { listSubStages } from "@/lib/sub-stages/server";
@@ -36,6 +37,8 @@ export default async function MainStageDealsPage({
     customerParties,
     partnerParties,
     partnerLinks,
+    dealRoles,
+    users,
   ] = await Promise.all([
     getServerSession(params.tenant),
     listDealSources(),
@@ -51,6 +54,8 @@ export default async function MainStageDealsPage({
     listDealCustomerParties(),
     listDealPartnerParties(),
     listDealPartnerLinks(),
+    listDealRoles(),
+    listUsersPicker(),
   ]);
 
   const mainStage = (mainStages ?? []).find((stage) => stage.id === params.id);
@@ -86,6 +91,8 @@ export default async function MainStageDealsPage({
       customerParties={customerParties ?? { configured: false, companies: [], contacts: [] }}
       partnerParties={partnerParties ?? { configured: false, companies: [], contacts: [] }}
       partnerLinks={partnerLinks ?? []}
+      dealRoles={dealRoles ?? []}
+      users={users ?? []}
       initialDeals={deals ?? []}
       title={mainStage.name}
       subtitle={

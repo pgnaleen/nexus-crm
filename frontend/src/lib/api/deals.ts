@@ -1,12 +1,16 @@
 import type {
+  AssignDealRoleRequest,
   CreateDealDocumentRequest,
   CreateDealNoteRequest,
   CreateDealRequest,
+  CreateDealRoleRequest,
   DealDependentsCountResponse,
   DealDocumentResponse,
   DealNoteResponse,
   DealPartnerResponse,
   DealResponse,
+  DealRoleAssignmentResponse,
+  DealRoleResponse,
   DealStageHistoryResponse,
   DealTenderDetailsResponse,
   MoveDealStageRequest,
@@ -122,6 +126,36 @@ export function addDealPartnerContact(dealId: string, contactId: string): Promis
 
 export function removeDealPartner(dealId: string, partnerId: string): Promise<{ success: true }> {
   return apiFetch<{ success: true }>(`/deals/${dealId}/partners/${partnerId}`, { method: "DELETE" });
+}
+
+export function listDealRoles(): Promise<DealRoleResponse[]> {
+  return apiFetch<DealRoleResponse[]>("/deal-roles");
+}
+
+export function createDealRole(payload: CreateDealRoleRequest): Promise<DealRoleResponse> {
+  return apiFetch<DealRoleResponse>("/deal-roles", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function listDealTeam(dealId: string): Promise<DealRoleAssignmentResponse[]> {
+  return apiFetch<DealRoleAssignmentResponse[]>(`/deals/${dealId}/team`);
+}
+
+export function assignDealRole(dealId: string, payload: AssignDealRoleRequest): Promise<DealRoleAssignmentResponse> {
+  return apiFetch<DealRoleAssignmentResponse>(`/deals/${dealId}/team`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function removeDealRoleAssignment(dealId: string, assignmentId: string): Promise<{ success: true }> {
+  return apiFetch<{ success: true }>(`/deals/${dealId}/team/${assignmentId}`, { method: "DELETE" });
+}
+
+export function setPrimaryDealRoleAssignment(
+  dealId: string,
+  assignmentId: string,
+): Promise<DealRoleAssignmentResponse> {
+  return apiFetch<DealRoleAssignmentResponse>(`/deals/${dealId}/team/${assignmentId}/primary`, { method: "PATCH" });
 }
 
 export function listDealNotes(dealId: string): Promise<DealNoteResponse[]> {

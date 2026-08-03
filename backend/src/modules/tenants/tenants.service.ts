@@ -3,6 +3,7 @@ import { InjectDataSource, InjectRepository } from "@nestjs/typeorm";
 import { SystemRole } from "@orelia/common";
 import { DataSource, Repository } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
+import { DealRole } from "../deals/entities/deal-role.entity";
 import { RelationshipType } from "../relationship-types/entities/relationship-type.entity";
 import { CreateTenantDto } from "./dto/create-tenant.dto";
 import { UpdateTenantDto } from "./dto/update-tenant.dto";
@@ -60,9 +61,14 @@ export class TenantsService {
 
   // Seeds two default Relationship Type rows (Customer/Partner, pre-flagged
   // via systemRole) so a brand-new tenant's Add Deal Customer/Partner pickers
-  // aren't empty on day one. Purely an onboarding convenience -- the tenant
-  // can rename, unflag, or delete either row at any time; nothing here (or
-  // anywhere else in the app) special-cases these two rows as protected.
+  // aren't empty on day one, plus the three default Deal Team roles (Sales
+  // Person/Pre-Sales/PMO -- see DealRole/DealsService.create()). Purely an
+  // onboarding convenience for the relationship types -- the tenant can
+  // rename, unflag, or delete either of those rows at any time. The Sales
+  // Person role is different: DealsService.create() requires exactly one
+  // tenant role with requiresPrimaryOnCreate=true to exist, so every tenant
+  // must have this row from creation onward (SeedDealRolesAndBackfill
+  // Assignments1784700000033 backfilled it for tenants that pre-date this).
   // Wrapped in the same transaction as the tenant insert so a seeding failure
   // rolls back the tenant too, rather than leaving it half-provisioned.
   async create(dto: CreateTenantDto, createdBy: string): Promise<Tenant> {
@@ -81,9 +87,20 @@ export class TenantsService {
           typeRepo.create({ tenantId: savedTenant.id, name: "Partner", systemRole: SystemRole.Partner, createdBy }),
         );
 
+        const roleRepo = manager.getRepository(DealRole);
+        await roleRepo.save(
+          roleRepo.create({ tenantId: savedTenant.id, name: "Sales Person", requiresPrimaryOnCreate: true, createdBy }),
+        );
+        await roleRepo.save(
+          roleRepo.create({ tenantId: savedTenant.id, name: "Pre-Sales", requiresPrimaryOnCreate: false, createdBy }),
+        );
+        await roleRepo.save(
+          roleRepo.create({ tenantId: savedTenant.id, name: "PMO", requiresPrimaryOnCreate: false, createdBy }),
+        );
+
         return savedTenant;
       });
-      this.logger.debug(`create succeeded for tenant ${saved.id} (seeded default Customer/Partner types)`);
+      this.logger.debug(`create succeeded for tenant ${saved.id} (seeded default relationship types + deal roles)`);
       await this.auditLogService.record({
         entityType: AUDIT_ENTITY_TYPE,
         entityId: saved.id,

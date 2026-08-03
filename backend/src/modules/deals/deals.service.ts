@@ -1,8 +1,9 @@
-import { DealStatus, DocumentOwnerType } from "@orelia/common";
+import { DealStatus, DocumentOwnerType, UserStatus } from "@orelia/common";
 import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
+import { TenantContextService } from "../../core/tenant";
 import { CompaniesRepository } from "../companies/companies.repository";
 import { ContactsRepository } from "../contacts/contacts.repository";
 import { DealSourcesRepository } from "../deal-sources/deal-sources.repository";
@@ -10,13 +11,15 @@ import { MainStagesService } from "../deal-stages/main-stages.service";
 import { SubStagesService } from "../deal-stages/sub-stages.service";
 import { DepartmentsRepository } from "../departments/departments.repository";
 import { Document } from "../documents/entities/document.entity";
-import { EmployeesRepository } from "../employees/employees.repository";
+import { User } from "../users/entities/user.entity";
 import { CreateDealDto } from "./dto/create-deal.dto";
 import { MoveDealDto } from "./dto/move-deal.dto";
 import { UpdateDealDto } from "./dto/update-deal.dto";
 import { Deal } from "./entities/deal.entity";
 import { DealNote } from "./entities/deal-note.entity";
 import { DealPartnersMap } from "./entities/deal-partners-map.entity";
+import { DealRole } from "./entities/deal-role.entity";
+import { DealRoleAssignment } from "./entities/deal-role-assignment.entity";
 import { DealStageHistoryService } from "./deal-stage-history.service";
 import { DealsRepository } from "./deals.repository";
 
@@ -36,7 +39,7 @@ export class DealsService {
     private readonly contactsRepo: ContactsRepository,
     private readonly dealSourcesRepo: DealSourcesRepository,
     private readonly departmentsRepo: DepartmentsRepository,
-    private readonly employeesRepo: EmployeesRepository,
+    private readonly tenantContext: TenantContextService,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
@@ -44,10 +47,11 @@ export class DealsService {
   // belonging to another tenant (or a soft-deleted row) would otherwise be
   // accepted silently and then resolved back into the response via
   // findOneWithRelations's leftJoinAndSelects -- leaking that other
-  // tenant's company/contact/employee/department/source name. Only checks
-  // fields actually present on the given dto, so it works for both the
-  // create dto (all optional except ownerId) and the update dto (all
-  // optional).
+  // tenant's company/contact/department/source name. Only checks fields
+  // actually present on the given dto, so it works for both the create dto
+  // and the update dto (all optional). salesPersonUserId is validated
+  // separately in create() -- it needs a tenant + active-user check, not a
+  // plain findOneScoped against one of these repos.
   private async validateReferences(
     dto: Partial<CreateDealDto> | Partial<UpdateDealDto>,
   ): Promise<void> {
@@ -64,12 +68,6 @@ export class DealsService {
         this.dealSourcesRepo.findOneScoped({ where: { id: dto.sourceId } })],
       ["departmentId", dto.departmentId, () =>
         this.departmentsRepo.findOneScoped({ where: { id: dto.departmentId } })],
-      ["ownerId", dto.ownerId, () =>
-        this.employeesRepo.findOneScoped({ where: { id: dto.ownerId } })],
-      ["preSalesPersonId", dto.preSalesPersonId, () =>
-        this.employeesRepo.findOneScoped({ where: { id: dto.preSalesPersonId } })],
-      ["pmoId", dto.pmoId, () =>
-        this.employeesRepo.findOneScoped({ where: { id: dto.pmoId } })],
     ];
 
     for (const [field, value, load] of checks) {
@@ -143,6 +141,34 @@ export class DealsService {
 
     await this.validateReferences(dto);
 
+    const tenantId = this.tenantContext.getTenantId();
+
+    // salesPersonUserId is a User id, not an Employee id (see
+    // DealRoleAssignment's own comment) -- validated here rather than in
+    // validateReferences() since it needs an active-status check too, not
+    // just existence.
+    const salesPersonUser = await this.dataSource.getRepository(User).findOne({
+      where: { id: dto.salesPersonUserId, tenantId, status: UserStatus.Active },
+    });
+    if (!salesPersonUser) {
+      this.logger.debug(`create: salesPersonUserId=${dto.salesPersonUserId} does not resolve to an active user for this tenant`);
+      throw new NotFoundException("salesPersonUserId does not reference a valid record");
+    }
+
+    // Every tenant is seeded with exactly one requires-primary-on-create
+    // role ("Sales Person") -- see SeedDealRolesAndBackfillAssignments and
+    // TenantsService.create(). Not finding one is a provisioning bug, not a
+    // caller error.
+    const salesPersonRole = await this.dataSource.getRepository(DealRole).findOne({
+      where: { tenantId, requiresPrimaryOnCreate: true },
+    });
+    if (!salesPersonRole) {
+      this.logger.error(`create: no requires-primary-on-create deal role configured for tenant ${tenantId}`);
+      throw new Error("No Sales Person role configured for this tenant");
+    }
+
+    const { salesPersonUserId, ...dealFields } = dto;
+
     // dealCode is derived from a plain count with no lock, so two concurrent
     // creates in the same tenant can race for the same code. The DB has a
     // unique (tenant_id, deal_code) index to catch that if it happens; on a
@@ -155,28 +181,45 @@ export class DealsService {
         const dealCode = `DEAL-${String(count + 1).padStart(5, "0")}`;
         this.logger.debug(`Assigned deal code ${dealCode} (attempt ${attempt})`);
 
-        // createScoped() builds a plain new entity with no relations attached
-        // (unlike the loaded-with-relations entities used for mutation
-        // elsewhere in this service), so it isn't exposed to the save() bug
-        // described above.
-        const deal = this.dealsRepo.createScoped({
-          ...dto,
-          dealCode,
-          status: DealStatus.Open,
-          createdBy: userId,
+        // The deal row and its mandatory primary Sales Person assignment are
+        // inserted together in one transaction -- a deal must never exist
+        // even momentarily with no primary Sales Person.
+        const dealId = await this.dataSource.transaction(async (manager) => {
+          const dealRepo = manager.getRepository(Deal);
+          const assignmentRepo = manager.getRepository(DealRoleAssignment);
+
+          const deal = dealRepo.create({
+            ...dealFields,
+            tenantId,
+            dealCode,
+            status: DealStatus.Open,
+            createdBy: userId,
+          });
+          await dealRepo.save(deal);
+
+          await assignmentRepo.save(
+            assignmentRepo.create({
+              dealId: deal.id,
+              roleId: salesPersonRole.id,
+              userId: salesPersonUserId,
+              isPrimary: true,
+              createdById: userId,
+            }),
+          );
+
+          return deal.id;
         });
-        await this.dealsRepo.saveScoped(deal);
-        this.logger.debug(`create succeeded for deal ${deal.id}`);
+        this.logger.debug(`create succeeded for deal ${dealId}`);
 
         await this.auditLogService.record({
           entityType: AUDIT_ENTITY_TYPE,
-          entityId: deal.id,
+          entityId: dealId,
           action: "insert",
           actorId: userId,
           changes: { ...dto, dealCode },
         });
 
-        return await this.findOneOrFail(deal.id);
+        return await this.findOneOrFail(dealId);
       } catch (err) {
         const isDealCodeConflict = (err as { code?: string; driverError?: { code?: string } }).code === "23505"
           || (err as { code?: string; driverError?: { code?: string } }).driverError?.code === "23505";

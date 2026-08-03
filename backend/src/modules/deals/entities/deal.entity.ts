@@ -7,7 +7,6 @@ import { DealSource } from "../../deal-sources/entities/deal-source.entity";
 import { MainStage } from "../../deal-stages/entities/main-stage.entity";
 import { SubStage } from "../../deal-stages/entities/sub-stage.entity";
 import { Department } from "../../departments/entities/department.entity";
-import { Employee } from "../../employees/entities/employee.entity";
 
 export interface CompetitorEntry {
   name: string;
@@ -57,36 +56,16 @@ export class Deal extends AuditedTenantEntity {
   @JoinColumn({ name: "source_id" })
   source?: DealSource;
 
-  @Column({ type: "uuid" })
-  ownerId!: string;
-
-  // No onDelete action (defaults to RESTRICT-like NO ACTION) — ownerId is
-  // required, so deleting an Employee who still owns deals must be blocked,
-  // forcing reassignment first, rather than leaving a NOT NULL column with
-  // nothing to reference.
-  @ManyToOne(() => Employee)
-  @JoinColumn({ name: "owner_id" })
-  owner?: Employee;
-
-  @Column({ type: "uuid", nullable: true })
-  preSalesPersonId?: string;
-
-  @ManyToOne(() => Employee, { nullable: true, onDelete: "SET NULL" })
-  @JoinColumn({ name: "pre_sales_person_id" })
-  preSalesPerson?: Employee;
-
-  @Column({ type: "uuid", nullable: true })
-  pmoId?: string;
-
-  @ManyToOne(() => Employee, { nullable: true, onDelete: "SET NULL" })
-  @JoinColumn({ name: "pmo_id" })
-  pmo?: Employee;
+  // Sales Person / Pre-Sales / PMO are no longer columns here -- they live in
+  // deal_role_assignments (see DealRole/DealRoleAssignment), each a row
+  // keyed on the tenant's deal_roles + a User id. Sales Person is mandatory
+  // (exactly one primary assignment, enforced by DealsService.create()'s
+  // transaction), the rest are optional and multi-person.
 
   // Required -- every deal always belongs to a Main Stage, whether or not
-  // that Main Stage has any Sub Stages configured. No onDelete action, same
-  // "must reassign before delete" reasoning as ownerId below: deleting a
-  // Main Stage that still has deals sitting directly in it (no Sub Stage)
-  // must be blocked, not silently null this out.
+  // that Main Stage has any Sub Stages configured. No onDelete action --
+  // deleting a Main Stage that still has deals sitting directly in it (no
+  // Sub Stage) must be blocked, not silently null this out.
   @Column({ type: "uuid" })
   mainStageId!: string;
 
@@ -97,7 +76,7 @@ export class Deal extends AuditedTenantEntity {
   // Optional -- a deal can sit directly "in" mainStageId above with no Sub
   // Stage breakdown. Set only once the deal is actually placed into a real
   // SubStage. No onDelete action when set — deleting a SubStage that deals
-  // currently sit in must still be blocked, same reasoning as owner.
+  // currently sit in must still be blocked, not silently null this out.
   @Column({ type: "uuid", nullable: true })
   currentStageId?: string;
 

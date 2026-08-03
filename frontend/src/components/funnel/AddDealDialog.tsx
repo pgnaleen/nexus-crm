@@ -11,23 +11,31 @@ import {
   type DealDocumentResponse,
   type DealPartnerResponse,
   type DealResponse,
+  type DealRoleAssignmentResponse,
+  type DealRoleResponse,
   type DealSourceResponse,
   type DepartmentPickerResponse,
   type EmployeePickerResponse,
   type IndustryResponse,
   type RelationshipRolePickerResponse,
   type RelationshipTypeResponse,
+  type UserPickerResponse,
 } from "@orelia/common";
 import {
   addDealPartnerCompany,
   addDealPartnerContact,
+  assignDealRole,
   createDeal,
   createDealNote,
+  createDealRole,
   deleteDealDocument,
   getDealTenderDetails,
   listDealDocuments,
   listDealPartners,
+  listDealTeam,
   removeDealPartner,
+  removeDealRoleAssignment,
+  setPrimaryDealRoleAssignment,
   updateDeal,
   upsertDealTenderDetails,
   uploadDealDocument,
@@ -142,11 +150,11 @@ interface DetailsFormState {
   projectValue: string;
   internalCosts: string;
   externalCosts: string;
-  // Team tab -- salesPersonId is sent as the deal's `ownerId`; Pre-Sales and
-  // PMO are sent as their own preSalesPersonId/pmoId columns.
-  salesPersonId: string;
-  preSalesPersonId: string;
-  pmoId: string;
+  // Team tab -- the mandatory primary Sales Person only. Every other role
+  // (Pre-Sales, PMO, custom) and additional Sales Person teammates are
+  // staged separately (see roleAssignmentValues) since they're not part of
+  // CreateDealRequest itself.
+  salesPersonUserId: string;
   // Tender tab -- only shown/sent when isTender is checked, saved to its own
   // deal_tender_details row via a separate upsert call, not part of the
   // deal's own PATCH/POST body.
@@ -249,6 +257,11 @@ interface AddDealDialogProps {
   departments: DepartmentPickerResponse[];
   relationshipTypes: RelationshipTypeResponse[];
   industries: IndustryResponse[];
+  // Deal Team tab -- deal_roles for the tenant (Sales Person/Pre-Sales/PMO
+  // plus any custom role) and every active user for the assignment pickers.
+  // Keyed on User, not Employee -- see DealRoleAssignment's own comment.
+  dealRoles: DealRoleResponse[];
+  users: UserPickerResponse[];
   // Companies/contacts tagged under the tenant's flagged Customer/Partner
   // relationship type -- what actually populates the Customer/Partners
   // pickers below, distinct from the unfiltered `companies`/`contacts` above
@@ -274,6 +287,8 @@ export function AddDealDialog({
   departments,
   relationshipTypes,
   industries,
+  dealRoles: initialDealRoles,
+  users,
   customerParties: initialCustomerParties,
   partnerParties: initialPartnerParties,
   defaultDealSourceId,
@@ -287,6 +302,7 @@ export function AddDealDialog({
   const [contacts, setContacts] = useState(initialContacts);
   const [customerParties, setCustomerParties] = useState(initialCustomerParties);
   const [partnerParties, setPartnerParties] = useState(initialPartnerParties);
+  const [dealRoles, setDealRoles] = useState(initialDealRoles);
   const [values, setValues] = useState<DetailsFormState>(() => ({
     name: deal?.name ?? "",
     isTender: deal?.isTender ?? false,
@@ -309,9 +325,7 @@ export function AddDealDialog({
     projectValue: deal?.estimatedValue != null ? String(deal.estimatedValue) : "",
     internalCosts: deal?.internalCosts != null ? String(deal.internalCosts) : "",
     externalCosts: deal?.externalCosts != null ? String(deal.externalCosts) : "",
-    salesPersonId: deal?.ownerId ?? "",
-    preSalesPersonId: deal?.preSalesPersonId ?? "",
-    pmoId: deal?.pmoId ?? "",
+    salesPersonUserId: deal?.primarySalesPersonUserId ?? "",
     // Tender fields aren't on DealResponse -- fetched separately below and
     // merged in once loaded (edit mode only, when the deal is a tender).
     tenderReference: "",
@@ -341,6 +355,12 @@ export function AddDealDialog({
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editNoteDraft, setEditNoteDraft] = useState("");
   const [partnerValues, setPartnerValues] = useState<string[]>([]);
+  // Create mode only -- staged per-role selections (roleId -> userIds),
+  // applied after the deal is created (mirrors partnerValues). Never
+  // includes the primary Sales Person slot, which is values.salesPersonUserId.
+  const [roleAssignmentValues, setRoleAssignmentValues] = useState<Record<string, string[]>>({});
+  const [newRoleName, setNewRoleName] = useState("");
+  const [isAddingRole, setIsAddingRole] = useState(false);
   const [isDropActive, setIsDropActive] = useState(false);
   const [addPartyState, setAddPartyState] = useState<AddPartyState>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -357,16 +377,18 @@ export function AddDealDialog({
   // add/remove applies immediately via its own endpoint.
   const [existingDocuments, setExistingDocuments] = useState<DealDocumentResponse[]>([]);
   const [existingPartners, setExistingPartners] = useState<DealPartnerResponse[]>([]);
+  const [existingAssignments, setExistingAssignments] = useState<DealRoleAssignmentResponse[]>([]);
   const [isUploadingDocs, setIsUploadingDocs] = useState(false);
 
   useEffect(() => {
     if (!isEdit || !deal) return;
     let cancelled = false;
-    Promise.all([listDealDocuments(deal.id), listDealPartners(deal.id)])
-      .then(([docsRes, partnersRes]) => {
+    Promise.all([listDealDocuments(deal.id), listDealPartners(deal.id), listDealTeam(deal.id)])
+      .then(([docsRes, partnersRes, teamRes]) => {
         if (cancelled) return;
         setExistingDocuments(docsRes);
         setExistingPartners(partnersRes);
+        setExistingAssignments(teamRes);
       })
       .catch(() => {
         // Non-fatal -- the tabs just show empty until the dialog is reopened.
@@ -464,7 +486,7 @@ export function AddDealDialog({
     if (nameError) nextErrors.name = nameError;
     // Customer is optional -- a deal can be created with no company/contact
     // set and have one added later once it's known.
-    if (!values.salesPersonId) nextErrors.salesPersonId = "Sales Person is required";
+    if (!values.salesPersonUserId) nextErrors.salesPersonUserId = "Sales Person is required";
     if (!isEdit && !values.mainStageId) {
       nextErrors.mainStageId = "Select a stage to create this deal in — add a Main Stage first";
     }
@@ -492,7 +514,7 @@ export function AddDealDialog({
       setActiveTab("dealInfo");
     } else if (nextErrors.tenderReference || nextErrors.issuingBody) {
       setActiveTab("tender");
-    } else if (nextErrors.salesPersonId) {
+    } else if (nextErrors.salesPersonUserId) {
       setActiveTab("team");
     }
 
@@ -639,9 +661,6 @@ export function AddDealDialog({
           ...deriveCustomerFields(otherParty),
           primaryContactId: otherParty?.kind === "company" ? values.primaryContactId || undefined : undefined,
           sourceId: values.sourceId || undefined,
-          ownerId: values.salesPersonId,
-          preSalesPersonId: values.preSalesPersonId || undefined,
-          pmoId: values.pmoId || undefined,
           departmentId: values.departmentId || undefined,
           dealCountry: values.dealCountry || undefined,
           customerPainPoint: values.customerPainPoint || undefined,
@@ -716,11 +735,11 @@ export function AddDealDialog({
         contactId,
         primaryContactId,
         sourceId: values.sourceId || undefined,
-        // Sales Person is the UI-facing replacement for the old Owner field --
-        // the backend still only has one `ownerId` column, so it's sent here.
-        ownerId: values.salesPersonId,
-        preSalesPersonId: values.preSalesPersonId || undefined,
-        pmoId: values.pmoId || undefined,
+        // The mandatory primary Sales Person -- inserted atomically with the
+        // deal itself by the backend (see DealsService.create()). Every
+        // other role/teammate is attached afterward, below, once the deal
+        // has an id.
+        salesPersonUserId: values.salesPersonUserId,
         mainStageId: values.mainStageId,
         currentStageId: values.currentStageId || undefined,
         departmentId: values.departmentId || undefined,
@@ -756,6 +775,9 @@ export function AddDealDialog({
         }),
         ...notes.map((note) => createDealNote(createdDeal.id, { text: note.text })),
         ...(values.isTender ? [upsertDealTenderDetails(createdDeal.id, buildTenderDetailsPayload())] : []),
+        ...Object.entries(roleAssignmentValues).flatMap(([roleId, userIds]) =>
+          userIds.map((userId) => assignDealRole(createdDeal.id, { roleId, userId })),
+        ),
       ]);
     } catch (err) {
       showToast({
@@ -833,27 +855,86 @@ export function AddDealDialog({
     icon: <UserIcon size={14} />,
   }));
 
-  const baseEmployeeOptions: SearchSelectOption[] = employees.map((e) => ({ value: e.id, label: e.fullName }));
-  // The picker excludes exited (terminated/resigned) employees. When editing a
-  // deal whose Sales Person / Pre-Sales / PMO has since been made inactive, that
-  // person is no longer in `employees` -- append them so their own field keeps
-  // showing its current value instead of going blank. Each of the three roles
-  // gets its own options list (not one shared list) so a terminated ex-Sales
-  // Person re-appended for the Sales Person field doesn't leak into the
-  // Pre-Sales/PMO dropdowns as a newly pickable option -- they were never
-  // assigned to those roles, so they must not appear there at all. (Within its
-  // own field, the re-appended entry can't be re-selected once cleared --
-  // that's intended.)
-  function withCurrentValueFallback(currentId: string | null | undefined, currentName: string | null | undefined): SearchSelectOption[] {
-    if (!currentId || baseEmployeeOptions.some((o) => o.value === currentId)) {
-      return baseEmployeeOptions;
-    }
-    return [...baseEmployeeOptions, { value: currentId, label: currentName ?? "Unknown" }];
+  // Team tab -- keyed on User, not Employee (see DealRoleAssignment's own
+  // comment). The picker only lists active users (see UsersService.findPicker).
+  // When editing a deal whose primary Sales Person has since been deactivated,
+  // append them so the field keeps showing its current value instead of going
+  // blank -- same fallback pattern as activeDealSources below (can't be
+  // re-selected once changed, which is intended).
+  const baseUserOptions: SearchSelectOption[] = users.map((u) => ({ value: u.id, label: u.displayName }));
+  const salesPersonPrimaryOptions: SearchSelectOption[] = (() => {
+    if (!deal || baseUserOptions.some((o) => o.value === deal.primarySalesPersonUserId)) return baseUserOptions;
+    if (!deal.primarySalesPersonUserId) return baseUserOptions;
+    return [...baseUserOptions, { value: deal.primarySalesPersonUserId, label: deal.primarySalesPersonName ?? "Unknown" }];
+  })();
+  const salesPersonRoleId = dealRoles.find((r) => r.requiresPrimaryOnCreate)?.id;
+
+  // Every userId already holding *any* assignment (including the primary)
+  // for a given role -- excluded from that role's "add" options so the same
+  // person can't be picked twice for one role.
+  function assignedUserIdsForRole(roleId: string): Set<string> {
+    const ids = existingAssignments.filter((a) => a.roleId === roleId).map((a) => a.userId);
+    if (roleId === salesPersonRoleId && values.salesPersonUserId) ids.push(values.salesPersonUserId);
+    return new Set(ids);
   }
 
-  const salesPersonOptions = deal ? withCurrentValueFallback(deal.ownerId, deal.ownerName) : baseEmployeeOptions;
-  const preSalesPersonOptions = deal ? withCurrentValueFallback(deal.preSalesPersonId, deal.preSalesPersonName) : baseEmployeeOptions;
-  const pmoOptions = deal ? withCurrentValueFallback(deal.pmoId, deal.pmoName) : baseEmployeeOptions;
+  async function handleAssignRole(roleId: string, userId: string) {
+    if (!deal) return;
+    try {
+      const assignment = await assignDealRole(deal.id, { roleId, userId });
+      setExistingAssignments((prev) => [...prev, assignment]);
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message : "Failed to assign team member");
+    }
+  }
+
+  async function handleRemoveAssignment(assignmentId: string) {
+    if (!deal) return;
+    try {
+      await removeDealRoleAssignment(deal.id, assignmentId);
+      setExistingAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message : "Failed to remove team member");
+    }
+  }
+
+  // Edit mode only -- changing the primary Sales Person. If the newly chosen
+  // person isn't already on the deal's team for this role, assign them
+  // first, then promote that assignment to primary (two calls, same
+  // sequential-network-step precedent as the create-flow's own attachments).
+  async function handleChangePrimarySalesPerson(userId: string) {
+    if (!deal || !salesPersonRoleId || userId === values.salesPersonUserId) return;
+    try {
+      let assignment = existingAssignments.find((a) => a.roleId === salesPersonRoleId && a.userId === userId);
+      if (!assignment) {
+        assignment = await assignDealRole(deal.id, { roleId: salesPersonRoleId, userId });
+        setExistingAssignments((prev) => [...prev, assignment!]);
+      }
+      const promoted = await setPrimaryDealRoleAssignment(deal.id, assignment.id);
+      setExistingAssignments((prev) =>
+        prev.map((a) => (a.roleId === salesPersonRoleId ? { ...a, isPrimary: a.id === promoted.id } : a)),
+      );
+      setField("salesPersonUserId", userId);
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message : "Failed to change Sales Person");
+    }
+  }
+
+  async function handleAddRole() {
+    const name = newRoleName.trim();
+    if (!name) return;
+    setIsAddingRole(true);
+    try {
+      const role = await createDealRole({ name });
+      setDealRoles((prev) => [...prev, role]);
+      setNewRoleName("");
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message : "Failed to add role");
+    } finally {
+      setIsAddingRole(false);
+    }
+  }
+
   const departmentOptions: SearchSelectOption[] = departments.map((d) => ({ value: d.id, label: d.name }));
   const costing = computeCosting(values.projectValue, values.internalCosts, values.externalCosts);
   // Only active deal sources are selectable. When editing a deal whose source
@@ -1649,44 +1730,92 @@ export function AddDealDialog({
                 <span className="text-[11.5px] font-bold text-slate-600 tracking-wide uppercase">Deal Team Assignment</span>
               </div>
               <div className="space-y-1">
-                <div className="mb-[18px]">
-                  <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                    Sales Person *
-                  </label>
-                  <SearchSelect
-                    value={values.salesPersonId}
-                    onChange={(val) => setField("salesPersonId", val)}
-                    options={salesPersonOptions}
-                    placeholder="Search employees..."
-                    searchPlaceholder="Search by name..."
-                  />
-                  {errors.salesPersonId && (
-                    <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{errors.salesPersonId}</p>
-                  )}
-                </div>
+                {dealRoles.map((role) => {
+                  const isSalesPerson = role.id === salesPersonRoleId;
+                  const teammates = existingAssignments.filter((a) => a.roleId === role.id && !a.isPrimary);
+                  const assignedIds = assignedUserIdsForRole(role.id);
+                  const addOptions = baseUserOptions.filter((o) => !assignedIds.has(o.value));
 
-                <div className="mb-[18px]">
-                  <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                    Pre-Sales Person
-                  </label>
-                  <SearchSelect
-                    value={values.preSalesPersonId}
-                    onChange={(val) => setField("preSalesPersonId", val)}
-                    options={preSalesPersonOptions}
-                    placeholder="Search employees..."
-                    searchPlaceholder="Search by name..."
-                  />
-                </div>
+                  return (
+                    <div key={role.id} className="mb-[18px]">
+                      <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                        {role.name}
+                        {isSalesPerson ? " (Primary) *" : ""}
+                      </label>
 
-                <div className="mb-[18px]">
-                  <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">PMO</label>
-                  <SearchSelect
-                    value={values.pmoId}
-                    onChange={(val) => setField("pmoId", val)}
-                    options={pmoOptions}
-                    placeholder="Search employees..."
-                    searchPlaceholder="Search by name..."
+                      {isSalesPerson && (
+                        <>
+                          <SearchSelect
+                            value={values.salesPersonUserId}
+                            onChange={(val) => (isEdit ? handleChangePrimarySalesPerson(val) : setField("salesPersonUserId", val))}
+                            options={salesPersonPrimaryOptions}
+                            placeholder="Search people..."
+                            searchPlaceholder="Search by name..."
+                          />
+                          {errors.salesPersonUserId && (
+                            <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{errors.salesPersonUserId}</p>
+                          )}
+                          <p className="mt-1.5 mb-2 text-[12px] text-[var(--color-text-muted)]">
+                            Responsible for this deal. Add more Sales Person teammates below.
+                          </p>
+                        </>
+                      )}
+
+                      {isEdit ? (
+                        <>
+                          {teammates.length > 0 && (
+                            <div className="mb-2 flex flex-col gap-2">
+                              {teammates.map((a) => (
+                                <div
+                                  key={a.id}
+                                  className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 hover:border-slate-300 transition-colors duration-150"
+                                >
+                                  <UserIcon size={14} />
+                                  <span className="flex-1 text-[13.5px] font-semibold text-crm-text">{a.userDisplayName}</span>
+                                  <button
+                                    type="button"
+                                    className="flex cursor-pointer rounded-md border-0 bg-transparent p-1.5 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#fdf0ee] hover:text-[var(--color-danger)]"
+                                    aria-label={`Remove ${a.userDisplayName}`}
+                                    onClick={() => handleRemoveAssignment(a.id)}
+                                  >
+                                    <TrashIcon size={14} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <SearchSelect
+                            value=""
+                            onChange={(userId) => handleAssignRole(role.id, userId)}
+                            options={addOptions}
+                            placeholder={isSalesPerson ? "Add another Sales Person..." : `Add to ${role.name}...`}
+                            searchPlaceholder="Search by name..."
+                          />
+                        </>
+                      ) : (
+                        <MultiSelect
+                          values={roleAssignmentValues[role.id] ?? []}
+                          onChange={(vals) => setRoleAssignmentValues((prev) => ({ ...prev, [role.id]: vals }))}
+                          options={isSalesPerson ? addOptions : baseUserOptions}
+                          placeholder={isSalesPerson ? "Add another Sales Person..." : `Add to ${role.name}...`}
+                          searchPlaceholder="Search by name..."
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newRoleName}
+                    onChange={(e) => setNewRoleName(e.target.value)}
+                    placeholder="New role name (e.g. Delivery Lead)"
+                    className="flex-1 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5 text-sm text-crm-text transition-colors duration-150 focus:outline-none focus:border-crm-primary focus:shadow-[0_0_0_3px_var(--color-crm-primary-glow)]"
                   />
+                  <Button type="button" variant="secondary" onClick={handleAddRole} disabled={isAddingRole || !newRoleName.trim()}>
+                    <PlusIcon size={14} /> Add Role
+                  </Button>
                 </div>
               </div>
             </div>

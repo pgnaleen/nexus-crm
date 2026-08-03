@@ -1,4 +1,4 @@
-import type { DealPartnerLinkResponse, DealResponse } from "@orelia/common";
+import type { DealPartnerLinkResponse, DealResponse, DealRoleResponse } from "@orelia/common";
 import { serverFetch } from "../api/server-client";
 
 export function listDeals(mainStageId?: string): Promise<DealResponse[] | null> {
@@ -8,4 +8,8 @@ export function listDeals(mainStageId?: string): Promise<DealResponse[] | null> 
 
 export function listDealPartnerLinks(): Promise<DealPartnerLinkResponse[] | null> {
   return serverFetch<DealPartnerLinkResponse[]>("/deals/partner-links");
+}
+
+export function listDealRoles(): Promise<DealRoleResponse[] | null> {
+  return serverFetch<DealRoleResponse[]>("/deal-roles");
 }

@@ -16,6 +16,7 @@ import type { AuthenticatedUser } from "../auth/types/authenticated-user";
 import { RequirePermission } from "../rbac/decorators/require-permission.decorator";
 import { PermissionsGuard } from "../rbac/guards/permissions.guard";
 import { DealPartnersService } from "./deal-partners.service";
+import { DealRoleAssignmentsService } from "./deal-role-assignments.service";
 import { CreateDealDto } from "./dto/create-deal.dto";
 import { MoveDealDto } from "./dto/move-deal.dto";
 import { UpdateDealDto } from "./dto/update-deal.dto";
@@ -27,6 +28,7 @@ export class DealsController {
   constructor(
     private readonly dealsService: DealsService,
     private readonly dealPartnersService: DealPartnersService,
+    private readonly dealRoleAssignmentsService: DealRoleAssignmentsService,
   ) {}
 
   @UseGuards(PermissionsGuard)
@@ -34,7 +36,8 @@ export class DealsController {
   @Get()
   async findAll(@Query("mainStageId") mainStageId?: string): Promise<DealResponse[]> {
     const deals = await this.dealsService.findAll(mainStageId);
-    return deals.map((deal) => this.toResponse(deal));
+    const primaryMap = await this.dealRoleAssignmentsService.findPrimarySalesPersonMap(deals.map((d) => d.id));
+    return deals.map((deal) => this.toResponse(deal, primaryMap.get(deal.id)));
   }
 
   // Declared before the ":id" route below so "partner-links" isn't swallowed
@@ -58,7 +61,8 @@ export class DealsController {
   @Get(":id")
   async findOne(@Param("id", ParseUUIDPipe) id: string): Promise<DealResponse> {
     const deal = await this.dealsService.findOneOrFail(id);
-    return this.toResponse(deal);
+    const primaryMap = await this.dealRoleAssignmentsService.findPrimarySalesPersonMap([id]);
+    return this.toResponse(deal, primaryMap.get(id));
   }
 
   @UseGuards(PermissionsGuard)
@@ -69,7 +73,8 @@ export class DealsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<DealResponse> {
     const deal = await this.dealsService.create(dto, user.sub);
-    return this.toResponse(deal);
+    const primaryMap = await this.dealRoleAssignmentsService.findPrimarySalesPersonMap([deal.id]);
+    return this.toResponse(deal, primaryMap.get(deal.id));
   }
 
   @UseGuards(PermissionsGuard)
@@ -81,7 +86,8 @@ export class DealsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<DealResponse> {
     const deal = await this.dealsService.update(id, dto, user.sub);
-    return this.toResponse(deal);
+    const primaryMap = await this.dealRoleAssignmentsService.findPrimarySalesPersonMap([id]);
+    return this.toResponse(deal, primaryMap.get(id));
   }
 
   @UseGuards(PermissionsGuard)
@@ -93,7 +99,8 @@ export class DealsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<DealResponse> {
     const deal = await this.dealsService.moveStage(id, dto, user.sub);
-    return this.toResponse(deal);
+    const primaryMap = await this.dealRoleAssignmentsService.findPrimarySalesPersonMap([id]);
+    return this.toResponse(deal, primaryMap.get(id));
   }
 
   // Gated on DEALS_DELETE, not DEALS_VIEW -- the only consumer is the delete
@@ -118,8 +125,10 @@ export class DealsController {
     return { success: true };
   }
 
-  private toResponse(deal: Deal): DealResponse {
+  private toResponse(deal: Deal, primarySalesPerson?: { userId: string; displayName: string }): DealResponse {
     return {
+      primarySalesPersonUserId: primarySalesPerson?.userId ?? null,
+      primarySalesPersonName: primarySalesPerson?.displayName ?? null,
       id: deal.id,
       tenantId: deal.tenantId,
       dealCode: deal.dealCode,
@@ -134,12 +143,6 @@ export class DealsController {
       contactName: deal.contact?.fullName ?? null,
       sourceId: deal.sourceId ?? null,
       sourceName: deal.source?.name ?? null,
-      ownerId: deal.ownerId,
-      ownerName: deal.owner?.fullName,
-      preSalesPersonId: deal.preSalesPersonId ?? null,
-      preSalesPersonName: deal.preSalesPerson?.fullName ?? null,
-      pmoId: deal.pmoId ?? null,
-      pmoName: deal.pmo?.fullName ?? null,
       mainStageId: deal.mainStageId,
       mainStageName: deal.mainStage?.name,
       currentStageId: deal.currentStageId ?? null,

@@ -8,12 +8,14 @@ import type {
   ContactPickerResponse,
   DealPartnerLinkResponse,
   DealResponse,
+  DealRoleResponse,
   DealSourceResponse,
   DepartmentPickerResponse,
   EmployeePickerResponse,
   IndustryResponse,
   RelationshipRolePickerResponse,
   RelationshipTypeResponse,
+  UserPickerResponse,
 } from "@orelia/common";
 import { FunnelBoard, type FunnelColumn } from "@/components/funnel/FunnelBoard";
 import { AddDealDialog } from "@/components/funnel/AddDealDialog";
@@ -80,7 +82,7 @@ function dealToFunnelLead(deal: DealResponse, stageIdField: StageIdField): Funne
     value: deal.estimatedValue ?? 0,
     stage: deal[stageIdField] ?? "",
     date: deal.expectedCloseDate ?? "",
-    assignee: deal.ownerName ?? "Unassigned",
+    assignee: deal.primarySalesPersonName ?? "Unassigned",
     code: deal.dealCode,
     country: deal.dealCountry ?? undefined,
     status: deal.status,
@@ -121,6 +123,10 @@ interface FunnelSourceTabsProps {
   departments: DepartmentPickerResponse[];
   relationshipTypes: RelationshipTypeResponse[];
   industries: IndustryResponse[];
+  // Deal Team tab -- deal_roles for the tenant (Sales Person/Pre-Sales/PMO
+  // plus any custom role) and every active user for the assignment pickers.
+  dealRoles: DealRoleResponse[];
+  users: UserPickerResponse[];
   customerParties: RelationshipRolePickerResponse;
   partnerParties: RelationshipRolePickerResponse;
   // Bulk, id-only deal-partner links for every deal in the tenant, used only
@@ -155,6 +161,8 @@ export function FunnelSourceTabs({
   departments,
   relationshipTypes,
   industries,
+  dealRoles,
+  users,
   customerParties,
   partnerParties,
   partnerLinks,
@@ -275,11 +283,15 @@ export function FunnelSourceTabs({
     { value: "non-tender", label: "Non-Tender" },
   ];
   // Derived from the deals themselves -- only salespeople who actually own a
-  // deal appear (same approach as countryOptions). ownerId is always set;
-  // ownerName is the resolved owner.fullName from the API response.
+  // deal appear (same approach as countryOptions). primarySalesPersonUserId/
+  // Name are resolved from deal_role_assignments (see DealResponse's own
+  // comment) -- every deal has exactly one, enforced at creation.
   const salespersonOptions = [
     { value: "", label: "All" },
-    ...Array.from(new Map(deals.map((d) => [d.ownerId, d.ownerName ?? "Unknown"])).entries())
+    ...Array.from(
+      new Map(deals.map((d) => [d.primarySalesPersonUserId, d.primarySalesPersonName ?? "Unknown"])).entries(),
+    )
+      .filter((entry): entry is [string, string] => Boolean(entry[0]))
       .map(([value, label]) => ({ value, label }))
       .sort((a, b) => a.label.localeCompare(b.label)),
   ];
@@ -329,7 +341,7 @@ export function FunnelSourceTabs({
     .filter((d) => !department || d.departmentId === department)
     .filter((d) => !country || d.dealCountry === country)
     .filter((d) => !tender || (tender === "tender" ? d.isTender : !d.isTender))
-    .filter((d) => !salesperson || d.ownerId === salesperson)
+    .filter((d) => !salesperson || d.primarySalesPersonUserId === salesperson)
     .filter((d) => {
       if (!customerFilterParty) return true;
       return customerFilterParty.kind === "company"
@@ -648,6 +660,8 @@ export function FunnelSourceTabs({
           departments={departments}
           relationshipTypes={relationshipTypes}
           industries={industries}
+          dealRoles={dealRoles}
+          users={users}
           customerParties={customerParties}
           partnerParties={partnerParties}
           defaultDealSourceId={activeId !== "all" ? activeId : dealSources[0]?.id}
@@ -690,6 +704,8 @@ export function FunnelSourceTabs({
           departments={departments}
           relationshipTypes={relationshipTypes}
           industries={industries}
+          dealRoles={dealRoles}
+          users={users}
           customerParties={customerParties}
           partnerParties={partnerParties}
           onClose={() => setEditDeal(null)}

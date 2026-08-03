@@ -1,5 +1,5 @@
 import { DealType, DocumentType, EvaluationType, SubmissionMode } from "../enums";
-import { IDeal, IDealTenderDetails } from "../types";
+import { IDeal, IDealRole, IDealTenderDetails } from "../types";
 
 export interface CompetitorEntryRequest {
   name: string;
@@ -20,9 +20,13 @@ export interface CreateDealRequest {
   primaryContactId?: string;
   contactId?: string;
   sourceId?: string;
-  ownerId: string;
-  preSalesPersonId?: string;
-  pmoId?: string;
+  // The primary, mandatory Sales Person for this deal -- a User id (not an
+  // Employee id, see DealRoleAssignment). Inserted atomically with the deal
+  // itself as the initial primary deal_role_assignments row for the
+  // tenant's "Sales Person" role. Additional Sales Person teammates, and
+  // every other role (Pre-Sales/PMO/custom), are added afterward via the
+  // team assignment endpoints -- see AssignDealRoleRequest.
+  salesPersonUserId: string;
   // Every deal always belongs to a Main Stage. currentStageId (a Sub Stage)
   // is optional -- a deal can sit directly "in" a Main Stage that has no Sub
   // Stages configured yet, or that the tenant has chosen never to break down
@@ -42,7 +46,11 @@ export interface CreateDealRequest {
   isTender?: boolean;
 }
 
-export type UpdateDealRequest = Partial<CreateDealRequest>;
+// salesPersonUserId is deliberately excluded -- it's only meaningful at
+// creation (the mandatory-primary invariant). Changing who's primary on an
+// existing deal goes through the team assignment endpoints instead (see
+// AssignDealRoleRequest / the "set primary" action), not a PATCH /deals.
+export type UpdateDealRequest = Partial<Omit<CreateDealRequest, "salesPersonUserId">>;
 
 // Exactly one of toStageId (a real Sub Stage) or toMainStageId (a Main Stage
 // with no Sub Stage breakdown) must be provided -- enforced by MoveDealDto,
@@ -65,13 +73,16 @@ export interface DealResponse extends IDeal {
   companyCountries?: string[] | null;
   mainStageName?: string;
   currentStageName?: string;
-  ownerName?: string;
-  preSalesPersonName?: string | null;
-  pmoName?: string | null;
   sourceName?: string | null;
   departmentName?: string | null;
   primaryContactName?: string | null;
   contactName?: string | null;
+  // The deal's primary Sales Person -- resolved from deal_role_assignments
+  // (the tenant's requires-primary-on-create role), not a deals column.
+  // Every deal has exactly one (enforced at creation), so these are only
+  // ever null for a data-integrity edge case, not a normal "unset" state.
+  primarySalesPersonUserId?: string | null;
+  primarySalesPersonName?: string | null;
 }
 
 export interface CreateDealDocumentRequest {
@@ -114,6 +125,27 @@ export interface DealPartnerLinkResponse {
   dealId: string;
   companyId: string | null;
   contactId: string | null;
+}
+
+export interface CreateDealRoleRequest {
+  name: string;
+}
+
+export type DealRoleResponse = IDealRole;
+
+export interface AssignDealRoleRequest {
+  roleId: string;
+  userId: string;
+}
+
+export interface DealRoleAssignmentResponse {
+  id: string;
+  dealId: string;
+  roleId: string;
+  roleName: string;
+  userId: string;
+  userDisplayName: string;
+  isPrimary: boolean;
 }
 
 export interface DealStageHistoryResponse {

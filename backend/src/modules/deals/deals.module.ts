@@ -10,8 +10,6 @@ import { DealSource } from "../deal-sources/entities/deal-source.entity";
 import { DepartmentsRepository } from "../departments/departments.repository";
 import { Department } from "../departments/entities/department.entity";
 import { DocumentsModule } from "../documents/documents.module";
-import { EmployeesRepository } from "../employees/employees.repository";
-import { Employee } from "../employees/entities/employee.entity";
 import { RbacModule } from "../rbac/rbac.module";
 import { DealPartnersMap } from "./entities/deal-partners-map.entity";
 import { DealNote } from "./entities/deal-note.entity";
@@ -27,6 +25,10 @@ import { DealDocumentsController } from "./deal-documents.controller";
 import { DealDocumentsService } from "./deal-documents.service";
 import { DealNotesController } from "./deal-notes.controller";
 import { DealNotesService } from "./deal-notes.service";
+import { DealRolesController } from "./deal-roles.controller";
+import { DealRolesService } from "./deal-roles.service";
+import { DealRoleAssignmentsService } from "./deal-role-assignments.service";
+import { DealTeamController } from "./deal-team.controller";
 import { DealStageHistoryController } from "./deal-stage-history.controller";
 import { DealStageHistoryService } from "./deal-stage-history.service";
 import { DealTenderDetailsController } from "./deal-tender-details.controller";
@@ -51,7 +53,6 @@ import { DealsService } from "./deals.service";
       Contact,
       DealSource,
       Department,
-      Employee,
     ]),
     RbacModule,
     MainStagesModule,
@@ -62,6 +63,8 @@ import { DealsService } from "./deals.service";
     DealDocumentsController,
     DealNotesController,
     DealPartnersController,
+    DealRolesController,
+    DealTeamController,
     DealStageHistoryController,
     DealTenderDetailsController,
   ],
@@ -71,6 +74,8 @@ import { DealsService } from "./deals.service";
     DealDocumentsService,
     DealNotesService,
     DealPartnersService,
+    DealRolesService,
+    DealRoleAssignmentsService,
     DealStageHistoryService,
     DealTenderDetailsService,
     DealTenderDetailsRepository,
@@ -78,7 +83,6 @@ import { DealsService } from "./deals.service";
     ContactsRepository,
     DealSourcesRepository,
     DepartmentsRepository,
-    EmployeesRepository,
   ],
 })
 export class DealsModule {}

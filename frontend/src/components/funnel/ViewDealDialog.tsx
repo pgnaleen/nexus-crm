@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode, Fragment } from "react";
-import { PERMISSIONS, type DealDocumentResponse, type DealNoteResponse, type DealPartnerResponse, type DealResponse } from "@orelia/common";
+import { PERMISSIONS, type DealDocumentResponse, type DealNoteResponse, type DealPartnerResponse, type DealResponse, type DealRoleAssignmentResponse } from "@orelia/common";
 import {
   createDealNote,
   deleteDeal,
@@ -11,6 +11,7 @@ import {
   listDealDocuments,
   listDealNotes,
   listDealPartners,
+  listDealTeam,
   updateDealNote,
 } from "@/lib/api/deals";
 import { ApiError } from "@/lib/api/client";
@@ -100,6 +101,7 @@ export function ViewDealDialog({
   const [deal, setDeal] = useState<DealResponse | null>(null);
   const [documents, setDocuments] = useState<DealDocumentResponse[] | null>(null);
   const [partners, setPartners] = useState<DealPartnerResponse[] | null>(null);
+  const [team, setTeam] = useState<DealRoleAssignmentResponse[] | null>(null);
   const [notes, setNotes] = useState<DealNoteResponse[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -125,13 +127,20 @@ export function ViewDealDialog({
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getDeal(dealId), listDealDocuments(dealId), listDealPartners(dealId), listDealNotes(dealId)])
-      .then(([dealRes, documentsRes, partnersRes, notesRes]) => {
+    Promise.all([
+      getDeal(dealId),
+      listDealDocuments(dealId),
+      listDealPartners(dealId),
+      listDealNotes(dealId),
+      listDealTeam(dealId),
+    ])
+      .then(([dealRes, documentsRes, partnersRes, notesRes, teamRes]) => {
         if (cancelled) return;
         setDeal(dealRes);
         setDocuments(documentsRes);
         setPartners(partnersRes);
         setNotes(notesRes);
+        setTeam(teamRes);
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err instanceof ApiError ? err.message : "Failed to load deal");
@@ -712,11 +721,30 @@ export function ViewDealDialog({
               <span className="text-slate-550"><UsersGroupIcon size={14} /></span>
               <span className="text-[11.5px] font-bold text-slate-600 tracking-wide uppercase">Deal Team Assignment</span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3.5">
-              <Field label="Sales Person" value={deal.ownerName} />
-              <Field label="Pre-Sales Person" value={deal.preSalesPersonName} />
-              <Field label="PMO" value={deal.pmoName} />
-            </div>
+            {(() => {
+              const byRole = new Map<string, { roleName: string; primary?: string; teammates: string[] }>();
+              for (const a of team ?? []) {
+                const entry = byRole.get(a.roleId) ?? { roleName: a.roleName, teammates: [] };
+                if (a.isPrimary) entry.primary = a.userDisplayName;
+                else entry.teammates.push(a.userDisplayName);
+                byRole.set(a.roleId, entry);
+              }
+              const rows = Array.from(byRole.values());
+              if (rows.length === 0) {
+                return <p className="text-[12.5px] text-[var(--color-text-muted)]">No team members assigned yet.</p>;
+              }
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3.5">
+                  {rows.map((row) => (
+                    <Field
+                      key={row.roleName}
+                      label={row.roleName}
+                      value={[row.primary, ...row.teammates].filter(Boolean).join(", ") || undefined}
+                    />
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

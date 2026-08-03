@@ -1,7 +1,7 @@
 import { FunnelSourceTabs } from "@/components/funnel/FunnelSourceTabs";
 import { getServerSession } from "@/lib/auth/session";
 import { listDealSources } from "@/lib/deal-sources/server";
-import { listDeals, listDealPartnerLinks } from "@/lib/deals/server";
+import { listDeals, listDealPartnerLinks, listDealRoles } from "@/lib/deals/server";
 import { listMainStages } from "@/lib/main-stages/server";
 import {
   listCompaniesPicker,
@@ -11,6 +11,7 @@ import {
   listDepartmentsPicker,
   listEmployeesPicker,
   listIndustries,
+  listUsersPicker,
 } from "@/lib/pickers/server";
 import { listRelationshipTypes } from "@/lib/relationship-types/server";
 import { listSubStages } from "@/lib/sub-stages/server";
@@ -31,6 +32,8 @@ export default async function FunnelPage({ params }: { params: { tenant: string 
     customerParties,
     partnerParties,
     partnerLinks,
+    dealRoles,
+    users,
   ] = await Promise.all([
     getServerSession(params.tenant),
     listDealSources(),
@@ -46,6 +49,8 @@ export default async function FunnelPage({ params }: { params: { tenant: string 
     listDealCustomerParties(),
     listDealPartnerParties(),
     listDealPartnerLinks(),
+    listDealRoles(),
+    listUsersPicker(),
   ]);
 
   // Board columns are grouped by Main Stage here (the tenant-wide overview).
@@ -73,6 +78,8 @@ export default async function FunnelPage({ params }: { params: { tenant: string 
       customerParties={customerParties ?? { configured: false, companies: [], contacts: [] }}
       partnerParties={partnerParties ?? { configured: false, companies: [], contacts: [] }}
       partnerLinks={partnerLinks ?? []}
+      dealRoles={dealRoles ?? []}
+      users={users ?? []}
       initialDeals={deals ?? []}
       currentUserId={session?.user.id}
       permissions={session?.permissions ?? []}

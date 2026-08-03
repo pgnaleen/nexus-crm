@@ -54,9 +54,6 @@ export interface IDeal {
   primaryContactId?: string | null;
   contactId?: string | null;
   sourceId?: string | null;
-  ownerId: string;
-  preSalesPersonId?: string | null;
-  pmoId?: string | null;
   mainStageId: string;
   currentStageId?: string | null;
   status: DealStatus;
@@ -132,4 +129,23 @@ export interface IMainStageHistory {
   movedById?: string | null;
   movedAt: string;
   note?: string | null;
+}
+
+export interface IDealRole {
+  id: string;
+  tenantId: string;
+  name: string;
+  // True only for the seeded "Sales Person" role -- a deal must have exactly
+  // one primary assignee for this role, enforced at creation time.
+  requiresPrimaryOnCreate: boolean;
+}
+
+export interface IDealRoleAssignment {
+  id: string;
+  dealId: string;
+  roleId: string;
+  userId: string;
+  isPrimary: boolean;
+  createdAt: string;
+  createdById?: string | null;
 }

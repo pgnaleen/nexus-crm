@@ -5,7 +5,7 @@ import { DataSource, IsNull } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { assertKeyBelongsToTenant, EMPLOYEE_CV_SEGMENT, EMPLOYEE_PHOTO_SEGMENT } from "../../core/storage/storage.constants";
 import { TenantContextService } from "../../core/tenant";
-import { Deal } from "../deals/entities/deal.entity";
+import { DealRoleAssignment } from "../deals/entities/deal-role-assignment.entity";
 import { DocumentsService } from "../documents/documents.service";
 import { CreateEmployeeDto } from "./dto/create-employee.dto";
 import { UpdateEmployeeDto } from "./dto/update-employee.dto";
@@ -594,20 +594,29 @@ export class EmployeesService {
   // dateOfExit via update() above), which keeps the record fully visible for
   // compliance/history. Bare load for the mutation target -- same
   // relations-save rule as update().
-  // Deal.ownerId has no onDelete action (RESTRICT-like); preSalesPersonId/
-  // pmoId have DB-level ON DELETE SET NULL -- but that only fires on a real
-  // DELETE, and this delete is a soft-delete, so none of the three FK actions
-  // actually run. Without this check a deal would be left silently pointing
-  // at (or, for ownerId, would hit a raw unhandled DB error on any future
-  // hard delete against) a now-hidden, soft-deleted Employee.
-  async countActiveDeals(employeeId: string): Promise<{ owner: number; preSales: number; pmo: number }> {
-    const dealsRepo = this.dataSource.getRepository(Deal);
-    const [owner, preSales, pmo] = await Promise.all([
-      dealsRepo.count({ where: { ownerId: employeeId } }),
-      dealsRepo.count({ where: { preSalesPersonId: employeeId } }),
-      dealsRepo.count({ where: { pmoId: employeeId } }),
-    ]);
-    return { owner, preSales, pmo };
+  // deal_role_assignments is keyed on user_id, not employee_id (see
+  // DealRoleAssignment's own comment) -- so this checks deal team
+  // assignments held by whichever User this Employee is linked to, not the
+  // Employee row itself. An employee with no linked user can't hold any
+  // assignment at all. Without this check a deal would be left silently
+  // pointing at a now-hidden, soft-deleted Employee's still-active login.
+  async countActiveDeals(employeeId: string): Promise<Array<{ roleName: string; count: number }>> {
+    const employee = await this.employeesRepo.findOneScoped({ where: { id: employeeId } });
+    if (!employee?.userId) {
+      return [];
+    }
+    const rows = await this.dataSource
+      .getRepository(DealRoleAssignment)
+      .createQueryBuilder("assignment")
+      .innerJoin("assignment.role", "role")
+      .innerJoin("assignment.deal", "deal")
+      .select("role.name", "roleName")
+      .addSelect("COUNT(*)", "count")
+      .where("assignment.user_id = :userId", { userId: employee.userId })
+      .andWhere("deal.deleted_at IS NULL")
+      .groupBy("role.name")
+      .getRawMany<{ roleName: string; count: string }>();
+    return rows.map((row) => ({ roleName: row.roleName, count: Number(row.count) }));
   }
 
   async remove(id: string, userId: string): Promise<void> {
@@ -617,11 +626,8 @@ export class EmployeesService {
     // A ConflictException here is an expected business-rule rejection, not a
     // system failure -- thrown before the try/catch below so it isn't logged
     // as an error, same as NotFoundException elsewhere.
-    const { owner, preSales, pmo } = await this.countActiveDeals(id);
-    const parts: string[] = [];
-    if (owner > 0) parts.push(`${owner} deal(s) as owner`);
-    if (preSales > 0) parts.push(`${preSales} deal(s) as pre-sales`);
-    if (pmo > 0) parts.push(`${pmo} deal(s) as PMO`);
+    const dealCounts = await this.countActiveDeals(id);
+    const parts = dealCounts.map((row) => `${row.count} deal(s) as ${row.roleName}`);
     if (parts.length > 0) {
       this.logger.debug(`Blocked: employee ${id} still assigned to deals (${parts.join(", ")})`);
       throw new ConflictException(

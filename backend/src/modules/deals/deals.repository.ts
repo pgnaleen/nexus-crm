@@ -18,9 +18,6 @@ export class DealsRepository extends BaseTenantRepository<Deal> {
       .leftJoinAndSelect("deal.company", "company")
       .leftJoinAndSelect("deal.currentStage", "currentStage")
       .leftJoinAndSelect("deal.mainStage", "mainStage")
-      .leftJoinAndSelect("deal.owner", "owner")
-      .leftJoinAndSelect("deal.preSalesPerson", "preSalesPerson")
-      .leftJoinAndSelect("deal.pmo", "pmo")
       .leftJoinAndSelect("deal.source", "source")
       .leftJoinAndSelect("deal.department", "department")
       .leftJoinAndSelect("deal.primaryContact", "primaryContact")
@@ -49,9 +46,6 @@ export class DealsRepository extends BaseTenantRepository<Deal> {
         "company",
         "currentStage",
         "mainStage",
-        "owner",
-        "preSalesPerson",
-        "pmo",
         "source",
         "department",
         "primaryContact",

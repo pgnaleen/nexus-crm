@@ -53,18 +53,6 @@ export class UpdateDealDto implements UpdateDealRequest {
 
   @IsOptional()
   @IsUUID()
-  ownerId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  preSalesPersonId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  pmoId?: string;
-
-  @IsOptional()
-  @IsUUID()
   mainStageId?: string;
 
   @IsOptional()

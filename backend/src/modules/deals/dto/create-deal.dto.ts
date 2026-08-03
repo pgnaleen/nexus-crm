@@ -54,15 +54,7 @@ export class CreateDealDto implements CreateDealRequest {
   sourceId?: string;
 
   @IsUUID()
-  ownerId!: string;
-
-  @IsOptional()
-  @IsUUID()
-  preSalesPersonId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  pmoId?: string;
+  salesPersonUserId!: string;
 
   @IsUUID()
   mainStageId!: string;
