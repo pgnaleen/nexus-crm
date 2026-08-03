@@ -6,8 +6,8 @@ import { CURRENCIES, formatCurrencyLabel } from "@/lib/currencies";
 import { SearchSelect, type SearchSelectOption } from "./SearchSelect";
 
 const CURRENCY_TO_COUNTRY: Record<string, string> = {
-  EUR: "EU", // Map Euro directly to the European Union flag
-  USD: "US", // Ensure US Dollar maps directly to US
+  EUR: "EU", // Euro → European Union flag
+  USD: "US", // Ensure USD maps to US (not another USD-using country)
 };
 
 // Dynamically build the mappings from the database list of countries
@@ -22,6 +22,14 @@ try {
 } catch (e) {
   console.error("Failed to build currency-to-country mapping dynamically:", e);
 }
+
+// Manual overrides for currencies that countries-list doesn't map correctly
+// (obsolete currencies, dissolved territories, or data gaps in the library)
+CURRENCY_TO_COUNTRY["BGN"] = "BG"; // Bulgarian Lev → Bulgaria (countries-list shows BG→EUR post-adoption)
+CURRENCY_TO_COUNTRY["ANG"] = "CW"; // Netherlands Antillean Guilder → Curaçao (closest flag)
+CURRENCY_TO_COUNTRY["CUC"] = "CU"; // Cuban Convertible Peso → Cuba
+CURRENCY_TO_COUNTRY["HRK"] = "HR"; // Croatian Kuna → Croatia (was valid before EUR adoption 2023)
+CURRENCY_TO_COUNTRY["ZWL"] = "ZW"; // Zimbabwean Dollar → Zimbabwe
 
 const CURRENCY_OPTIONS: SearchSelectOption[] = CURRENCIES.map((code) => {
   const countryCode = CURRENCY_TO_COUNTRY[code];

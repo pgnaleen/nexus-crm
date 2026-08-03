@@ -60,6 +60,8 @@ import { SearchSelect, type SearchSelectOption } from "@/components/ui/SearchSel
 import { BuildingIcon, EditIcon, FileIcon, FunnelIcon, LegalIcon, FinanceIcon, UsersGroupIcon, TrashIcon, UploadCloudIcon, UserIcon, PlusIcon } from "@/components/ui/icons";
 import { minDate, required, validate } from "@/lib/validation";
 import { t } from "@/lib/i18n";
+import { COUNTRY_CURRENCY_MAP } from "@/lib/countries";
+import { CURRENCIES } from "@/lib/currencies";
 import { CompanyFormDialog } from "@/app/[tenant]/(dashboard)/relationships/[id]/_components/CompanyFormDialog";
 import { ContactFormDialog } from "@/app/[tenant]/(dashboard)/relationships/[id]/_components/ContactFormDialog";
 
@@ -1311,7 +1313,17 @@ export function AddDealDialog({
                 <CountrySelect
                   label="Deal Country"
                   value={values.dealCountry}
-                  onChange={(val) => setField("dealCountry", val)}
+                  onChange={(val) => {
+                    setField("dealCountry", val);
+                    // Auto-set currency to the country's primary currency if
+                    // the user hasn't already chosen a non-USD currency
+                    if (val) {
+                      const suggestedCurrency = COUNTRY_CURRENCY_MAP[val];
+                      if (suggestedCurrency && CURRENCIES.includes(suggestedCurrency)) {
+                        setField("currency", suggestedCurrency);
+                      }
+                    }
+                  }}
                   placeholder="Search countries..."
                 />
 

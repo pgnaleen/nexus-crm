@@ -13,3 +13,17 @@ export interface Country {
 export const COUNTRIES: Country[] = getCountryDataList()
   .map((country) => ({ code: country.iso2, name: country.name, flag: getEmojiFlag(country.iso2) }))
   .sort((a, b) => a.name.localeCompare(b.name));
+
+// Maps plain country name → primary ISO 4217 currency code.
+// Used by AddDealDialog to auto-fill the Currency field when a Deal Country is selected.
+export const COUNTRY_CURRENCY_MAP: Record<string, string> = {};
+try {
+  for (const country of getCountryDataList()) {
+    const primaryCurrency = country.currency?.[0];
+    if (primaryCurrency) {
+      COUNTRY_CURRENCY_MAP[country.name] = primaryCurrency;
+    }
+  }
+} catch (e) {
+  console.error("Failed to build country→currency map:", e);
+}
