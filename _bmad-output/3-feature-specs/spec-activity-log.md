@@ -2,7 +2,7 @@
 title: 'Activity Log — System Administration page'
 type: 'feature'
 created: '2026-07-31'
-status: 'draft'
+status: 'implemented'
 review_loop_iteration: 0
 context: []
 baseline_commit: 'c68b1452f46775bb22a19a304ad30f637ea6dd6a'
@@ -488,8 +488,62 @@ Per `feature-development-guideline.md` §4 — all four required:
 4. **Regression** — an unrelated page (Departments or Users). Because `AuthService` is modified,
    **re-verify that login itself still works**, including the lockout path.
 
+## Implementation status (2026-08-03) — built, verified, shipped
+
+Built in three passes: mock-first UI (`cd630f0`), a Settings-tab consolidation + cross-tenant
+scope addition requested mid-build (`ed074c2`), then the real backend + real frontend wiring
+(commit `67ce7cb` for the backend half — bundled into an unrelated frontend-restyling commit by
+the human developer, see that commit's file list — and `67114d5` for the frontend-wiring +
+documentation half).
+
+**Two deliberate deviations from the frozen Intent/Decisions/Out-of-scope sections above**, both
+requested by the product owner *after* this spec was frozen, so the frozen text was left as
+written rather than edited (per the `<frozen-after-approval>` rule) — treat this section as the
+up-to-date correction:
+
+- **Cross-tenant platform view is now IN scope and built**, contradicting the "Own tenant only" /
+  "No cross-tenant view in v1" decision and the "Out of scope" line below. A genuine System-tenant
+  session (never act-as-tenant) sees every tenant's activity by default, or one tenant at a time
+  via a Tenant filter; every other tenant is still hard-scoped to its own rows only, enforced
+  server-side in `ActivityLogService.applyTenantScope()` regardless of what the client sends —
+  verified live both directions (see Verification below).
+- **The page lives under Settings, not its own sidebar entry.** `admin/activity-log/page.tsx` in
+  the Code Map above was superseded by consolidating into
+  `admin/settings/_components/activity-log/` as the "Audits" tab alongside the pre-existing
+  Backups tab, under one renamed "Settings" sidebar item — so the actual paths differ from the
+  Code Map for every frontend file listed there (same components, different directory).
+
+**Known gap vs. the Code Map**: `users.service.ts` capturing `password_changed`/`password_reset`
+auth events was never built — only the four `auth.service.ts` login/logout capture points exist.
+A user's own self-service password change and an admin-triggered reset today leave no trace in
+Sign-in Activity. Worth a follow-up if that history matters.
+
+**Verification actually performed** (per `feature-development-guideline.md` §4):
+
+1. **Typecheck** — backend clean (`tsc --noEmit`, zero errors). Frontend: zero errors in any
+   activity-log file; the file itself sits in a shared dev tree with unrelated, separately
+   in-progress feature work (deal-roles/main-stages/fx-rates) that has its own pre-existing
+   typecheck errors, confirmed unrelated by grep/diff before treating them as out of scope here.
+2. **Browser** — not possible in this environment (no browser tool available). Verified instead
+   via direct HTTP against the real endpoints for every filter/pagination/redaction/cross-tenant
+   case (see #3), plus a clean SSR render of the Settings page. The renderer's five `changes`
+   shapes were exercised during the earlier mock-first pass in the browser, before backend wiring.
+3. **`psql` + direct HTTP** — tenant isolation confirmed both ways: a real non-platform test user
+   holding only `AUDIT_LOG_VIEW` got identical, own-tenant-only results whether or not it sent
+   `allTenants=true` or a foreign `tenantId`; a real System-tenant session got 220 rows
+   (218 own + 2 Helix) with `allTenants=true` and exactly the 2 Helix rows with `tenantId` set.
+   Redaction verified both ways: a viewer without `EMPLOYEES_VIEW_SENSITIVE` got `nicPassportNumber`/
+   `baseSalary`/`passwordHash` all `"[redacted]"`; a Super Admin (who holds it) got real HR values
+   back but `passwordHash` still redacted unconditionally. `auth_events` rows confirmed for
+   login-succeeded, all four login-failed reasons, account-locked, and logout, each with real
+   captured IP/user-agent. All test users/roles/rows created for this were deleted afterward,
+   confirmed via a fresh count query.
+4. **Regression** — login itself (including the lockout path) re-verified live after modifying
+   `AuthService`, since that's exactly the code path this feature instruments.
+
 ## Out of scope
 
-Cross-tenant platform view · retention purge job · CSV export · resolving the
-`deal_*_stage_history` half-in-each-store split · backfilling audit coverage for
-companies/contacts/uploads · real-time streaming of new events.
+~~Cross-tenant platform view~~ (built — see Implementation status above) · retention purge job ·
+CSV export · resolving the `deal_*_stage_history` half-in-each-store split · backfilling audit
+coverage for companies/contacts/uploads · real-time streaming of new events · `password_changed`/
+`password_reset` auth-event capture (see the known-gap note above).
