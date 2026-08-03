@@ -514,7 +514,7 @@ export function FunnelSourceTabs({
               placeholder="Search deals..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-white py-2 pl-8 pr-3 font-[inherit] text-[13px] transition-colors duration-150 focus:border-[var(--color-crm-primary)] focus:outline-none"
+              className="w-full rounded-lg border border-[var(--color-border)] bg-white py-2 pl-8 pr-3 font-[inherit] text-[13px] transition-[border-color,box-shadow] duration-150 focus:border-crm-primary focus:shadow-[0_0_0_3px_var(--color-crm-primary-glow)] focus:outline-none"
             />
           </div>
           <div className="flex flex-wrap items-center gap-3">
