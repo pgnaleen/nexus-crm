@@ -16,9 +16,11 @@ an admin section (Users) — zero visual change, zero console/build errors from 
 The frontend's existing screens (`frontend/src/app/globals.css`'s `.field`/`.dialog-tab`/etc.
 classes, `Button`/`TextField`/`Dialog`/`SearchSelect` components) are still 100% hand-written CSS
 and are **not yet migrated** — only new UI built from here on should use Tailwind/FlyonUI
-utility classes. Existing screens get their own restyle pass later, phase by phase below.
-`flyonui/variants.css`, mentioned in FlyonUI's own README, does not exist in the installed
-2.4.1 package (confirmed by searching `node_modules`) — omitted from the CSS import, not a bug.
+utility classes. Existing screens get their own restyle pass later — process and current phase
+status are in the `flyonui-migration` skill (invoke it before touching any existing screen's
+styling). `flyonui/variants.css`, mentioned in FlyonUI's own README, does not exist in the
+installed 2.4.1 package (confirmed by searching `node_modules`) — omitted from the CSS import, not
+a bug.
 
 ### Color tokens
 
@@ -46,27 +48,19 @@ large solid surface fill, and never in the shell's background gradient — the s
 navy only. If red starts showing up elsewhere, replace it with the navy shell color or a neutral
 grey.
 
-**Brand color note.** Three near-identical reds have been in play. `#ED1B24` is the value the
-delivered Nexus logo SVGs were exported with, and on 2026-07-28 the client chose it as the
-app-wide `--color-crm-primary` so the logo and every other red surface match exactly. The two
-rejected candidates, recorded so this isn't re-litigated: `#E91C2D` (the token's own earlier
-value) and `#EA0A2A` (confirmed directly from `orelit.com`'s theme CSS,
-`--wp--preset--color--accent: #ea0a2a`). All three are genuinely red, not orange, despite how
-they can read on some displays, and the differences are a few points in the blue channel —
-imperceptible side by side. Which one is *correct* was a brand-authority call, not a visual one.
-This does **not** change where red is allowed to appear (see the rule above) — the client
-separately confirmed the shell background should stay navy (matching this section's original
-`#022B5D` value) with no red in it at all; red stays confined to the four usages listed.
+**Brand color note.** `#ED1B24` was chosen by the client on 2026-07-28 as a brand-authority call
+(it's the value the delivered Nexus logo SVGs were exported with) — do not re-litigate the exact
+hex; see `_bmad-output/6-finished-archive/claude-md-decision-log.md` for the two rejected
+candidates and why. This does not change where red is allowed to appear (see the rule above) —
+the shell background stays navy with no red in it at all.
 
 **The glow token is the one deliberate duplicate.** `--color-crm-primary-glow` restates the
 primary as `rgba()` at 15% alpha because Tailwind cannot derive an alpha variant of a custom
 property inside a composite `box-shadow` value. **When the brand red changes, both must be
-edited.** This is the single exception to the one-line-rebrand rule below, and it exists because
-the alternative was worse: before 2026-07-28 there was no glow token and ten separate components
-each hardcoded `rgba(233,28,45,0.15)` inline — so changing `--color-crm-primary` left every form
-focus ring glowing the *previous* brand red, with nothing to catch it. If a future Tailwind
-version can express `color-mix()` or an alpha modifier here, collapse this token back into
-`--color-crm-primary` and delete this paragraph.
+edited.** This is the single exception to the one-line-rebrand rule below — see the decision log
+above for why a separate token exists instead of deriving it. If a future Tailwind version can
+express `color-mix()` or an alpha modifier here, collapse this token back into
+`--color-crm-primary` and delete this note.
 
 **Shell background technique.** The dashboard/sidebar shell (`frontend/src/app/[tenant]/
 (dashboard)/layout.tsx`) uses the same dot+gradient+blur-blob technique as the login page
@@ -154,77 +148,11 @@ Done: `AddDealDialog` (`h-[620px]`, the reference), `CompanyFormDialog` (`h-[620
 spinner given the same height so the dialog doesn't resize when data arrives). Still to retrofit
 when next touched: `ViewDealDialog`.
 
-### Migration discipline
+### Migration process & phase status
 
-- One phase per session/turn. Verify the result (visually, in the browser) before moving to the
-  next phase — never batch multiple phases into one pass.
-- Restyling must never touch: API calls, routes, validation logic, submit handlers, state
-  management, or data mapping/sorting/filtering logic. Only className/CSS changes are in scope
-  for any styling phase.
-- After each phase: list every file modified, and get explicit sign-off before starting the next
-  phase.
-
-#### Phase order (do not skip ahead)
-
-1. ✅ Setup check — confirmed: Next.js 14 App Router, no prior Tailwind, styles in
-   `frontend/src/app/globals.css`, imported once from `frontend/src/app/layout.tsx`.
-2. ✅ Install Tailwind + FlyonUI; configure the main CSS file. Preflight excluded, verified via
-   full `next build` + visual regression across login/dashboard/funnel/Add-Deal-dialog/an admin
-   section — no breakage.
-3. ✅ Add the color tokens above (as a Tailwind `@theme` block — see note above).
-4. Phase 1 — app shell only (sidebar, top nav, main content wrapper, page background). **In
-   progress**: sidebar, top nav (search bar, date/time, account/notification trigger buttons),
-   main-content wrapper, and shell background (navy dot+gradient+glow, see Color tokens above)
-   are done, restyled with Tailwind utility classes referencing the `@theme` tokens (no
-   hardcoded hex). Account-menu and notification dropdown *contents* (not their trigger buttons)
-   are deliberately deferred to Phase 5 (dropdown menus).
-5. Phase 2 — dashboard cards (KPI/metric cards, activity cards, quick actions, empty
-   states/skeletons). **Done** for the two cards that exist today: the KPI stat-card grid
-   (`StatCard.tsx`, `dashboard/page.tsx`) and the activity list (`ActivityWidget.tsx`), including
-   switching their icon-box tint from the old ad-hoc blue (`#eef1fb`/`--color-brand`) to the
-   documented `--color-crm-primary-tint`/`--color-crm-primary` tokens, consistent with "no blue
-   anywhere." No quick-actions widget or empty-state UI exists on the dashboard yet, so that part
-   of this phase's listed scope doesn't apply to current code — revisit if/when one is built.
-6. Phase 3 — tables and lists (data tables, search bars, filter dropdowns, status badges,
-   pagination, row hover states, empty states). **Done** across all 15 consumers (5 admin
-   widgets, 4 layout table widgets, `RelationshipViewWidget`, Backups/Employees/Contacts/
-   Companies/Deals pages) plus the shared `SearchSelect` trigger, `StatusBadge`, and
-   `UserStatusBadge` components. Deliberately **not** touched, staying in scope for Phase 5
-   instead: `SearchSelect`'s open-menu content (a dropdown menu), and the shared `.icon-btn`/
-   `.icon-btn-danger`/`.content-card`/`.empty-state*`/`.field-label` classes, which remain in
-   `globals.css` since components outside this phase's table/list scope still depend on them.
-   Two status-badge components (`StatusBadge`, `UserStatusBadge`) had a real color fix alongside
-   the class migration: "Trial"/"Invited" used the old ad-hoc blue (`#eef1fb`/`#2f6feb`) —
-   switched to the same amber pairing used elsewhere for a neutral "pending" state, per the
-   client's "no blue anywhere" rule (see the Color tokens section above). No pagination exists
-   anywhere yet, so that part of this phase's listed scope doesn't apply to current code.
-7. Phase 4 — forms (text inputs, selects, textareas, checkboxes/radios, validation error
-   styling, save/cancel buttons). **Done.** Shared components migrated first for leverage:
-   `Button.tsx` (fixed a real bug in the same pass: its primary variant used the old
-   `--color-primary` dark-grey token, never the brand red, despite being *the* save/submit button
-   on every form — now `bg-crm-primary`), `TextField.tsx`, `EmailField.tsx`, `PhoneField.tsx`
-   (wrapper only; the third-party phone-input library's own internal styling untouched),
-   `PasswordField.tsx`, `PasswordStrengthHint.tsx`, and the `.dialog-actions` footer wrapper
-   across all 17 of its consumers. Also fixed the shared focus-ring glow from blue
-   (`rgba(47,111,235,...)`) to the brand red, per the "form focus rings" rule and "no blue
-   anywhere." Then all ~20 remaining dialogs with inline `.field`/`.field-error`/
-   `.field-checkbox-row`/`.field-textarea`/`.field-hint`/`.field-locked-value`/`.field-row` usage
-   were migrated file-by-file: 5 admin form dialogs, 6 layout form/detail dialogs, 2 relationship
-   dialogs (`CompanyFormDialog`/`ContactFormDialog` — the largest, ~750 lines each), and several
-   smaller standalone error messages found during a final sweep that weren't in the original
-   survey. All now-dead CSS rules removed from `globals.css`, including the `.password-*` rules
-   that became dead once `PasswordField`/`PasswordStrengthHint` were migrated. `.field-label`
-   (used by `SearchSelect`/`MultiSelect`) and `.permissions-*` (a bespoke picker UI, not a
-   standard form field) were deliberately left alone — out of scope for this phase.
-8. Phase 5 — modals and interactive components (modals, confirmation dialogs, toasts/alerts,
-   dropdown menus, tabs, drawers).
-9. Phase 6 — responsive QA pass (mobile/tablet sidebar collapse, sticky top bar, card stacking,
-   horizontally scrollable tables, usable forms on mobile, no overflow).
-10. Final QA verification — confirm color usage, component classes, and that no logic (API
-    calls, routes, validation, state) was altered anywhere in the migration.
-
-Source: FlyonUI CRM Styling Guide (official FlyonUI documentation — themes, config, utilities,
-colours, component customisation, theme controller).
+Moved to the `flyonui-migration` skill (`.claude/skills/flyonui-migration/SKILL.md`) so it only
+loads into context when actually doing restyle work. Invoke it before touching the styling of any
+existing (not-yet-migrated) screen or component, or when asked about migration progress.
 
 ## Audit, Deletion & Logging Rules
 
@@ -272,35 +200,21 @@ own `deletedAt`/`deletedBy` set correctly, same as if it were deleted directly.
 roughly how many records are affected, and must re-enter their account password to confirm. No
 silent or one-click cascading deletes.
 
-**Rule — a cascade must reach the real leaf entity, not stop at a join/tag table.** Discovered
-2026-07-28 during a full audit prompted by the client: `RelationshipTypesService.remove()` (and
-the single-party `RelationshipPartiesService.remove()` used by the "Delete Company/Person" button)
-both only soft-delete the `relationship_company_contact_map` row — the tag linking a Company or
-Contact to a Relationship Type. Neither ever touches the underlying `Company`/`Contact` row's own
-`deletedAt`/`deletedBy`. The visible symptom: delete a Relationship Type (or a single Company/
-Person card under one), the confirm dialog correctly warns "this will also delete N tagged
-companies/contacts," but those Companies/Contacts stay fully active underneath — still returned by
-every picker (e.g. still selectable when creating a new Deal), still visible to any other
-Relationship Type they also happen to be tagged under, effectively un-deletable by a normal user
-ever again. **Fixed 2026-07-28** — both `RelationshipPartiesService.remove()` and
-`RelationshipTypesService.remove()` now cascade the real soft-delete down to the Company/Contact
-(and a deleted company's own owned Contacts), each getting its own `audit_logs` row (not just a
-count folded into the parent's entry), and each blocked with a `ConflictException` naming the
-still-referenced records if any of them has an active Deal reference — mirroring the guard
-`removeContactForCompany()` already had. Verified live: booted the app, ran both delete paths
-against real throwaway rows, confirmed `companies`/`contacts` rows actually got
-`deletedAt`/`deletedBy` set and each produced its own `audit_logs` delete row. The rule going
-forward, for any *new* cascade: when a cascade's warning dialog tells the user N records will be
-deleted, the code must actually soft-delete all N of those records (each with its own audit log
-row), not just the association row that pointed at them. Before shipping any new cascade, trace it
-all the way to the leaf entity and confirm via a real DB query that the leaf row's `deletedAt`
-actually changed, not just the join table's.
+**Rule — a cascade must reach the real leaf entity, not stop at a join/tag table.** A join/tag-
+table-only cascade (soft-deleting the link row but never the Company/Contact/etc. it points at)
+shipped once and stayed invisible for a while — full incident in
+`_bmad-output/6-finished-archive/claude-md-decision-log.md`. The rule going forward, for any *new*
+cascade: when a cascade's warning dialog tells the user N records will be deleted, the code must
+actually soft-delete all N of those records (each with its own audit log row), not just the
+association row that pointed at them. Before shipping any new cascade, trace it all the way to the
+leaf entity and confirm via a real DB query that the leaf row's `deletedAt` actually changed, not
+just the join table's.
 
-**Known residual data issue:** this bug shipped before the fix above, so 6 Companies and 1 Contact
-in the live database are still soft-orphaned from it (a `relationship_company_contact_map` row
-that's deleted, pointing at a Company/Contact that isn't) — found via direct query during the same
-audit. Not backfilled automatically; needs an explicit one-time cleanup decision (which rows,
-confirmed with the client) rather than a silent bulk soft-delete.
+**Known residual data issue:** 6 Companies and 1 Contact in the live database are still
+soft-orphaned from the bug above (a `relationship_company_contact_map` row that's deleted,
+pointing at a Company/Contact that isn't). Not backfilled automatically; needs an explicit
+one-time cleanup decision (which rows, confirmed with the client) rather than a silent bulk
+soft-delete.
 
 ### Deeper audit trail
 
@@ -323,8 +237,7 @@ create/update/delete for every table with its own service: `relationship_type`,
 `relationship_party` (company/contact tagging), `department`, `deal_source`, `user`, `rbac_role`
 (+ role-resource/role-user assignment), `team`, `tenant`, `deal`, `deal_partner`, `deal_document`,
 `deal_note`, `deal_tender_detail`, `employee`, `certification`, `priority_task` (+
-`priority_task_share`), and — added in this pass, previously the one real gap — `main_stage` and
-`sub_stage` (`backend/src/modules/deal-stages/`).
+`priority_task_share`), and `main_stage`/`sub_stage` (`backend/src/modules/deal-stages/`).
 
 ### Terminal logging
 
@@ -379,40 +292,19 @@ bare (no `relations` option, no `leftJoinAndSelect`).** Load a bare entity for t
 mutate it, save it, and — if the caller needs display data (resolved names, joined records) —
 re-fetch a *separate*, relations-loaded copy afterward purely to build the response.
 
-**Why this is a rule and not just a style preference**: discovered 2026-07-21 while building View
-Deal — `deals.service.ts`'s `update()` and `moveStage()` both loaded the `Deal` via
-`findOneWithRelations()` (needed six-then-ten `leftJoinAndSelect`s for display purposes: company,
-owner, stage names, etc.), mutated one or two fields on that same object, then called
-`saveScoped()`. This silently **nulled every relation-backed FK column on the row**
-(`company_id`, `contact_id`, `primary_contact_id`, `source_id`, `department_id`,
-`pre_sales_person_id`, `pmo_id`) on every single update/move — confirmed empirically: reproduced
-with as few as one relation loaded, reproduced with zero DTO fields touching those columns
-(`moveStage` never even referenced them), gone completely the instant the entity was loaded with
-*zero* relations. It was only ever caught because `deals` happens to have a `CHECK` constraint
-(`company_id IS NOT NULL OR contact_id IS NOT NULL`) that turned the corruption into a loud 500
-instead of a silent data loss. **Any other entity with the same load-with-relations-then-save
-pattern and no equivalent CHECK constraint would lose its relation columns on every partial update
-with no error at all.** Audited: no other service in this codebase does this today — every other
-`findOneOrFail` used ahead of a mutation loads bare (`findOneScoped({where:{id}})`, no `relations`
-option) — Deals was the only one combining "needs relations for display" with "the same method is
-also used to fetch the mutation target." Keep it that way: if a future resource's `findOneOrFail`
-needs relations for its own display purposes, split it into two methods the way
-`deals.service.ts` now does (`findOneOrFail` for relations/response, a private
-`findOneBareOrFail` for the entity that actually gets mutated and saved), never one method serving
-both purposes.
+This is a hard rule, not a style preference: loading an entity with relations and then `save()`ing
+that same object silently **nulls every relation-backed FK column on the row** — reproduced with
+as little as one relation loaded, regardless of which fields the mutation actually touched. Full
+incident writeup (the `deals.service.ts` bug this was discovered from) is in
+`_bmad-output/6-finished-archive/claude-md-decision-log.md`. If a future resource's
+`findOneOrFail` needs relations for its own display purposes, split it into two methods the way
+`deals.service.ts` does (`findOneOrFail` for relations/response, a private `findOneBareOrFail` for
+the entity that actually gets mutated and saved), never one method serving both purposes.
 
 ## Replacing a set of join rows must be atomic, and its ids validated first
 
 **Rule: "replace this record's links" is a delete plus an insert, and it is only correct inside one
 transaction. Validate every submitted foreign key before the first write.**
-
-Discovered 2026-07-31, hours after shipping, by probing the endpoint — not by any typecheck.
-`RelationshipPartiesService.updateCompany()` replaced a company's `company_industries` rows with a
-`delete(removed)` followed by a `save(added)`, unwrapped. When the insert failed on a bad
-`industry_id` FK, **the delete stayed committed and the company was left with no industries at
-all** — reproduced live, one bad id took a company from 1 link to 0, with nothing shown to the
-user. The same missing validation also turned a well-formed but non-existent uuid into a `500`
-instead of a `404`, on both the create and update paths.
 
 Both halves matter and neither substitutes for the other:
 
@@ -425,9 +317,11 @@ Both halves matter and neither substitutes for the other:
   between the check and the insert still races. The transaction is what makes the failure
   non-destructive instead of merely unlikely.
 
-The trigger is not exotic. Pickers in this codebase fetch their options once on mount and never
-refresh (a known, deferred issue — see `_bmad-output/2-current-work/deferred-work.md`), so a form
-left open across someone else's admin edit submits a stale id as a matter of course.
+Full incident writeup (the `RelationshipPartiesService.updateCompany()` bug this was discovered
+from) is in `_bmad-output/6-finished-archive/claude-md-decision-log.md`. The trigger is not
+exotic: pickers in this codebase fetch their options once on mount and never refresh (a known,
+deferred issue — see `_bmad-output/2-current-work/deferred-work.md`), so a form left open across
+someone else's admin edit submits a stale id as a matter of course.
 
 **Before shipping any new "replace the set" write path, prove it by sending a deliberately bad id
 and confirming two things: the response is a 4xx naming the problem, and the record's existing
@@ -475,21 +369,14 @@ justification — it's an exception for this one read-only case, not a second pa
 
 **Migration complete** for `TENANTS`, `USERS`, `RBAC`, `TEAMS`, `RELATIONSHIP_TYPE`,
 `RELATIONSHIP`, `MAIN_STAGE`, `SUB_STAGE`, `DEPARTMENT`, `DEAL_SOURCE` — all ten `_MANAGE` keys
-deleted from `permissions.ts`, every controller guard and frontend `hasManage` fallback trimmed,
-both roles that held any of them (`Admin`, `Super Admin`) migrated onto the granular equivalents
-first (verified via direct DB query — zero access lost), and `Sidebar.tsx` changed from checking
-one hardcoded permission key per nav item to checking "does the user hold *any* permission under
-this resource's prefix" — so removing a resource's `_MANAGE` key (or changing its permission set
-again later) never requires a matching `Sidebar.tsx` edit.
+deleted, zero access lost (verified via direct DB query). Full detail in
+`_bmad-output/6-finished-archive/claude-md-decision-log.md`. Companies/Contacts/Deals never had a
+`_MANAGE` key at all (already 4-permission by design).
 
 **Not yet migrated:** `DEAL_STAGES_MANAGE` — a dead wildcard (zero controllers ever checked it)
 superseded by `MAIN_STAGE_*`/`SUB_STAGE_*`'s own granular permissions. Tracked as its own task in
 `_bmad-output/4-design-plans/plan-funnel-deal-management.md` (Task 4), since it needs no
 migration (nothing to move access to) — just deletion, once picked up.
-
-Companies/Contacts/Deals never had a `_MANAGE` key at all (already 4-permission by design) — the
-only fix needed there was renaming their read action from `_READ` to `_VIEW` for naming
-consistency with every other resource, also done.
 
 ## RBAC Routes vs. System-Internal (Picker) Routes
 
