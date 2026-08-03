@@ -1761,37 +1761,24 @@ export function AddDealDialog({
                         </>
                       )}
 
-                      {isEdit ? (
-                        <>
-                          {teammates.length > 0 && (
-                            <div className="mb-2 flex flex-col gap-2">
-                              {teammates.map((a) => (
-                                <div
-                                  key={a.id}
-                                  className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 hover:border-slate-300 transition-colors duration-150"
-                                >
-                                  <UserIcon size={14} />
-                                  <span className="flex-1 text-[13.5px] font-semibold text-crm-text">{a.userDisplayName}</span>
-                                  <button
-                                    type="button"
-                                    className="flex cursor-pointer rounded-md border-0 bg-transparent p-1.5 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#fdf0ee] hover:text-[var(--color-danger)]"
-                                    aria-label={`Remove ${a.userDisplayName}`}
-                                    onClick={() => handleRemoveAssignment(a.id)}
-                                  >
-                                    <TrashIcon size={14} />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          <SearchSelect
-                            value=""
-                            onChange={(userId) => handleAssignRole(role.id, userId)}
-                            options={addOptions}
-                            placeholder={isSalesPerson ? "Add another Sales Person..." : `Add to ${role.name}...`}
-                            searchPlaceholder="Search by name..."
-                          />
-                        </>
+                       {isEdit ? (
+                        <MultiSelect
+                          values={teammates.map((a) => a.userId)}
+                          onChange={async (nextUserIds) => {
+                            const regularUserIds = teammates.map((a) => a.userId);
+                            const addedIds = nextUserIds.filter((id) => !regularUserIds.includes(id));
+                            for (const userId of addedIds) {
+                              await handleAssignRole(role.id, userId);
+                            }
+                            const removed = teammates.filter((a) => !nextUserIds.includes(a.userId));
+                            for (const assignment of removed) {
+                              await handleRemoveAssignment(assignment.id);
+                            }
+                          }}
+                          options={isSalesPerson ? baseUserOptions.filter((o) => o.value !== values.salesPersonUserId) : baseUserOptions}
+                          placeholder={isSalesPerson ? "Add another Sales Person..." : `Add to ${role.name}...`}
+                          searchPlaceholder="Search by name..."
+                        />
                       ) : (
                         <MultiSelect
                           values={roleAssignmentValues[role.id] ?? []}
