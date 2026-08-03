@@ -18,7 +18,7 @@ import { listMainStages } from "@/lib/api/main-stages";
 import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
-import { BuildingIcon, EditIcon, ExternalLinkIcon, FileIcon, FunnelIcon, LegalIcon, FinanceIcon, UsersGroupIcon, TrashIcon, UserIcon } from "@/components/ui/icons";
+import { BuildingIcon, EditIcon, ExternalLinkIcon, FileIcon, FunnelIcon, LegalIcon, FinanceIcon, UsersGroupIcon, TrashIcon, UserIcon, ClockIcon } from "@/components/ui/icons";
 import { useAlert, useCascadeDeleteConfirm, useConfirm } from "@/components/providers/DialogProvider";
 import { computeCosting, formatLkr, formatNoteTime, formatPercent, getInitials } from "@/lib/deals/deal-display";
 import { DealStageHistoryRoadmap } from "./DealStageHistoryRoadmap";
@@ -280,33 +280,41 @@ export function ViewDealDialog({
       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 text-crm-primary border border-red-100 shadow-sm">
         <FunnelIcon size={22} />
       </div>
-      <div className="flex items-center justify-between gap-6 flex-1 min-w-0">
-        <div className="flex flex-col min-w-0">
-          <span className="text-[16px] font-bold text-slate-800 truncate leading-tight">
-            {deal.name}
-          </span>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-[11.5px] font-semibold text-[var(--color-text-muted)]">
-              {deal.companyName || deal.contactName || "No Customer Assigned"}
+      <div className="flex flex-col min-w-0">
+        <span className="text-[16px] font-bold text-slate-800 truncate leading-tight">
+          {deal.name}
+        </span>
+        <span className="text-[12px] font-medium text-[var(--color-text-muted)] leading-none mt-1">
+          {deal.companyName || deal.contactName || "No Customer Assigned"}
+        </span>
+      </div>
+    </div>
+  );
+
+  return (
+    <Dialog open title={dialogTitle} onClose={onClose} maxWidth="960px">
+      
+      {/* Metrics Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50 border border-slate-100/80 rounded-xl p-4 mb-6 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white shadow-sm border border-slate-100 text-slate-400">
+            <ClockIcon size={16} />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Created</span>
+            <span className="text-[12.5px] font-bold text-slate-700 leading-none">
+              {dealAgeText || "Unknown"}
             </span>
-            {dealAgeText && (
-              <>
-                <span className="w-1 h-1 rounded-full bg-slate-300" />
-                <span className="text-[11px] font-medium text-slate-500 tracking-wide">
-                  {dealAgeText}
-                </span>
-              </>
-            )}
           </div>
         </div>
-        
+
         {weightPercent != null && (
-          <div className="hidden sm:flex flex-col w-36 shrink-0 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-            <div className="flex items-center justify-between text-[9.5px] font-bold text-slate-500 tracking-wider mb-1.5 uppercase">
+          <div className="flex flex-col w-full sm:w-72 bg-white px-4 py-2.5 rounded-lg border border-slate-100/80 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+            <div className="flex items-center justify-between text-[9.5px] font-bold text-slate-500 tracking-wider mb-2 uppercase">
               <span>Stage Progress</span>
-              <span className="text-crm-primary">{weightPercent}%</span>
+              <span className="text-[10px] text-crm-primary bg-red-50/80 px-2 py-0.5 rounded-md border border-red-100/50">{weightPercent}%</span>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 shadow-inner">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 shadow-inner">
               <div
                 className="h-full rounded-full bg-[var(--color-crm-primary)] transition-all duration-700 ease-out shadow-[0_0_10px_var(--color-crm-primary-glow)]"
                 style={{ width: `${weightPercent}%` }}
@@ -315,11 +323,7 @@ export function ViewDealDialog({
           </div>
         )}
       </div>
-    </div>
-  );
 
-  return (
-    <Dialog open title={dialogTitle} onClose={onClose} maxWidth="960px">
       <div className="relative mb-6">
         {showLeftFade && (
           <div className="absolute left-1 top-1 bottom-1 w-10 bg-gradient-to-r from-slate-100/90 to-transparent pointer-events-none z-10 rounded-l-lg" />

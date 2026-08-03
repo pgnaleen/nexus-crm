@@ -641,3 +641,27 @@ user holding only `AUDIT_LOG_VIEW` got the identical 2-row Helix-only result reg
 whether `allTenants=true` or a foreign `tenantId` was sent — confirming the client-sent flags are
 never trusted, only ever honored after the server independently re-derives platform status from
 the session itself.
+
+---
+
+## Dashboard (`backend/src/modules/dashboard/dashboard.controller.ts`)
+
+New module, 2026-08-04 — closes the two gaps `DashboardWidgetGrid.tsx`'s own code comments and
+Story 1.8 (`epics-system.md`) called out as deliberately deferred: (1) per-widget permission
+filtering, now done one layer up in `dashboard/page.tsx` via
+`frontend/src/components/widgets/widget-registry.tsx` (each widget declares the section-prefix(es)
+its data belongs to; the page filters `WIDGET_REGISTRY` against the signed-in user's
+`session.permissions` using the same `hasAnyPermissionForPrefix` rule `Sidebar.tsx` uses for nav
+items — moved to `frontend/src/lib/permissions.ts` so both share one implementation), and (2)
+backend-persisted layout/visibility, replacing what used to be `localStorage`-only state in
+`DashboardWidgetGrid.tsx`.
+
+Both routes gated by authentication only — no `PermissionsGuard`/`RequirePermission` — same access
+model as Priority Tasks: every user reads and writes only their own dashboard preferences, so
+there's no resource permission to gate on. One row per (tenant, user) in `dashboard_preferences`
+(upserted, never append-only), extending `AuditedTenantEntity` per the standing audit-columns rule.
+
+| # | Method | Endpoint | Type | Permission(s) | Purpose | Request Data | Response Data | Controller → Service | Frontend Consumer(s) | Debug Logging | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | GET | `/dashboard/preferences` | Auth only (no RBAC permission) | none | The caller's own saved widget visibility + grid layout, or `null` if never saved. | none | `DashboardPreferenceResponse \| null` → `{visibleWidgetKeys: string[], layout: DashboardLayoutItem[]} \| null` | `getPreferences` → `dashboard-preferences.service.ts::getForUser` | `dashboard/page.tsx` (server-side fetch, passed into `DashboardWidgetGrid`) | ✅ | `null` means "no row yet" — the frontend falls back to `widget-registry.tsx`'s default layout/visibility (every permitted widget shown) in that case. |
+| 2 | PUT | `/dashboard/preferences` | Auth only (no RBAC permission) | none | Upserts the caller's own widget visibility + grid layout. | body: `UpdateDashboardPreferenceRequest` → `{visibleWidgetKeys: string[], layout: DashboardLayoutItem[]}` | `DashboardPreferenceResponse` (same shape as #1, never null) | `updatePreferences` → `dashboard-preferences.service.ts::upsertForUser` | `DashboardWidgetGrid.tsx` (debounced save on layout/visibility change, replacing the old `localStorage.setItem` calls) | ✅ | One row per (tenant, user) — update-in-place via a bare (no-relations) load-then-save, never a second row. |

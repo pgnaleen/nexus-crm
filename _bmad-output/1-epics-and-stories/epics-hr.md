@@ -412,9 +412,83 @@ So that **I can quickly identify who's qualified for a project requirement, trus
 **When** I search
 **Then** I get a clear "no matches" result, not an error or an empty-looking broken screen
 
+### Story 1.15: Configurable Reporting Types & Multi-Line Reporting — DRAFT
+
+> Picked up 2026-08-04 from the "Indirect / dotted-line reporting" deferred item below — the
+> product owner has now confirmed direction (via Mary), generalized beyond a fixed
+> direct/dotted-line binary into an **admin-defined list of Reporting Types**. Not yet reviewed
+> by the architect — see the open questions at the end before implementation starts.
+
+As an **HR admin**,
+I want **to define named Reporting Types (e.g. "Direct", "Functional", "Dotted-line"), each with
+its own line style, and connect an employee to more than one manager at once — exactly one
+primary link that drives their position in the org tree, plus any number of secondary/overlay
+links tagged by type**,
+So that **the chart can represent real matrix-style reporting (e.g. a regional lead who also
+functionally reports to a global director) instead of being limited to one manager per person**.
+
+**Acceptance Criteria (draft — pending product owner confirmation, one story at a time per this
+epic's own review process):**
+
+**Given** a new admin section for Reporting Types (own CRUD, own `_VIEW`/`_CREATE`/`_UPDATE`/
+`_DELETE` permissions, following this project's standard admin-section pattern)
+**When** an HR admin creates one
+**Then** they set a name and a line style (color + dash pattern) that the Playground and view mode
+both use to render that type's connections
+
+**Given** I'm in the Playground and draw a connection between two employee cards
+**When** the connection is made
+**Then** I'm prompted to choose which Reporting Type it represents
+
+**Given** an employee already has a primary (tree-driving) link
+**When** I draw a new connection of a different type to them
+**Then** it's added as a secondary/overlay link, not a replacement — the employee's position in the
+main tree doesn't move
+
+**Given** an employee has multiple links
+**When** the structure is saved
+**Then** exactly one is enforced server-side as primary at all times — never zero, never more than
+one
+
+**Given** I'm in view mode and multiple Reporting Types have overlay links on the chart
+**When** I toggle a type's visibility (a legend-style show/hide, matching the client demo's
+"toggleable view")
+**Then** only that type's overlay edges show/hide — the primary tree stays visible always
+
+**Given** the existing cycle-detection rule for the primary tree (Story 1.8)
+**When** a primary connection would create a loop
+**Then** it's still rejected exactly as today — unchanged
+
+**Open questions for Winston (architecture) before this is built:**
+1. Schema shape — most likely a new join table (`employee_reporting_links`: `employeeId`,
+   `managerId`, `reportingTypeId`, `isPrimary`, full audit columns) replacing the single
+   `reportingManagerId` column, mirroring the `deal_partners_map`-style pattern already used
+   elsewhere in this codebase for "many links to one entity." Needs the architect's sign-off, not
+   assumed here.
+2. Migration — every employee's existing `reportingManagerId` needs backfilling into the new join
+   table as `isPrimary = true` under a seeded default "Direct" Reporting Type.
+3. Cascade rules — what happens to an employee's links when: the employee exits, their manager
+   exits, or a Reporting Type is deactivated/soft-deleted while links still reference it. Follows
+   `CLAUDE.md`'s cascade-delete rule (explicit, transactional, reach the real leaf entity) — not
+   yet worked out for this specific shape.
+4. Cycle-detection scope — does a secondary/dotted link need loop protection too, or is it exempt
+   since it doesn't establish authority the way the primary link does? Undecided.
+
+### Story 1.16: Org Chart — Visual, Interaction & Motion Polish — DRAFT
+
+> Also raised 2026-08-04. Scope confirmed as the **whole page** (view mode and the Playground
+> edit mode both), across **all three** axes together: visual design (card styling, spacing,
+> color, typography — currently functional but utilitarian), drag-and-drop feel (interactions feel
+> stiff/unclear), and motion (missing transitions — nodes/state changes snap rather than
+> animate). No acceptance criteria written yet — this is a design problem before it's a build
+> problem. Recommend a UX pass (Sally) to produce concrete before/after treatment ahead of any
+> implementation, rather than prescribing pixel-level detail here.
+
 ## Deferred (not in this release)
 
-- **Indirect / dotted-line reporting.** The client-provided demo supports a second relationship type (an employee reporting, in a secondary/dotted sense, to more than one manager) with its own toggleable view. This epic ships direct-line reporting only. Raised three times during story review without a scope decision from the product owner — treated as **out of scope for this release** rather than left ambiguous; revisit as its own story (working title: "Story 1.15: View/Edit Indirect Reporting Lines") if the client confirms it's needed.
+- **Indirect / dotted-line reporting.** ~~The client-provided demo supports a second relationship
+  type...~~ Picked up as **Story 1.15** above (2026-08-04) — no longer deferred, now in draft
+  pending architecture review.
 - **Certification expiry logic** (auto-flagging expired certifications, excluding them from staffing search, renewal reminders). The `expiryDate` field is captured starting in Story 1.12, but no behavior acts on it yet.
 - **Manager-level certification verification.** Story 1.13 restricts verification to `EMPLOYEES_VERIFY_CERTIFICATIONS` holders (HR), not an employee's own reporting manager — revisit if the client wants managers to verify their own team's claims.
 - **Real-time multi-user collaboration** (multiple HR admins editing the chart simultaneously with live cursors, as in the demo). Not pursued unless confirmed necessary — the batch edit-mode/save flow in Story 1.8 assumes single-editor-at-a-time, consistent with how every other form in this app already works.
