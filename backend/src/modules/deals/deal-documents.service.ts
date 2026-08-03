@@ -59,6 +59,7 @@ export class DealDocumentsService {
         userId,
         dto.title,
         dto.docType,
+        dto.version,
       );
       this.logger.debug(`create succeeded, document ${saved.id}`);
       await this.auditLogService.record({
@@ -66,7 +67,7 @@ export class DealDocumentsService {
         entityId: saved.id,
         action: "insert",
         actorId: userId,
-        changes: { dealId, docType: saved.docType, title: saved.title },
+        changes: { dealId, docType: saved.docType, title: saved.title, version: saved.version },
       });
       return saved;
     } catch (err) {
@@ -92,7 +93,7 @@ export class DealDocumentsService {
         entityId: documentId,
         action: "delete",
         actorId: userId,
-        changes: { dealId, docType: target.docType, title: target.title },
+        changes: { dealId, docType: target.docType, title: target.title, version: target.version },
       });
     } catch (err) {
       this.logger.error(`remove failed for document ${documentId}: ${(err as Error).message}`, (err as Error).stack);

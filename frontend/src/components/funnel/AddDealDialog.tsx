@@ -48,7 +48,7 @@ import {
 } from "@/lib/api/pickers";
 import { ApiError } from "@/lib/api/client";
 import { useToast } from "@/components/providers/ToastProvider";
-import { computeCosting, formatBytes, formatLkr, formatNoteTime, formatPercent, getInitials } from "@/lib/deals/deal-display";
+import { computeCosting, formatLkr, formatNoteTime, formatPercent, getInitials } from "@/lib/deals/deal-display";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
@@ -100,6 +100,18 @@ const TEXTAREA_CLASS =
 interface StagedDocument {
   id: string;
   file: File;
+  name: string;
+  version: string;
+}
+
+// Blank Name falls back to the file's own name, blank Version falls back to
+// "1.0" -- applied here, once, at upload time so every document gets a real
+// stored value rather than blank/null.
+function resolveDocMeta(doc: StagedDocument): { title: string; version: string } {
+  return {
+    title: doc.name.trim() || doc.file.name,
+    version: doc.version.trim() || "1.0",
+  };
 }
 
 interface CompetitorEntry {
@@ -540,27 +552,44 @@ export function AddDealDialog({
   async function addFiles(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
 
-    if (isEdit && deal) {
-      setIsUploadingDocs(true);
-      try {
-        for (const file of Array.from(fileList)) {
-          const doc = await uploadDealDocument(deal.id, file, { docType: DocumentType.Other, title: file.name });
-          setExistingDocuments((prev) => [...prev, doc]);
-        }
-      } catch (err) {
-        setFormError(err instanceof ApiError ? err.message : "Failed to upload document");
-      } finally {
-        setIsUploadingDocs(false);
-      }
-      return;
-    }
-
-    const next = Array.from(fileList).map((file) => ({ id: crypto.randomUUID(), file }));
+    // Both modes stage first now -- the user gets a moment to edit Name/
+    // Version before anything is actually uploaded. Edit mode's previous
+    // instant-upload-on-select is gone; it now needs an explicit Upload
+    // click (uploadStagedDocument below) once those fields are filled in.
+    const next = Array.from(fileList).map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      name: file.name,
+      version: "",
+    }));
     setDocuments((prev) => [...prev, ...next]);
+  }
+
+  function updateStagedDocument(id: string, field: "name" | "version", value: string) {
+    setDocuments((prev) => prev.map((doc) => (doc.id === id ? { ...doc, [field]: value } : doc)));
   }
 
   function removeDocument(id: string) {
     setDocuments((prev) => prev.filter((doc) => doc.id !== id));
+  }
+
+  // Edit mode only -- uploads one staged document for real and moves it
+  // into existingDocuments on success (create mode uploads everything
+  // staged at deal-creation submit time instead, see handleSubmit).
+  async function uploadStagedDocument(id: string) {
+    if (!deal) return;
+    const staged = documents.find((doc) => doc.id === id);
+    if (!staged) return;
+    setIsUploadingDocs(true);
+    try {
+      const doc = await uploadDealDocument(deal.id, staged.file, { docType: DocumentType.Other, ...resolveDocMeta(staged) });
+      setExistingDocuments((prev) => [...prev, doc]);
+      setDocuments((prev) => prev.filter((d) => d.id !== id));
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message : "Failed to upload document");
+    } finally {
+      setIsUploadingDocs(false);
+    }
   }
 
   async function removeExistingDocument(documentId: string) {
@@ -780,7 +809,7 @@ export function AddDealDialog({
     try {
       await Promise.all([
         ...documents.map((doc) =>
-          uploadDealDocument(createdDeal.id, doc.file, { docType: DocumentType.Other, title: doc.file.name }),
+          uploadDealDocument(createdDeal.id, doc.file, { docType: DocumentType.Other, ...resolveDocMeta(doc) }),
         ),
         ...partnerValues.map((value) => {
           const partner = parsePartyValue(value);
@@ -1852,7 +1881,7 @@ export function AddDealDialog({
                 {isEdit && isUploadingDocs ? "Uploading…" : "Click to upload or drag and drop"}
               </span>
               <span className="text-xs text-[var(--color-text-muted)]">
-                {isEdit ? "Uploaded immediately" : "Uploaded once you create the deal"}
+                {isEdit ? "Set a name/version, then click Upload" : "Uploaded once you create the deal"}
               </span>
               <input
                 ref={fileInputRef}
@@ -1863,68 +1892,92 @@ export function AddDealDialog({
               />
             </div>
 
-            {isEdit
-              ? existingDocuments.length > 0 && (
-                  <div className="mt-4 flex flex-col gap-2.5">
-                    {existingDocuments.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 hover:border-slate-300 transition-colors duration-150"
+            {documents.length > 0 && (
+              <div className="mt-4 flex flex-col gap-2.5">
+                {documents.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 hover:border-slate-300 transition-colors duration-150"
+                  >
+                    <span className="flex flex-shrink-0 text-crm-primary">
+                      <FileIcon size={18} />
+                    </span>
+                    <div className="min-w-0 flex-1 flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={doc.name}
+                        placeholder={doc.file.name}
+                        onChange={(e) => updateStagedDocument(doc.id, "name", e.target.value)}
+                        className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[13.5px] font-semibold text-crm-text focus:outline-none focus:border-[var(--color-crm-primary)]"
+                        aria-label="Document name"
+                      />
+                      <input
+                        type="text"
+                        value={doc.version}
+                        placeholder="1.0"
+                        onChange={(e) => updateStagedDocument(doc.id, "version", e.target.value)}
+                        className="w-20 flex-shrink-0 rounded-md border border-slate-200 bg-white px-2 py-1 text-[13px] text-crm-text focus:outline-none focus:border-[var(--color-crm-primary)]"
+                        aria-label="Document version"
+                      />
+                    </div>
+                    {isEdit && (
+                      <button
+                        type="button"
+                        disabled={isUploadingDocs}
+                        className="flex-shrink-0 rounded-md border-0 bg-crm-primary px-2.5 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-crm-primary-hover disabled:opacity-50"
+                        onClick={() => uploadStagedDocument(doc.id)}
                       >
-                        <span className="flex flex-shrink-0 text-crm-primary">
-                          <FileIcon size={18} />
-                        </span>
-                        <a
-                          href={doc.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="min-w-0 flex-1 no-underline"
-                        >
-                          <div className="overflow-hidden truncate text-[13.5px] font-bold text-crm-text">
-                            {doc.title}
-                          </div>
-                          <div className="text-[11px] text-[var(--color-text-muted)] mt-0.5">{doc.docType}</div>
-                        </a>
-                        <button
-                          type="button"
-                          className="flex cursor-pointer rounded-md border-0 bg-transparent p-1.5 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#fdf0ee] hover:text-[var(--color-danger)]"
-                          aria-label={`Remove ${doc.title}`}
-                          onClick={() => removeExistingDocument(doc.id)}
-                        >
-                          <TrashIcon size={14} />
-                        </button>
-                      </div>
-                    ))}
+                        Upload
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="flex flex-shrink-0 cursor-pointer rounded-md border-0 bg-transparent p-1.5 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#fdf0ee] hover:text-[var(--color-danger)]"
+                      aria-label={`Remove ${doc.file.name}`}
+                      onClick={() => removeDocument(doc.id)}
+                    >
+                      <TrashIcon size={14} />
+                    </button>
                   </div>
-                )
-              : documents.length > 0 && (
-                  <div className="mt-4 flex flex-col gap-2.5">
-                    {documents.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 hover:border-slate-300 transition-colors duration-150"
-                      >
-                        <span className="flex flex-shrink-0 text-crm-primary">
-                          <FileIcon size={18} />
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="overflow-hidden truncate text-[13.5px] font-bold text-crm-text">
-                            {doc.file.name}
-                          </div>
-                          <div className="text-[11px] text-[var(--color-text-muted)] mt-0.5">{formatBytes(doc.file.size)}</div>
-                        </div>
-                        <button
-                          type="button"
-                          className="flex cursor-pointer rounded-md border-0 bg-transparent p-1.5 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#fdf0ee] hover:text-[var(--color-danger)]"
-                          aria-label={`Remove ${doc.file.name}`}
-                          onClick={() => removeDocument(doc.id)}
-                        >
-                          <TrashIcon size={14} />
-                        </button>
+                ))}
+              </div>
+            )}
+
+            {isEdit && existingDocuments.length > 0 && (
+              <div className="mt-4 flex flex-col gap-2.5">
+                {existingDocuments.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 hover:border-slate-300 transition-colors duration-150"
+                  >
+                    <span className="flex flex-shrink-0 text-crm-primary">
+                      <FileIcon size={18} />
+                    </span>
+                    <a
+                      href={doc.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="min-w-0 flex-1 no-underline"
+                    >
+                      <div className="overflow-hidden truncate text-[13.5px] font-bold text-crm-text">
+                        {doc.title}
                       </div>
-                    ))}
+                      <div className="text-[11px] text-[var(--color-text-muted)] mt-0.5">
+                        {doc.docType}{doc.version ? ` · ${doc.version}` : ""}
+                      </div>
+                    </a>
+                    <button
+                      type="button"
+                      className="flex cursor-pointer rounded-md border-0 bg-transparent p-1.5 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#fdf0ee] hover:text-[var(--color-danger)]"
+                      aria-label={`Remove ${doc.title}`}
+                      onClick={() => removeExistingDocument(doc.id)}
+                    >
+                      <TrashIcon size={14} />
+                    </button>
                   </div>
-                )}
+                ))}
+              </div>
+            )}
           </div>
         )}
 

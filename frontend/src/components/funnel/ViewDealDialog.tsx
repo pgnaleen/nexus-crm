@@ -546,7 +546,9 @@ export function ViewDealDialog({
                     <div className="overflow-hidden truncate text-[13.5px] font-bold text-crm-text">
                       {doc.title}
                     </div>
-                    <div className="text-[11px] text-[var(--color-text-muted)] mt-0.5">{doc.docType}</div>
+                    <div className="text-[11px] text-[var(--color-text-muted)] mt-0.5">
+                      {doc.docType}{doc.version ? ` · ${doc.version}` : ""}
+                    </div>
                   </div>
                   <span className="text-slate-400"><ExternalLinkIcon size={14} /></span>
                 </a>

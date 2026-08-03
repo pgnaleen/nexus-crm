@@ -26,6 +26,9 @@ export class Document extends AuditedTenantEntity {
   @Column({ type: "varchar", nullable: true })
   title?: string | null;
 
+  @Column({ type: "varchar", nullable: true })
+  version?: string | null;
+
   @Column()
   s3Key!: string;
 }

@@ -1,5 +1,5 @@
 import { CreateDealDocumentRequest, DocumentType } from "@orelia/common";
-import { IsEnum, IsString, MaxLength, MinLength } from "class-validator";
+import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 
 export class CreateDealDocumentDto implements CreateDealDocumentRequest {
   @IsEnum(DocumentType)
@@ -9,4 +9,9 @@ export class CreateDealDocumentDto implements CreateDealDocumentRequest {
   @MinLength(1)
   @MaxLength(160)
   title!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  version?: string;
 }

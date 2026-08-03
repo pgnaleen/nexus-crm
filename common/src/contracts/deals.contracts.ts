@@ -88,6 +88,7 @@ export interface DealResponse extends IDeal {
 export interface CreateDealDocumentRequest {
   docType: DocumentType;
   title: string;
+  version?: string;
 }
 
 export interface DealDocumentResponse {
@@ -95,6 +96,7 @@ export interface DealDocumentResponse {
   dealId: string;
   docType: DocumentType;
   title: string;
+  version?: string;
   url: string;
   createdAt: string;
 }

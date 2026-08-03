@@ -71,6 +71,7 @@ export async function uploadDealDocument(
   formData.append("file", file);
   formData.append("docType", meta.docType);
   formData.append("title", meta.title);
+  if (meta.version) formData.append("version", meta.version);
 
   // Raw fetch, not apiFetch -- apiFetch forces a JSON Content-Type header,
   // which would break this multipart/form-data upload (the browser needs to

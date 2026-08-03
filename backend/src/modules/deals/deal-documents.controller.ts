@@ -131,6 +131,7 @@ export class DealDocumentsController {
       // sharing this table.
       docType: document.docType!,
       title: document.title!,
+      version: document.version ?? undefined,
       // A fresh signed URL, generated on every response -- the row itself
       // only ever stores the bare S3 key (document.s3Key).
       url: (await this.s3.getSignedGetUrl(document.s3Key)) ?? "",

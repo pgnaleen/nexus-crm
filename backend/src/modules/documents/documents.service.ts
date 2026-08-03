@@ -94,6 +94,7 @@ export class DocumentsService {
     actorId: string,
     title?: string | null,
     docType?: DocumentType | null,
+    version?: string | null,
   ): Promise<Document> {
     this.logger.debug(`add called (ownerType=${ownerType}, ownerId=${ownerId})`);
     const created = this.documentsRepo.createScoped({
@@ -102,6 +103,7 @@ export class DocumentsService {
       s3Key,
       title: title ?? null,
       docType: docType ?? null,
+      version: version ?? null,
       createdBy: actorId,
     });
     const saved = await this.documentsRepo.saveScoped(created);
