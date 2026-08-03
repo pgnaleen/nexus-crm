@@ -18,6 +18,7 @@ export * from "./employment-status.enum";
 export * from "./clearance-level.enum";
 export * from "./document-type.enum";
 export * from "./document-owner-type.enum";
+export * from "./auth-event-type.enum";
 export * from "./review-type.enum";
 export * from "./review-decision.enum";
 export * from "./review-vote.enum";

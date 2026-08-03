@@ -435,6 +435,62 @@
       "acknowledge": "Got it"
     }
   },
+  "activityLog": {
+    "title": "Activity Log",
+    "subtitle": "Who did what, and when — record changes and sign-in activity for this workspace",
+    "disclaimer": "This trail is best-effort: a failed write can leave a gap, and some areas of the app don't yet record activity here.",
+    "tabs": {
+      "auditLog": "Record Changes",
+      "authEvents": "Sign-in Activity"
+    },
+    "filters": {
+      "from": "From",
+      "to": "To",
+      "actor": "Actor",
+      "module": "Module",
+      "searchPlaceholder": "Search activity...",
+      "allActors": "All actors",
+      "allModules": "All modules",
+      "clear": "Clear filters"
+    },
+    "table": {
+      "when": "When (Asia/Colombo)",
+      "actor": "Actor",
+      "activity": "Activity",
+      "eventType": "Event",
+      "reason": "Reason",
+      "ipAddress": "IP Address",
+      "userAgent": "Device"
+    },
+    "actor": {
+      "unknown": "Unknown user",
+      "platform": "Platform administrator"
+    },
+    "eventTypes": {
+      "login_succeeded": "Signed in",
+      "login_failed": "Sign-in failed",
+      "logout": "Signed out",
+      "account_locked": "Account locked"
+    },
+    "reasons": {
+      "unknown_user": "Unknown username",
+      "inactive": "Account inactive",
+      "bad_password": "Incorrect password",
+      "locked_out": "Locked out"
+    },
+    "emptyState": {
+      "noneYet": "No activity recorded yet.",
+      "noMatch": "No activity matches the current filters — showing the last 30 days, widen the range to see older activity."
+    },
+    "pagination": {
+      "showing": "Showing {from}–{to} of {total}",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "detail": {
+      "rawData": "Raw data"
+    }
+  },
   "relationshipTypes": {
     "dialog": {
       "systemRoleLabel": "System Role",
