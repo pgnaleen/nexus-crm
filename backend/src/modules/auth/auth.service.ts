@@ -1,11 +1,12 @@
 import { randomBytes } from "node:crypto";
-import { ActingTenant, AuthSessionResponse, UserStatus } from "@orelia/common";
+import { ActingTenant, AuthEventReason, AuthEventType, AuthSessionResponse, UserStatus } from "@orelia/common";
 import { ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
 import * as bcrypt from "bcrypt";
 import { Repository } from "typeorm";
+import { AuthEventService } from "../../core/audit-log/auth-event.service";
 import {
   ACT_AS_TENANT_TOKEN_TYPE,
   ACT_AS_TENANT_TTL_MS,
@@ -25,6 +26,13 @@ import { hashToken } from "./util/token-hash";
 interface TokenPair {
   accessToken: string;
   refreshToken: string;
+}
+
+// IP/user agent are only meaningful once main.ts's trust-proxy setting is
+// correctly configured for the environment -- see that file's own comment.
+export interface RequestMeta {
+  ipAddress?: string;
+  userAgent?: string;
 }
 
 const LOGIN_LOCKOUT_THRESHOLD = 5;
@@ -47,16 +55,21 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly tenantContext: TenantContextService,
     private readonly systemTenantCache: SystemTenantCache,
+    private readonly authEventService: AuthEventService,
   ) {}
 
   private readonly logger = new Logger(AuthService.name);
 
-  async login(dto: LoginDto): Promise<{ session: AuthSessionResponse } & TokenPair> {
+  async login(dto: LoginDto, requestMeta: RequestMeta = {}): Promise<{ session: AuthSessionResponse } & TokenPair> {
     // Never log dto.password.
     this.logger.debug(`login called (tenantSlug="${dto.tenantSlug}", username="${dto.username}")`);
     try {
       const tenant = await this.tenantRepo.findOneBy({ slug: dto.tenantSlug });
       if (!tenant) {
+        // Deliberately NOT recorded -- there is no tenant to attribute this
+        // to, so no tenant's Activity Log could ever show it anyway. Slug-
+        // enumeration probes remain visible only in RequestLoggerMiddleware's
+        // own terminal output. See spec-activity-log.md Edge Case 19.
         this.logger.debug(`login blocked: no tenant with slug "${dto.tenantSlug}"`);
         throw new UnauthorizedException("Invalid credentials");
       }
@@ -64,24 +77,59 @@ export class AuthService {
       const user = await this.userRepo.findOneBy({ tenantId: tenant.id, username: dto.username });
       if (!user || user.status !== UserStatus.Active) {
         this.logger.debug(`login blocked: user "${dto.username}" not found or not active for tenant ${tenant.id}`);
+        await this.authEventService.record({
+          tenantId: tenant.id,
+          userId: user?.id,
+          usernameAttempted: dto.username,
+          eventType: AuthEventType.LoginFailed,
+          reason: user ? AuthEventReason.Inactive : AuthEventReason.UnknownUser,
+          ...requestMeta,
+        });
         throw new UnauthorizedException("Invalid credentials");
       }
 
       if (user.lockedUntil && user.lockedUntil > new Date()) {
         this.logger.debug(`login blocked: user ${user.id} is locked out until ${user.lockedUntil.toISOString()}`);
+        await this.authEventService.record({
+          tenantId: tenant.id,
+          userId: user.id,
+          usernameAttempted: dto.username,
+          eventType: AuthEventType.LoginFailed,
+          reason: AuthEventReason.LockedOut,
+          ...requestMeta,
+        });
         throw new UnauthorizedException("Too many failed attempts. Try again in a few minutes.");
       }
 
       const passwordMatches = await bcrypt.compare(dto.password, user.passwordHash);
       if (!passwordMatches) {
         user.loggingAttempts += 1;
+        let justLocked = false;
         if (user.loggingAttempts >= LOGIN_LOCKOUT_THRESHOLD) {
           user.lockedUntil = new Date(Date.now() + LOGIN_LOCKOUT_DURATION_MS);
+          justLocked = true;
           this.logger.debug(`login: user ${user.id} hit the lockout threshold, locking until ${user.lockedUntil.toISOString()}`);
         } else {
           this.logger.debug(`login blocked: wrong password for user ${user.id} (attempt ${user.loggingAttempts}/${LOGIN_LOCKOUT_THRESHOLD})`);
         }
         await this.userRepo.save(user);
+        await this.authEventService.record({
+          tenantId: tenant.id,
+          userId: user.id,
+          usernameAttempted: dto.username,
+          eventType: AuthEventType.LoginFailed,
+          reason: AuthEventReason.BadPassword,
+          ...requestMeta,
+        });
+        if (justLocked) {
+          await this.authEventService.record({
+            tenantId: tenant.id,
+            userId: user.id,
+            usernameAttempted: dto.username,
+            eventType: AuthEventType.AccountLocked,
+            ...requestMeta,
+          });
+        }
         throw new UnauthorizedException("Invalid credentials");
       }
 
@@ -96,6 +144,13 @@ export class AuthService {
       user.lastLoggingAt = new Date();
       await this.userRepo.save(user);
       this.logger.debug(`login succeeded for user ${user.id}`);
+      await this.authEventService.record({
+        tenantId: tenant.id,
+        userId: user.id,
+        usernameAttempted: dto.username,
+        eventType: AuthEventType.LoginSucceeded,
+        ...requestMeta,
+      });
 
       return await this.issueSession(user, tenant);
     } catch (err) {
@@ -198,7 +253,7 @@ export class AuthService {
     }
   }
 
-  async logout(rawRefreshToken: string | undefined): Promise<void> {
+  async logout(rawRefreshToken: string | undefined, requestMeta: RequestMeta = {}): Promise<void> {
     this.logger.debug(`logout called (tokenProvided=${!!rawRefreshToken})`);
     if (!rawRefreshToken) {
       this.logger.debug("logout: no refresh token cookie present, nothing to revoke");
@@ -206,8 +261,28 @@ export class AuthService {
     }
     try {
       const tokenHash = hashToken(rawRefreshToken);
-      const result = await this.refreshTokenRepo.update({ tokenHash }, { revokedAt: new Date() });
-      this.logger.debug(`logout succeeded, revoked ${result.affected ?? 0} token row(s)`);
+      // Loads the row (rather than the previous blind update({tokenHash}, ...))
+      // specifically to get userId/tenantId for the auth-event capture below
+      // -- an update() call never returns the row it touched. "Missing or
+      // stale token is not an error" behavior is preserved: no row means no
+      // event, same as before.
+      const existing = await this.refreshTokenRepo.findOneBy({ tokenHash });
+      if (!existing) {
+        this.logger.debug("logout: token not found (already revoked or never existed), nothing to do");
+        return;
+      }
+      existing.revokedAt = new Date();
+      await this.refreshTokenRepo.save(existing);
+      this.logger.debug(`logout succeeded, revoked token for user ${existing.userId}`);
+
+      const user = await this.userRepo.findOneBy({ id: existing.userId });
+      await this.authEventService.record({
+        tenantId: existing.tenantId,
+        userId: existing.userId,
+        usernameAttempted: user?.username ?? existing.userId,
+        eventType: AuthEventType.Logout,
+        ...requestMeta,
+      });
     } catch (err) {
       this.logger.error(`logout failed: ${(err as Error).message}`, (err as Error).stack);
       throw err;

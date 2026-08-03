@@ -5,6 +5,7 @@ import { envValidationSchema } from "./config/env.validation";
 import { CoreModule } from "./core/core.module";
 import { RequestLoggerMiddleware } from "./core/logging/request-logger.middleware";
 import { DatabaseModule } from "./database/database.module";
+import { ActivityLogModule } from "./modules/activity-log/activity-log.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { CertificationsModule } from "./modules/certifications/certifications.module";
 import { CompaniesModule } from "./modules/companies/companies.module";
@@ -53,6 +54,7 @@ import { UsersModule } from "./modules/users/users.module";
     UploadsModule,
     DbBackupModule,
     AuthModule,
+    ActivityLogModule,
   ],
 })
 export class AppModule implements NestModule {

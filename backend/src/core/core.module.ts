@@ -5,6 +5,8 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { Tenant } from "../modules/tenants/entities/tenant.entity";
 import { AuditLog } from "./audit-log/audit-log.entity";
 import { AuditLogService } from "./audit-log/audit-log.service";
+import { AuthEvent } from "./audit-log/auth-event.entity";
+import { AuthEventService } from "./audit-log/auth-event.service";
 import { MailService } from "./mail/mail.service";
 import { RealtimeGateway, RealtimeService } from "./realtime";
 import { S3Service } from "./storage/s3.service";
@@ -19,11 +21,12 @@ import { SystemTenantCache, TenantContextInterceptor, TenantContextService } fro
   // TenantsModule/AuthModule. JwtModule.register({}) takes no secret here --
   // secrets are passed per sign()/verify() call, so re-registering it is
   // cheap and doesn't duplicate config (AuthModule already does the same).
-  imports: [TypeOrmModule.forFeature([Tenant, AuditLog]), JwtModule.register({})],
+  imports: [TypeOrmModule.forFeature([Tenant, AuditLog, AuthEvent]), JwtModule.register({})],
   providers: [
     TenantContextService,
     SystemTenantCache,
     AuditLogService,
+    AuthEventService,
     S3Service,
     MailService,
     RealtimeGateway,
@@ -33,6 +36,6 @@ import { SystemTenantCache, TenantContextInterceptor, TenantContextService } fro
       useClass: TenantContextInterceptor,
     },
   ],
-  exports: [TenantContextService, SystemTenantCache, AuditLogService, S3Service, MailService, RealtimeService],
+  exports: [TenantContextService, SystemTenantCache, AuditLogService, AuthEventService, S3Service, MailService, RealtimeService],
 })
 export class CoreModule {}

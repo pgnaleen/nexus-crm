@@ -240,7 +240,7 @@ function KanbanColumn({
 
   return (
     <div
-      className={`flex min-w-[180px] flex-1 flex-col border-r border-[var(--color-border)] last:border-r-0 transition-colors duration-150 ${
+      className={`flex min-w-[260px] flex-1 flex-col border-r border-[var(--color-border)] last:border-r-0 transition-colors duration-150 ${
         isOver ? "bg-[rgba(47,111,235,0.03)]" : "bg-white"
       }`}
       onDragOver={onDragOver}

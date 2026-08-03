@@ -75,6 +75,14 @@ export const PERMISSIONS = {
 
   BACKUP_CREATE: "backup:create",
 
+  // Deliberate exception to the four-permission (_VIEW/_CREATE/_UPDATE/_DELETE)
+  // rule above: audit_log is read-only by nature, so there is no create/
+  // update/delete to gate. Never add AUDIT_LOG_CREATE/_UPDATE/_DELETE --
+  // audit rows are written only by the system, and a delete permission would
+  // imply the trail can be erased. See CLAUDE.md's Permission Model section
+  // and spec-activity-log.md for the full reasoning.
+  AUDIT_LOG_VIEW: "audit_log:view",
+
   // EMPLOYEES_VIEW_SENSITIVE is a narrow extra gate (Story 1.2's
   // Confidential tab: NIC/passport, base salary) -- named to match this
   // project's "no _MANAGE key" rule, not the "EMPLOYEES_MANAGE_SENSITIVE"

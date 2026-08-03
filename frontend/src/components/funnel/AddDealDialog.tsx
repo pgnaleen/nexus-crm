@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent, type FormEvent, Fragment } from "react";
 import {
   DealType,
   DocumentType,
@@ -49,7 +49,7 @@ import { CountrySelect } from "@/components/ui/CountrySelect";
 import { CurrencySelect } from "@/components/ui/CurrencySelect";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 import { SearchSelect, type SearchSelectOption } from "@/components/ui/SearchSelect";
-import { BuildingIcon, EditIcon, FileIcon, TrashIcon, UploadCloudIcon, UserIcon } from "@/components/ui/icons";
+import { BuildingIcon, EditIcon, FileIcon, FunnelIcon, LegalIcon, FinanceIcon, UsersGroupIcon, TrashIcon, UploadCloudIcon, UserIcon, PlusIcon } from "@/components/ui/icons";
 import { minDate, required, validate } from "@/lib/validation";
 import { t } from "@/lib/i18n";
 import { CompanyFormDialog } from "@/app/[tenant]/(dashboard)/relationships/[id]/_components/CompanyFormDialog";
@@ -870,7 +870,15 @@ export function AddDealDialog({
     ...activeDealSources.map((ds) => ({ value: ds.id, label: ds.name })),
   ];
   function openAddParty() {
-    setAddPartyState(relationshipTypes.length === 1 ? { step: "kind", relationshipTypeId: relationshipTypes[0].id, relationshipTypeName: relationshipTypes[0].name } : { step: "type" });
+    if (relationshipTypes && relationshipTypes.length === 1 && relationshipTypes[0]) {
+      setAddPartyState({
+        step: "kind",
+        relationshipTypeId: relationshipTypes[0].id,
+        relationshipTypeName: relationshipTypes[0].name,
+      });
+    } else {
+      setAddPartyState({ step: "type" });
+    }
   }
 
   function handlePartySaved() {
@@ -879,6 +887,35 @@ export function AddDealDialog({
   }
 
   const documentCount = isEdit ? existingDocuments.length : documents.length;
+
+  const [showLeftFade, setShowLeftFade] = useState(false);
+  const [showRightFade, setShowRightFade] = useState(true);
+  const [scrollProgress, setScrollProgress] = useState({ left: 0, width: 40, show: false });
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setShowLeftFade(el.scrollLeft > 5);
+    setShowRightFade(el.scrollLeft < el.scrollWidth - el.clientWidth - 5);
+
+    const hasScroll = el.scrollWidth > el.clientWidth;
+    if (hasScroll) {
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      const width = Math.max(12, (el.clientWidth / el.scrollWidth) * 40);
+      const maxLeft = 40 - width;
+      const left = maxScroll > 0 ? (el.scrollLeft / maxScroll) * maxLeft : 0;
+      setScrollProgress({ left, width, show: true });
+    } else {
+      setScrollProgress({ left: 0, width: 40, show: false });
+    }
+  };
+
+  useEffect(() => {
+    handleScroll();
+    window.addEventListener("resize", handleScroll);
+    return () => window.removeEventListener("resize", handleScroll);
+  }, [activeTab]);
   const tabDefs: [TabId, string][] = [
     ["dealInfo", "Deal Information"],
     // Only shown once "This is a Tender deal" is checked on the Deal
@@ -895,481 +932,682 @@ export function AddDealDialog({
     ["team", "Team"],
   ];
 
+  const dialogTitle = (
+    <div className="flex items-center gap-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-crm-primary">
+        <FunnelIcon size={20} />
+      </div>
+      <div className="flex flex-col min-w-0">
+        <span className="text-[15px] font-bold text-crm-text truncate">
+          {isEdit ? "Edit Deal" : "Add New Deal"}
+        </span>
+        {isEdit && deal && (
+          <span className="text-[11px] font-medium text-[var(--color-text-muted)] leading-none mt-0.5">
+            {deal.name}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+
   return (
-    <Dialog open title={isEdit ? deal?.name ?? "Edit Deal" : "Add New Deal"} onClose={onClose} maxWidth="720px">
-      <form onSubmit={handleSubmit}>
-        {/* Single row, never wrapping or squashing -- mirrors ViewDealDialog's
-            tab strip. Tabs keep their natural width (shrink-0) and the strip
-            scrolls horizontally when all 8 no longer fit the 720px dialog. */}
-        <div className="-mx-5 -mt-5 mb-5 flex flex-nowrap gap-x-4 overflow-x-auto border-b border-[var(--color-border)] px-5">
-          {tabDefs.map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              className={`shrink-0 cursor-pointer whitespace-nowrap border-0 border-b-2 bg-transparent px-1 py-3 text-[13.5px] font-semibold transition-colors duration-150 hover:text-[var(--color-text)] ${
-                activeTab === id
-                  ? "border-b-[var(--color-crm-primary)] text-[var(--color-crm-primary)]"
-                  : "border-b-transparent text-[var(--color-text-muted)]"
-              }`}
-              onClick={() => setActiveTab(id)}
-            >
-              {label}
-            </button>
-          ))}
+    <Dialog open title={dialogTitle} onClose={onClose} maxWidth="960px">
+      <form onSubmit={handleSubmit}>        <div className="relative mb-6">
+          {showLeftFade && (
+            <div className="absolute left-1 top-1 bottom-1 w-10 bg-gradient-to-r from-slate-100/90 to-transparent pointer-events-none z-10 rounded-l-lg" />
+          )}
+          <div 
+            ref={scrollRef}
+            onScroll={handleScroll}
+            className="flex flex-nowrap items-center bg-slate-100/90 p-1 rounded-xl select-none border border-slate-200/40 shadow-sm w-full overflow-x-auto whitespace-nowrap [&::-webkit-scrollbar]:hidden [scrollbar-width:none] gap-1"
+          >
+            {tabDefs.map(([id, label], idx) => {
+              const isActive = activeTab === id;
+              
+              let cleanLabel = label;
+              if (id === "documents") cleanLabel = "Documents";
+              if (id === "notes") cleanLabel = "Notes";
+              
+              let icon = null;
+              if (id === "dealInfo") {
+                icon = <FunnelIcon size={14} />;
+              } else if (id === "tender") {
+                icon = <LegalIcon size={14} />;
+              } else if (id === "delivery") {
+                icon = (
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                );
+              } else if (id === "costing") {
+                icon = <FinanceIcon size={14} />;
+              } else if (id === "documents") {
+                icon = <FileIcon size={14} />;
+              } else if (id === "notes") {
+                icon = (
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                );
+              } else if (id === "competition") {
+                icon = (
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                );
+              } else if (id === "team") {
+                icon = <UsersGroupIcon size={14} />;
+              }
+
+              let clipPath = "";
+              if (isActive) {
+                const isFirst = idx === 0;
+                const isLast = idx === tabDefs.length - 1;
+                if (isFirst) {
+                  clipPath = "polygon(0 0, 100% 0, 88% 100%, 0 100%)";
+                } else if (isLast) {
+                  clipPath = "polygon(12% 0, 100% 0, 100% 100%, 0 100%)";
+                } else {
+                  clipPath = "polygon(12% 0, 100% 0, 88% 100%, 0 100%)";
+                }
+              }
+
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setActiveTab(id)}
+                  className={`relative flex items-center justify-center gap-1.5 py-1.5 px-3.5 sm:px-4 font-bold transition-all duration-150 border-none outline-none focus:outline-none cursor-pointer shrink-0 rounded-lg ${
+                    isActive
+                      ? "text-white select-none"
+                      : "text-slate-550 hover:bg-slate-200/50 hover:text-slate-800"
+                  }`}
+                >
+                  {isActive && (
+                    <div 
+                      className={`absolute inset-0 bg-crm-primary shadow-sm ${
+                        idx === 0 ? "rounded-l-lg" : idx === tabDefs.length - 1 ? "rounded-r-lg" : ""
+                      }`}
+                      style={{ clipPath }}
+                    />
+                  )}
+                  <span className="relative z-10 flex items-center gap-1.5 text-[12.5px] sm:text-[13px] whitespace-nowrap">
+                    {icon}
+                    {cleanLabel}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {showRightFade && (
+            <div className="absolute right-1 top-1 bottom-1 w-10 bg-gradient-to-l from-slate-100/90 to-transparent pointer-events-none z-10 rounded-r-lg" />
+          )}
         </div>
+
+        {scrollProgress.show && (
+          <div className="flex justify-center mb-5 -mt-3.5">
+            <div className="w-10 h-[3px] bg-slate-200/60 rounded-full relative overflow-hidden">
+              <div 
+                className="h-full bg-slate-400 rounded-full absolute transition-all duration-75"
+                style={{
+                  left: `${scrollProgress.left}px`,
+                  width: `${scrollProgress.width}px`
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         {formError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{formError}</p>}
 
         {/* ── Deal Information ──────────────────────────── */}
         {activeTab === "dealInfo" && (
-          <div className="h-[620px] overflow-y-auto pr-1">
-            <TextField
-              label="Deal Name *"
-              name="name"
-              value={values.name}
-              error={errors.name}
-              placeholder="e.g. TechNova Inc. — Platform Rollout"
-              onChange={(e) => setField("name", e.target.value)}
-            />
-
-            <label className="mb-[18px] flex cursor-pointer items-center gap-2.5 text-[13.5px] text-crm-text">
-              <input
-                type="checkbox"
-                checked={values.isTender}
-                onChange={(e) => setField("isTender", e.target.checked)}
-              />
-              <span>This is a Tender deal</span>
-            </label>
-
-            <div className="mb-[18px]">
-              <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                Stage {!isEdit && "*"}
-              </label>
-              {isEdit ? (
-                <div className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-[13.5px] text-[var(--color-text-muted)]">
-                  {deal?.mainStageName ?? "—"}
-                  {deal?.currentStageName ? ` › ${deal.currentStageName}` : ""}
-                </div>
-              ) : (
-                <CustomSelect
-                  fullWidth
-                  label=""
-                  value={values.mainStageId}
-                  onChange={(val) => {
-                    setField("mainStageId", val);
-                    // Changing Main Stage invalidates whichever Sub Stage was
-                    // picked, if any -- it belonged to the previous Main Stage.
-                    setField("currentStageId", "");
-                  }}
-                  options={mainStages.map((s) => ({ value: s.id, label: s.name }))}
-                />
-              )}
-              {errors.mainStageId && (
-                <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{errors.mainStageId}</p>
-              )}
-            </div>
-
-            {!isEdit && subStagesForMainStage.length > 0 && (
-              <div className="mb-[18px]">
-                <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                  Sub Stage
-                </label>
-                <CustomSelect
-                  fullWidth
-                  label=""
-                  value={values.currentStageId}
-                  onChange={(val) => setField("currentStageId", val)}
-                  options={[
-                    { value: "", label: "No sub stage yet" },
-                    ...subStagesForMainStage.map((s) => ({ value: s.id, label: s.name })),
-                  ]}
-                />
+          <div className="h-[min(620px,calc(100vh-250px))] overflow-y-auto pr-1 space-y-4">
+            {/* Card 1: Deal Basics */}
+            <div className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 transition-all duration-200 hover:border-slate-300/80">
+              <div className="flex items-center gap-2 mb-3.5 border-b border-slate-100 pb-2">
+                <span className="text-slate-500"><FunnelIcon size={14} /></span>
+                <span className="text-[11.5px] font-bold text-slate-600 tracking-wide uppercase">Deal Basics</span>
               </div>
-            )}
+              <div className="space-y-1">
+                <TextField
+                  label="Deal Name *"
+                  name="name"
+                  value={values.name}
+                  error={errors.name}
+                  placeholder="e.g. TechNova Inc. — Platform Rollout"
+                  onChange={(e) => setField("name", e.target.value)}
+                />
 
-            <div className="mb-[18px]">
-              <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                Deal Source
-              </label>
-              <CustomSelect
-                fullWidth
-                label=""
-                value={values.sourceId}
-                onChange={(val) => setField("sourceId", val)}
-                options={dealSourceOptions}
-              />
+                <label className="mb-[18px] flex cursor-pointer items-center gap-2.5 text-[13.5px] text-crm-text">
+                  <input
+                    type="checkbox"
+                    checked={values.isTender}
+                    onChange={(e) => setField("isTender", e.target.checked)}
+                  />
+                  <span className="font-semibold">This is a Tender deal</span>
+                </label>
+
+                <div className="mb-[18px]">
+                  <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                    Stage {!isEdit && "*"}
+                  </label>
+                  {isEdit ? (
+                    <div className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-[13.5px] text-[var(--color-text-muted)]">
+                      {deal?.mainStageName ?? "—"}
+                      {deal?.currentStageName ? ` › ${deal.currentStageName}` : ""}
+                    </div>
+                  ) : (
+                    <CustomSelect
+                      fullWidth
+                      label=""
+                      value={values.mainStageId}
+                      onChange={(val) => {
+                        setField("mainStageId", val);
+                        setField("currentStageId", "");
+                      }}
+                      options={mainStages.map((s) => ({ value: s.id, label: s.name }))}
+                    />
+                  )}
+                  {errors.mainStageId && (
+                    <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{errors.mainStageId}</p>
+                  )}
+                </div>
+
+                {!isEdit && subStagesForMainStage.length > 0 && (
+                  <div className="mb-[18px]">
+                    <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                      Sub Stage
+                    </label>
+                    <CustomSelect
+                      fullWidth
+                      label=""
+                      value={values.currentStageId}
+                      onChange={(val) => setField("currentStageId", val)}
+                      options={[
+                        { value: "", label: "No sub stage yet" },
+                        ...subStagesForMainStage.map((s) => ({ value: s.id, label: s.name })),
+                      ]}
+                    />
+                  </div>
+                )}
+
+                <div className="mb-[18px]">
+                  <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                    Deal Source
+                  </label>
+                  <CustomSelect
+                    fullWidth
+                    label=""
+                    value={values.sourceId}
+                    onChange={(val) => setField("sourceId", val)}
+                    options={dealSourceOptions}
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="mb-[18px]">
-              <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                Customer (Company or Contact)
-              </label>
-              {!customerParties.configured ? (
-                <p className="text-[12.5px] text-[var(--color-danger)]">{t("addDealDialog.customer.notConfigured")}</p>
-              ) : otherPartyOptions.length === 0 ? (
-                <p className="text-[12.5px] text-[var(--color-text-muted)]">{t("addDealDialog.customer.noneTagged")}</p>
-              ) : (
-                <>
+            {/* Card 2: Customer & Assignment */}
+            <div className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 transition-all duration-200 hover:border-slate-300/80">
+              <div className="flex items-center gap-2 mb-3.5 border-b border-slate-100 pb-2">
+                <span className="text-slate-550"><UserIcon size={14} /></span>
+                <span className="text-[11.5px] font-bold text-slate-600 tracking-wide uppercase">Customer & Assignment</span>
+              </div>
+              <div className="space-y-1">
+                <div className="mb-[18px]">
+                  <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                    Customer (Company or Contact)
+                  </label>
+                  {!customerParties.configured ? (
+                    <p className="text-[12.5px] text-[var(--color-danger)]">{t("addDealDialog.customer.notConfigured")}</p>
+                  ) : otherPartyOptions.length === 0 ? (
+                    <p className="text-[12.5px] text-[var(--color-text-muted)]">{t("addDealDialog.customer.noneTagged")}</p>
+                  ) : (
+                    <SearchSelect
+                      value={partyValue(otherParty)}
+                      onChange={handleOtherPartyChange}
+                      options={otherPartyOptions}
+                      placeholder="Not set — search companies and contacts..."
+                      searchPlaceholder="Search by name..."
+                    />
+                  )}
+                </div>
+
+                {otherParty?.kind === "company" && (
+                  <div className="mb-[18px]">
+                    <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                      Primary Contact
+                    </label>
+                    <SearchSelect
+                      value={values.primaryContactId}
+                      onChange={(val) => setField("primaryContactId", val)}
+                      options={primaryContactOptions}
+                      placeholder={companyContacts.length > 0 ? "Select a contact..." : "No contacts at this company yet"}
+                      searchPlaceholder="Search contacts..."
+                      disabled={companyContacts.length === 0}
+                    />
+                  </div>
+                )}
+
+                <div className="mb-[18px]">
+                  <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                    Department
+                  </label>
                   <SearchSelect
-                    value={partyValue(otherParty)}
-                    onChange={handleOtherPartyChange}
-                    options={otherPartyOptions}
-                    placeholder="Not set — search companies and contacts..."
+                    value={values.departmentId}
+                    onChange={(val) => setField("departmentId", val)}
+                    options={departmentOptions}
+                    placeholder="Search departments..."
                     searchPlaceholder="Search by name..."
                   />
-                </>
-              )}
-            </div>
-
-            {otherParty?.kind === "company" && (
-              <div className="mb-[18px]">
-                <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                  Primary Contact
-                </label>
-                <SearchSelect
-                  value={values.primaryContactId}
-                  onChange={(val) => setField("primaryContactId", val)}
-                  options={primaryContactOptions}
-                  placeholder={companyContacts.length > 0 ? "Select a contact..." : "No contacts at this company yet"}
-                  searchPlaceholder="Search contacts..."
-                  disabled={companyContacts.length === 0}
-                />
+                </div>
               </div>
-            )}
-
-            <CountrySelect
-              label="Deal Country"
-              value={values.dealCountry}
-              onChange={(val) => setField("dealCountry", val)}
-              placeholder="Search countries..."
-            />
-
-            <TextField
-              label="Expected Deadline"
-              name="expectedCloseDate"
-              type="date"
-              min={todayISO}
-              value={values.expectedCloseDate}
-              error={errors.expectedCloseDate}
-              onChange={(e) => setField("expectedCloseDate", e.target.value)}
-            />
-
-            <div className="mb-[18px]">
-              <label
-                htmlFor="customerPainPoint"
-                className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]"
-              >
-                Customer Pain Point
-              </label>
-              <textarea
-                id="customerPainPoint"
-                className={TEXTAREA_CLASS}
-                rows={4}
-                value={values.customerPainPoint}
-                placeholder="What problem is the customer trying to solve?"
-                onChange={(e) => setField("customerPainPoint", e.target.value)}
-              />
             </div>
 
-            <div className="mb-[18px]">
-              <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                Department
-              </label>
-              <SearchSelect
-                value={values.departmentId}
-                onChange={(val) => setField("departmentId", val)}
-                options={departmentOptions}
-                placeholder="Search departments..."
-                searchPlaceholder="Search by name..."
-              />
+            {/* Card 3: Timeline & Pain Points */}
+            <div className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 transition-all duration-200 hover:border-slate-300/80">
+              <div className="flex items-center gap-2 mb-3.5 border-b border-slate-100 pb-2">
+                <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="text-[11.5px] font-bold text-slate-600 tracking-wide uppercase">Timeline & Pain Points</span>
+              </div>
+              <div className="space-y-1">
+                <CountrySelect
+                  label="Deal Country"
+                  value={values.dealCountry}
+                  onChange={(val) => setField("dealCountry", val)}
+                  placeholder="Search countries..."
+                />
+
+                <TextField
+                  label="Expected Deadline"
+                  name="expectedCloseDate"
+                  type="date"
+                  min={todayISO}
+                  value={values.expectedCloseDate}
+                  error={errors.expectedCloseDate}
+                  onChange={(e) => setField("expectedCloseDate", e.target.value)}
+                />
+
+                <div className="mb-[18px]">
+                  <label
+                    htmlFor="customerPainPoint"
+                    className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]"
+                  >
+                    Customer Pain Point
+                  </label>
+                  <textarea
+                    id="customerPainPoint"
+                    className={TEXTAREA_CLASS}
+                    rows={4}
+                    value={values.customerPainPoint}
+                    placeholder="What problem is the customer trying to solve?"
+                    onChange={(e) => setField("customerPainPoint", e.target.value)}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         )}
 
         {/* ── Tender ────────────────────────────────────── */}
         {activeTab === "tender" && (
-          <div className="h-[620px] overflow-y-auto pr-1">
-            <TextField
-              label="Tender Reference Number *"
-              name="tenderReference"
-              value={values.tenderReference}
-              error={errors.tenderReference}
-              placeholder="e.g. TND-2026-0142"
-              onChange={(e) => setField("tenderReference", e.target.value)}
-            />
+          <div className="h-[min(620px,calc(100vh-250px))] overflow-y-auto pr-1 space-y-4">
+            {/* Card 1: Tender Details */}
+            <div className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 transition-all duration-200 hover:border-slate-300/80">
+              <div className="flex items-center gap-2 mb-3.5 border-b border-slate-100 pb-2">
+                <span className="text-slate-500"><LegalIcon size={14} /></span>
+                <span className="text-[11.5px] font-bold text-slate-600 tracking-wide uppercase">Tender Identity</span>
+              </div>
+              <div className="space-y-1">
+                <TextField
+                  label="Tender Reference Number *"
+                  name="tenderReference"
+                  value={values.tenderReference}
+                  error={errors.tenderReference}
+                  placeholder="e.g. TND-2026-0142"
+                  onChange={(e) => setField("tenderReference", e.target.value)}
+                />
 
-            <TextField
-              label="Issuing Body *"
-              name="issuingBody"
-              value={values.issuingBody}
-              error={errors.issuingBody}
-              placeholder="e.g. Ministry of Health"
-              onChange={(e) => setField("issuingBody", e.target.value)}
-            />
-
-            <label className="mb-[18px] flex cursor-pointer items-center gap-2.5 text-[13.5px] text-crm-text">
-              <input
-                type="checkbox"
-                checked={values.bidBondRequired}
-                onChange={(e) => setField("bidBondRequired", e.target.checked)}
-              />
-              <span>Bid Bond Required</span>
-            </label>
-
-            {values.bidBondRequired && (
-              <TextField
-                label="Bid Bond Amount"
-                name="bidBondAmount"
-                type="number"
-                min="0"
-                value={values.bidBondAmount}
-                placeholder="0"
-                onChange={(e) => setField("bidBondAmount", e.target.value)}
-              />
-            )}
-
-            <TextField
-              label="EMD Amount"
-              name="emdAmount"
-              type="number"
-              min="0"
-              value={values.emdAmount}
-              placeholder="0"
-              onChange={(e) => setField("emdAmount", e.target.value)}
-            />
-
-            <div className="mb-[18px]">
-              <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                Submission Mode
-              </label>
-              <CustomSelect
-                fullWidth
-                label=""
-                value={values.submissionMode}
-                onChange={(val) => setField("submissionMode", val as SubmissionMode | "")}
-                options={SUBMISSION_MODE_OPTIONS}
-              />
+                <TextField
+                  label="Issuing Body *"
+                  name="issuingBody"
+                  value={values.issuingBody}
+                  error={errors.issuingBody}
+                  placeholder="e.g. Ministry of Health"
+                  onChange={(e) => setField("issuingBody", e.target.value)}
+                />
+              </div>
             </div>
 
-            <div className="mb-[18px]">
-              <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                Evaluation Type
-              </label>
-              <CustomSelect
-                fullWidth
-                label=""
-                value={values.evaluationType}
-                onChange={(val) => setField("evaluationType", val as EvaluationType | "")}
-                options={EVALUATION_TYPE_OPTIONS}
-              />
+            {/* Card 2: Submission & Evaluation */}
+            <div className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 transition-all duration-200 hover:border-slate-300/80">
+              <div className="flex items-center gap-2 mb-3.5 border-b border-slate-100 pb-2">
+                <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                </svg>
+                <span className="text-[11.5px] font-bold text-slate-600 tracking-wide uppercase">Tender Specs</span>
+              </div>
+              <div className="space-y-1">
+                <div className="mb-[18px]">
+                  <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                    Submission Mode
+                  </label>
+                  <CustomSelect
+                    fullWidth
+                    label=""
+                    value={values.submissionMode}
+                    onChange={(val) => setField("submissionMode", val as SubmissionMode | "")}
+                    options={SUBMISSION_MODE_OPTIONS}
+                  />
+                </div>
+
+                <div className="mb-[18px]">
+                  <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                    Evaluation Type
+                  </label>
+                  <CustomSelect
+                    fullWidth
+                    label=""
+                    value={values.evaluationType}
+                    onChange={(val) => setField("evaluationType", val as EvaluationType | "")}
+                    options={EVALUATION_TYPE_OPTIONS}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Card 3: Bid Security & EMD */}
+            <div className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 transition-all duration-200 hover:border-slate-300/80">
+              <div className="flex items-center gap-2 mb-3.5 border-b border-slate-100 pb-2">
+                <span className="text-slate-550"><FinanceIcon size={14} /></span>
+                <span className="text-[11.5px] font-bold text-slate-600 tracking-wide uppercase">Bid Security & Financials</span>
+              </div>
+              <div className="space-y-1">
+                <label className="mb-[18px] flex cursor-pointer items-center gap-2.5 text-[13.5px] text-crm-text">
+                  <input
+                    type="checkbox"
+                    checked={values.bidBondRequired}
+                    onChange={(e) => setField("bidBondRequired", e.target.checked)}
+                  />
+                  <span className="font-semibold">Bid Bond Required</span>
+                </label>
+
+                {values.bidBondRequired && (
+                  <TextField
+                    label="Bid Bond Amount"
+                    name="bidBondAmount"
+                    type="number"
+                    min="0"
+                    value={values.bidBondAmount}
+                    placeholder="0"
+                    onChange={(e) => setField("bidBondAmount", e.target.value)}
+                  />
+                )}
+
+                <TextField
+                  label="EMD Amount"
+                  name="emdAmount"
+                  type="number"
+                  min="0"
+                  value={values.emdAmount}
+                  placeholder="0"
+                  onChange={(e) => setField("emdAmount", e.target.value)}
+                />
+              </div>
             </div>
           </div>
         )}
 
         {/* ── Delivery ──────────────────────────────────── */}
         {activeTab === "delivery" && (
-          <div className="h-[620px] overflow-y-auto pr-1">
-            <div className="mb-[18px]">
-              <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                Partners (Companies or Contacts)
-              </label>
-              {isEdit ? (
-                <>
-                  {existingPartners.length > 0 && (
-                    <div className="mb-2 flex flex-col gap-2">
-                      {existingPartners.map((partner) => (
-                        <div
-                          key={partner.id}
-                          className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2"
-                        >
-                          {partner.kind === "company" ? <BuildingIcon size={14} /> : <UserIcon size={14} />}
-                          <span className="flex-1 text-[13.5px] text-[var(--color-text)]">{partner.name}</span>
-                          {partner.subtitle && (
-                            <span className="text-[12px] text-[var(--color-text-muted)]">{partner.subtitle}</span>
-                          )}
-                          <button
-                            type="button"
-                            className="flex cursor-pointer rounded-md border-0 bg-transparent p-1.5 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#fdf0ee] hover:text-[var(--color-danger)]"
-                            aria-label={`Remove ${partner.name}`}
-                            onClick={() => removeExistingPartner(partner.id)}
-                          >
-                            <TrashIcon size={14} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {!partnerParties.configured ? (
-                    <p className="text-[12.5px] text-[var(--color-danger)]">{t("addDealDialog.partners.notConfigured")}</p>
-                  ) : partnerOptions.length === 0 ? (
-                    <p className="text-[12.5px] text-[var(--color-text-muted)]">{t("addDealDialog.partners.noneTagged")}</p>
-                  ) : (
-                    <SearchSelect
-                      value=""
-                      onChange={handleAddExistingPartner}
-                      options={partnerOptions}
-                      placeholder="Add a partner..."
-                      searchPlaceholder="Search by name..."
-                    />
-                  )}
-                </>
-              ) : !partnerParties.configured ? (
-                <p className="text-[12.5px] text-[var(--color-danger)]">{t("addDealDialog.partners.notConfigured")}</p>
-              ) : partnerParties.companies.length === 0 && partnerParties.contacts.length === 0 ? (
-                <p className="text-[12.5px] text-[var(--color-text-muted)]">{t("addDealDialog.partners.noneTagged")}</p>
-              ) : (
-                <MultiSelect
-                  values={partnerValues}
-                  onChange={setPartnerValues}
-                  options={partnerOptions}
-                  placeholder="Select partner companies or contacts..."
-                  searchPlaceholder="Search by name..."
-                  addNewLabel="Add New"
-                  onAddNew={openAddParty}
+          <div className="h-[min(620px,calc(100vh-250px))] overflow-y-auto pr-1 space-y-4">
+            {/* Card 1: Scope & Solutions */}
+            <div className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 transition-all duration-200 hover:border-slate-300/80">
+              <div className="flex items-center gap-2 mb-3.5 border-b border-slate-100 pb-2">
+                <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+                <span className="text-[11.5px] font-bold text-slate-600 tracking-wide uppercase">Scope & Solutions</span>
+              </div>
+              <div className="space-y-1">
+                <TextField
+                  label="Product"
+                  name="product"
+                  value={values.product}
+                  placeholder="e.g. Nexus CRM Enterprise"
+                  onChange={(e) => setField("product", e.target.value)}
                 />
-              )}
+
+                <TextField
+                  label="Services"
+                  name="services"
+                  value={values.services}
+                  placeholder="e.g. Implementation, Training"
+                  onChange={(e) => setField("services", e.target.value)}
+                />
+              </div>
             </div>
 
-            <TextField
-              label="Product"
-              name="product"
-              value={values.product}
-              placeholder="e.g. Nexus CRM Enterprise"
-              onChange={(e) => setField("product", e.target.value)}
-            />
-
-            <TextField
-              label="Services"
-              name="services"
-              value={values.services}
-              placeholder="e.g. Implementation, Training"
-              onChange={(e) => setField("services", e.target.value)}
-            />
+            {/* Card 2: Collaboration */}
+            <div className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 transition-all duration-200 hover:border-slate-300/80">
+              <div className="flex items-center gap-2 mb-3.5 border-b border-slate-100 pb-2">
+                <span className="text-slate-500"><UsersGroupIcon size={14} /></span>
+                <span className="text-[11.5px] font-bold text-slate-600 tracking-wide uppercase">Partners & Alliances</span>
+              </div>
+              <div className="space-y-1">
+                <div className="mb-[18px]">
+                  <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                    Partners (Companies or Contacts)
+                  </label>
+                  {isEdit ? (
+                    <>
+                      {existingPartners.length > 0 && (
+                        <div className="mb-3 flex flex-col gap-2">
+                          {existingPartners.map((partner) => (
+                            <div
+                              key={partner.id}
+                              className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 hover:border-slate-300 transition-colors duration-150"
+                            >
+                              {partner.kind === "company" ? <BuildingIcon size={14} /> : <UserIcon size={14} />}
+                              <span className="flex-1 text-[13.5px] font-semibold text-crm-text">{partner.name}</span>
+                              {partner.subtitle && (
+                                <span className="text-[12px] text-[var(--color-text-muted)]">{partner.subtitle}</span>
+                              )}
+                              <button
+                                type="button"
+                                className="flex cursor-pointer rounded-md border-0 bg-transparent p-1.5 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#fdf0ee] hover:text-[var(--color-danger)]"
+                                aria-label={`Remove ${partner.name}`}
+                                onClick={() => removeExistingPartner(partner.id)}
+                              >
+                                <TrashIcon size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {!partnerParties.configured ? (
+                        <p className="text-[12.5px] text-[var(--color-danger)]">{t("addDealDialog.partners.notConfigured")}</p>
+                      ) : partnerOptions.length === 0 ? (
+                        <p className="text-[12.5px] text-[var(--color-text-muted)]">{t("addDealDialog.partners.noneTagged")}</p>
+                      ) : (
+                        <SearchSelect
+                          value=""
+                          onChange={handleAddExistingPartner}
+                          options={partnerOptions}
+                          placeholder="Add a partner..."
+                          searchPlaceholder="Search by name..."
+                        />
+                      )}
+                    </>
+                  ) : !partnerParties.configured ? (
+                    <p className="text-[12.5px] text-[var(--color-danger)]">{t("addDealDialog.partners.notConfigured")}</p>
+                  ) : partnerParties.companies.length === 0 && partnerParties.contacts.length === 0 ? (
+                    <p className="text-[12.5px] text-[var(--color-text-muted)]">{t("addDealDialog.partners.noneTagged")}</p>
+                  ) : (
+                    <MultiSelect
+                      values={partnerValues}
+                      onChange={setPartnerValues}
+                      options={partnerOptions}
+                      placeholder="Select partner companies or contacts..."
+                      searchPlaceholder="Search by name..."
+                      addNewLabel="Add New"
+                      onAddNew={openAddParty}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
         {/* ── Costing ───────────────────────────────────── */}
         {activeTab === "costing" && (
-          <div className="h-[620px] overflow-y-auto pr-1">
-            <CurrencySelect
-              label="Currency"
-              value={values.currency}
-              onChange={(val) => setField("currency", val)}
-            />
+          <div className="h-[min(620px,calc(100vh-250px))] overflow-y-auto pr-1 space-y-4">
+            {/* Card 1: Costing Inputs */}
+            <div className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 transition-all duration-200 hover:border-slate-300/80">
+              <div className="flex items-center gap-2 mb-3.5 border-b border-slate-100 pb-2">
+                <span className="text-slate-550"><FinanceIcon size={14} /></span>
+                <span className="text-[11.5px] font-bold text-slate-600 tracking-wide uppercase">Costing Inputs</span>
+              </div>
+              <div className="space-y-1">
+                <CurrencySelect
+                  label="Currency"
+                  value={values.currency}
+                  onChange={(val) => setField("currency", val)}
+                />
 
-            <TextField
-              label={`Project Value without Tax (${values.currency})`}
-              name="projectValue"
-              type="number"
-              min="0"
-              value={values.projectValue}
-              placeholder="0"
-              onChange={(e) => setField("projectValue", e.target.value)}
-            />
+                <TextField
+                  label={`Project Value without Tax (${values.currency})`}
+                  name="projectValue"
+                  type="number"
+                  min="0"
+                  value={values.projectValue}
+                  placeholder="0"
+                  onChange={(e) => setField("projectValue", e.target.value)}
+                />
 
-            <TextField
-              label={`Internal Costs (${values.currency})`}
-              name="internalCosts"
-              type="number"
-              min="0"
-              value={values.internalCosts}
-              placeholder="0"
-              onChange={(e) => setField("internalCosts", e.target.value)}
-            />
+                <TextField
+                  label={`Internal Costs (${values.currency})`}
+                  name="internalCosts"
+                  type="number"
+                  min="0"
+                  value={values.internalCosts}
+                  placeholder="0"
+                  onChange={(e) => setField("internalCosts", e.target.value)}
+                />
 
-            <TextField
-              label={`External Costs (${values.currency})`}
-              name="externalCosts"
-              type="number"
-              min="0"
-              value={values.externalCosts}
-              placeholder="0"
-              onChange={(e) => setField("externalCosts", e.target.value)}
-            />
-
-            <div className="mb-[18px]">
-              <label htmlFor="totalCost" className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                Total Cost ({values.currency})
-              </label>
-              <input
-                id="totalCost"
-                readOnly
-                value={formatLkr(costing.totalCost)}
-                className="w-full cursor-default rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-sm text-[var(--color-text-muted)]"
-              />
+                <TextField
+                  label={`External Costs (${values.currency})`}
+                  name="externalCosts"
+                  type="number"
+                  min="0"
+                  value={values.externalCosts}
+                  placeholder="0"
+                  onChange={(e) => setField("externalCosts", e.target.value)}
+                />
+              </div>
             </div>
 
-            <div className="mb-[18px]">
-              <label htmlFor="profit" className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                Profit ({values.currency})
-              </label>
-              <input
-                id="profit"
-                readOnly
-                value={formatLkr(costing.profit)}
-                className="w-full cursor-default rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-sm text-[var(--color-text-muted)]"
-              />
-            </div>
+            {/* Card 2: Financial Metrics */}
+            <div className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 transition-all duration-200 hover:border-slate-300/80">
+              <div className="flex items-center gap-2 mb-3.5 border-b border-slate-100 pb-2">
+                <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <span className="text-[11.5px] font-bold text-slate-600 tracking-wide uppercase">Financial Metrics</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label htmlFor="totalCost" className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                    Total Cost ({values.currency})
+                  </label>
+                  <input
+                    id="totalCost"
+                    readOnly
+                    value={formatLkr(costing.totalCost)}
+                    className="w-full cursor-default rounded-lg border border-slate-200 bg-slate-100/60 px-3 py-2.5 text-sm text-[var(--color-text-muted)]"
+                  />
+                </div>
 
-            <div className="mb-[18px]">
-              <label htmlFor="markup" className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                Project Profit Markup
-              </label>
-              <input
-                id="markup"
-                readOnly
-                value={formatPercent(costing.markupPercent)}
-                className="w-full cursor-default rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-sm text-[var(--color-text-muted)]"
-              />
-            </div>
+                <div>
+                  <label htmlFor="profit" className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                    Profit ({values.currency})
+                  </label>
+                  <input
+                    id="profit"
+                    readOnly
+                    value={formatLkr(costing.profit)}
+                    className="w-full cursor-default rounded-lg border border-slate-200 bg-slate-100/60 px-3 py-2.5 text-sm text-[var(--color-text-muted)]"
+                  />
+                </div>
 
-            <div className="mb-[18px]">
-              <label htmlFor="margin" className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                Project Profit Margin
-              </label>
-              <input
-                id="margin"
-                readOnly
-                value={formatPercent(costing.marginPercent)}
-                className="w-full cursor-default rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-sm text-[var(--color-text-muted)]"
-              />
+                <div>
+                  <label htmlFor="markup" className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                    Project Profit Markup
+                  </label>
+                  <input
+                    id="markup"
+                    readOnly
+                    value={formatPercent(costing.markupPercent)}
+                    className="w-full cursor-default rounded-lg border border-slate-200 bg-slate-100/60 px-3 py-2.5 text-sm text-[var(--color-text-muted)]"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="margin" className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                    Project Profit Margin
+                  </label>
+                  <input
+                    id="margin"
+                    readOnly
+                    value={formatPercent(costing.marginPercent)}
+                    className="w-full cursor-default rounded-lg border border-slate-200 bg-slate-100/60 px-3 py-2.5 text-sm text-[var(--color-text-muted)]"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         )}
 
         {/* ── Competition ───────────────────────────────── */}
-        {/* Persisted as a single jsonb column on the deal (Deal.competitors) --
-            just a list of free-text blurbs with no need to query/filter on
-            individually. */}
         {activeTab === "competition" && (
-          <div className="h-[620px] overflow-y-auto pr-1">
-            <div className="mb-4 flex justify-end">
-              <Button type="button" variant="secondary" onClick={addCompetitor}>
-                + Add Competitor
-              </Button>
-            </div>
+          <div className="h-[min(620px,calc(100vh-250px))] overflow-y-auto pr-1">
+            <Button
+              type="button"
+              variant="secondary"
+              className="btn-add w-full justify-center border-dashed border-2 hover:bg-slate-50 mb-4"
+              onClick={addCompetitor}
+            >
+              <PlusIcon size={14} /> Add Competitor
+            </Button>
 
             {competitors.length === 0 ? (
-              <p className="text-[var(--color-text-muted)]">
-                No competitors added yet. Click &quot;Add Competitor&quot; to note who else the customer is
-                considering.
+              <p className="deal-empty-tab bg-slate-50/30 rounded-xl border border-dashed border-slate-200 py-6 text-center">
+                No competitors added yet. Add who else the customer is considering.
               </p>
             ) : (
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-4">
                 {competitors.map((competitor, index) => (
                   <div
                     key={competitor.id}
-                    className="flex flex-col gap-2.5 rounded-lg border border-[var(--color-border)] bg-white p-[14px]"
+                    className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 transition-all duration-200 hover:border-slate-300/80"
                   >
-                    <div className="flex items-center justify-between text-[13px] font-semibold text-[var(--color-text)]">
-                      <span>Competitor {index + 1}</span>
+                    <div className="flex items-center justify-between text-[13px] font-bold text-crm-text mb-3 pb-2 border-b border-slate-100">
+                      <span className="flex items-center gap-1.5">
+                        <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        Competitor #{index + 1}
+                      </span>
                       <button
                         type="button"
                         className="flex cursor-pointer rounded-md border-0 bg-transparent p-1.5 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[#fdf0ee] hover:text-[var(--color-danger)]"
                         aria-label={`Remove competitor ${index + 1}`}
                         onClick={() => removeCompetitor(competitor.id)}
                       >
-                        <TrashIcon size={16} />
+                        <TrashIcon size={14} />
                       </button>
                     </div>
                     <TextField
@@ -1404,55 +1642,65 @@ export function AddDealDialog({
 
         {/* ── Team ──────────────────────────────────────── */}
         {activeTab === "team" && (
-          <div className="h-[620px] overflow-y-auto pr-1">
-            <div className="mb-[18px]">
-              <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                Sales Person *
-              </label>
-              <SearchSelect
-                value={values.salesPersonId}
-                onChange={(val) => setField("salesPersonId", val)}
-                options={salesPersonOptions}
-                placeholder="Search employees..."
-                searchPlaceholder="Search by name..."
-              />
-              {errors.salesPersonId && (
-                <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{errors.salesPersonId}</p>
-              )}
-            </div>
+          <div className="h-[min(620px,calc(100vh-250px))] overflow-y-auto pr-1">
+            <div className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 transition-all duration-200 hover:border-slate-300/80">
+              <div className="flex items-center gap-2 mb-3.5 border-b border-slate-100 pb-2">
+                <span className="text-slate-550"><UsersGroupIcon size={14} /></span>
+                <span className="text-[11.5px] font-bold text-slate-600 tracking-wide uppercase">Deal Team Assignment</span>
+              </div>
+              <div className="space-y-1">
+                <div className="mb-[18px]">
+                  <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                    Sales Person *
+                  </label>
+                  <SearchSelect
+                    value={values.salesPersonId}
+                    onChange={(val) => setField("salesPersonId", val)}
+                    options={salesPersonOptions}
+                    placeholder="Search employees..."
+                    searchPlaceholder="Search by name..."
+                  />
+                  {errors.salesPersonId && (
+                    <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{errors.salesPersonId}</p>
+                  )}
+                </div>
 
-            <div className="mb-[18px]">
-              <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
-                Pre-Sales Person
-              </label>
-              <SearchSelect
-                value={values.preSalesPersonId}
-                onChange={(val) => setField("preSalesPersonId", val)}
-                options={preSalesPersonOptions}
-                placeholder="Search employees..."
-                searchPlaceholder="Search by name..."
-              />
-            </div>
+                <div className="mb-[18px]">
+                  <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">
+                    Pre-Sales Person
+                  </label>
+                  <SearchSelect
+                    value={values.preSalesPersonId}
+                    onChange={(val) => setField("preSalesPersonId", val)}
+                    options={preSalesPersonOptions}
+                    placeholder="Search employees..."
+                    searchPlaceholder="Search by name..."
+                  />
+                </div>
 
-            <div className="mb-[18px]">
-              <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">PMO</label>
-              <SearchSelect
-                value={values.pmoId}
-                onChange={(val) => setField("pmoId", val)}
-                options={pmoOptions}
-                placeholder="Search employees..."
-                searchPlaceholder="Search by name..."
-              />
+                <div className="mb-[18px]">
+                  <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">PMO</label>
+                  <SearchSelect
+                    value={values.pmoId}
+                    onChange={(val) => setField("pmoId", val)}
+                    options={pmoOptions}
+                    placeholder="Search employees..."
+                    searchPlaceholder="Search by name..."
+                  />
+                </div>
+              </div>
             </div>
           </div>
         )}
 
         {/* ── Documents ─────────────────────────────────── */}
         {activeTab === "documents" && (
-          <div className="h-[620px] overflow-y-auto pr-1">
+          <div className="h-[min(620px,calc(100vh-250px))] overflow-y-auto pr-1">
             <div
-              className={`flex cursor-pointer flex-col items-center gap-2 rounded-[10px] border-[1.5px] border-dashed px-4 py-[30px] text-center text-[13.5px] font-medium text-[var(--color-text)] transition-colors duration-150 hover:border-[var(--color-brand)] hover:bg-[#eef4ff] ${
-                isDropActive ? "border-[var(--color-brand)] bg-[#eef4ff]" : "border-[var(--color-border)] bg-[#f8fafc]"
+              className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center text-[13.5px] transition-all duration-150 ${
+                isDropActive 
+                  ? "border-crm-primary bg-red-50/30" 
+                  : "border-slate-200 bg-slate-50/30 hover:border-slate-350 hover:bg-slate-50"
               }`}
               onClick={() => fileInputRef.current?.click()}
               onDragOver={(e) => {
@@ -1462,10 +1710,12 @@ export function AddDealDialog({
               onDragLeave={() => setIsDropActive(false)}
               onDrop={handleDrop}
             >
-              <UploadCloudIcon size={26} />
-              <span>{isEdit && isUploadingDocs ? "Uploading…" : "Click to upload or drag and drop"}</span>
-              <span className="text-xs font-normal text-[var(--color-text-muted)]">
-                {isEdit ? "Uploaded immediately" : "Uploaded once you create the deal below"}
+              <span className="text-slate-400"><UploadCloudIcon size={26} /></span>
+              <span className="font-semibold text-slate-700">
+                {isEdit && isUploadingDocs ? "Uploading…" : "Click to upload or drag and drop"}
+              </span>
+              <span className="text-xs text-[var(--color-text-muted)]">
+                {isEdit ? "Uploaded immediately" : "Uploaded once you create the deal"}
               </span>
               <input
                 ref={fileInputRef}
@@ -1478,13 +1728,13 @@ export function AddDealDialog({
 
             {isEdit
               ? existingDocuments.length > 0 && (
-                  <div className="mt-4 flex flex-col gap-2">
+                  <div className="mt-4 flex flex-col gap-2.5">
                     {existingDocuments.map((doc) => (
                       <div
                         key={doc.id}
-                        className="flex items-center gap-2.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5"
+                        className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 hover:border-slate-300 transition-colors duration-150"
                       >
-                        <span className="flex flex-shrink-0 text-[var(--color-brand)]">
+                        <span className="flex flex-shrink-0 text-crm-primary">
                           <FileIcon size={18} />
                         </span>
                         <a
@@ -1493,10 +1743,10 @@ export function AddDealDialog({
                           rel="noopener noreferrer"
                           className="min-w-0 flex-1 no-underline"
                         >
-                          <div className="overflow-hidden truncate text-[13.5px] font-medium text-[var(--color-text)]">
+                          <div className="overflow-hidden truncate text-[13.5px] font-bold text-crm-text">
                             {doc.title}
                           </div>
-                          <div className="text-xs text-[var(--color-text-muted)]">{doc.docType}</div>
+                          <div className="text-[11px] text-[var(--color-text-muted)] mt-0.5">{doc.docType}</div>
                         </a>
                         <button
                           type="button"
@@ -1504,27 +1754,27 @@ export function AddDealDialog({
                           aria-label={`Remove ${doc.title}`}
                           onClick={() => removeExistingDocument(doc.id)}
                         >
-                          <TrashIcon size={16} />
+                          <TrashIcon size={14} />
                         </button>
                       </div>
                     ))}
                   </div>
                 )
               : documents.length > 0 && (
-                  <div className="mt-4 flex flex-col gap-2">
+                  <div className="mt-4 flex flex-col gap-2.5">
                     {documents.map((doc) => (
                       <div
                         key={doc.id}
-                        className="flex items-center gap-2.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5"
+                        className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 hover:border-slate-300 transition-colors duration-150"
                       >
-                        <span className="flex flex-shrink-0 text-[var(--color-brand)]">
+                        <span className="flex flex-shrink-0 text-crm-primary">
                           <FileIcon size={18} />
                         </span>
                         <div className="min-w-0 flex-1">
-                          <div className="overflow-hidden truncate text-[13.5px] font-medium text-[var(--color-text)]">
+                          <div className="overflow-hidden truncate text-[13.5px] font-bold text-crm-text">
                             {doc.file.name}
                           </div>
-                          <div className="text-xs text-[var(--color-text-muted)]">{formatBytes(doc.file.size)}</div>
+                          <div className="text-[11px] text-[var(--color-text-muted)] mt-0.5">{formatBytes(doc.file.size)}</div>
                         </div>
                         <button
                           type="button"
@@ -1532,7 +1782,7 @@ export function AddDealDialog({
                           aria-label={`Remove ${doc.file.name}`}
                           onClick={() => removeDocument(doc.id)}
                         >
-                          <TrashIcon size={16} />
+                          <TrashIcon size={14} />
                         </button>
                       </div>
                     ))}
@@ -1542,19 +1792,8 @@ export function AddDealDialog({
         )}
 
         {/* ── Notes ─────────────────────────────────────── */}
-        {/* Comment-thread style: everyone who can see this deal can see every
-            note, but only the note's own author can edit it again -- the
-            backend enforces this too (POST /deals/:id/notes, PATCH
-            /deals/:id/notes/:noteId). This dialog only ever creates a
-            brand-new deal, so drafts are composed locally (there's no deal
-            to attach them to yet) and posted for real right after the deal
-            itself is created, below in handleSubmit. Every note posted here
-            is authored by CURRENT_USER_LABEL locally -- the edit check is
-            still written against that label (not skipped) so the same code
-            keeps working once this is reused for editing notes on an
-            existing deal, where other users' names would actually appear. */}
         {activeTab === "notes" && (
-          <div className="h-[620px] overflow-y-auto pr-1">
+          <div className="h-[min(620px,calc(100vh-250px))] overflow-y-auto pr-1">
             {notes.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-1 py-10 text-center">
                 <p className="text-[13.5px] font-medium text-[var(--color-text)]">No notes yet</p>
@@ -1656,12 +1895,12 @@ export function AddDealDialog({
           </div>
         )}
 
-        <div className="mt-2 flex justify-end gap-2.5">
+        <div className="mt-4 flex justify-end gap-2.5 border-t border-slate-200/60 pt-4">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>
           <Button type="submit" isLoading={isSaving}>
-            {isEdit ? "Save Changes" : "Create Deal"}
+            {isEdit ? "Save changes" : "Create deal"}
           </Button>
         </div>
       </form>

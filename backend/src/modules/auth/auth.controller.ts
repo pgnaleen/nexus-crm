@@ -37,12 +37,14 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async login(
     @Body() dto: LoginDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthSessionResponse> {
     // Never log dto.password.
     this.logger.debug(`POST /auth/login called (tenantSlug="${dto.tenantSlug}", username="${dto.username}")`);
     try {
-      const { session, accessToken, refreshToken } = await this.authService.login(dto);
+      const requestMeta = { ipAddress: req.ip, userAgent: req.headers["user-agent"] };
+      const { session, accessToken, refreshToken } = await this.authService.login(dto, requestMeta);
       this.setAuthCookies(res, accessToken, refreshToken);
       this.logger.debug(`POST /auth/login succeeded for user ${session.user.id}`);
       return session;
@@ -96,7 +98,8 @@ export class AuthController {
     this.logger.debug("POST /auth/logout called");
     try {
       const refreshToken = req.cookies?.[REFRESH_COOKIE];
-      await this.authService.logout(refreshToken);
+      const requestMeta = { ipAddress: req.ip, userAgent: req.headers["user-agent"] };
+      await this.authService.logout(refreshToken, requestMeta);
       res.clearCookie(ACCESS_COOKIE);
       res.clearCookie(REFRESH_COOKIE);
       // Defense in depth for shared machines -- a mismatched actingUserId

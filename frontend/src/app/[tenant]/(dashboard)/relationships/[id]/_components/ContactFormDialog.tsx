@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, Fragment } from "react";
 import type {
   CompanyPickerResponse,
   ContactResponse,
@@ -22,7 +22,7 @@ import { CustomSelect } from "@/components/ui/CustomSelect";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { RelationshipHubDiagram } from "@/components/ui/RelationshipHubDiagram";
 import { Spinner } from "@/components/ui/Spinner";
-import { PlusIcon } from "@/components/ui/icons";
+import { PlusIcon, UserIcon } from "@/components/ui/icons";
 import { email as emailValidator, linkedInUrl, minLength, phoneNumber, required, validate } from "@/lib/validation";
 import { t } from "@/lib/i18n";
 import { ContactFields, type ContactFieldsValue } from "./ContactFields";
@@ -281,37 +281,99 @@ export function ContactFormDialog({
     <Dialog
       open
       title={
-        mode === "create"
-          ? `Add Person (${relationshipTypeName})`
-          : mode === "view"
-            ? "View Person"
-            : "Edit Person"
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-crm-primary">
+            <UserIcon size={18} />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[15px] font-bold text-crm-text">
+              {mode === "create"
+                ? `Add Person (${relationshipTypeName})`
+                : mode === "view"
+                  ? "View Person"
+                  : "Edit Person"}
+            </span>
+            {mode !== "create" && contact && (
+              <span className="text-[11px] font-medium text-[var(--color-text-muted)] leading-none mt-0.5">
+                {contact.fullName}
+              </span>
+            )}
+          </div>
+        </div>
       }
       onClose={onClose}
       maxWidth={showRelationshipsTab ? "680px" : "560px"}
     >
       <form onSubmit={handleSubmit}>
         {showRelationshipsTab && (
-          <div className="dialog-tabs">
-            <button
-              type="button"
-              className={`dialog-tab${activeTab === "details" ? " dialog-tab-active" : ""}`}
-              onClick={() => setActiveTab("details")}
-            >
-              {t("relationshipTags.detailsTabLabel")}
-            </button>
-            <button
-              type="button"
-              className={`dialog-tab${activeTab === "relationships" ? " dialog-tab-active" : ""}`}
-              onClick={() => setActiveTab("relationships")}
-            >
-              {t("relationshipTags.tabLabel")}
-            </button>
+          <div className="inline-flex items-center bg-slate-100/90 p-1 rounded-xl mb-6 select-none border border-slate-200/40 shadow-sm">
+            {(() => {
+              const tabsOrder = ["details", "relationships"];
+              return tabsOrder.map((tabId, idx) => {
+                const isActive = activeTab === tabId;
+                const showDivider = idx > 0 && !isActive && activeTab !== tabsOrder[idx - 1];
+                
+                let label = "";
+                let icon = null;
+                if (tabId === "details") {
+                  label = t("relationshipTags.detailsTabLabel");
+                  icon = <UserIcon size={14} />;
+                } else if (tabId === "relationships") {
+                  label = t("relationshipTags.tabLabel");
+                  icon = (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                  );
+                }
+                
+                let clipPath = "";
+                if (isActive) {
+                  const isFirst = idx === 0;
+                  const isLast = idx === tabsOrder.length - 1;
+                  if (isFirst) {
+                    clipPath = "polygon(0 0, 100% 0, 88% 100%, 0 100%)";
+                  } else if (isLast) {
+                    clipPath = "polygon(12% 0, 100% 0, 100% 100%, 0 100%)";
+                  } else {
+                    clipPath = "polygon(12% 0, 100% 0, 88% 100%, 0 100%)";
+                  }
+                }
+
+                return (
+                  <Fragment key={tabId}>
+                    {showDivider && <div className="w-px h-3.5 bg-slate-300/80 mx-1" />}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab(tabId as never)}
+                      className={`relative flex items-center gap-2 py-2 px-5 font-bold transition-all duration-150 border-none outline-none focus:outline-none cursor-pointer ${
+                        isActive
+                          ? "text-white select-none"
+                          : "text-slate-550 hover:bg-slate-200/50 hover:text-slate-800 rounded-lg"
+                      }`}
+                    >
+                      {isActive && (
+                        <div 
+                          className={`absolute inset-0 bg-crm-primary shadow-sm ${
+                            idx === 0 ? "rounded-l-lg" : idx === tabsOrder.length - 1 ? "rounded-r-lg" : ""
+                          }`}
+                          style={{ clipPath }}
+                        />
+                      )}
+                      <span className="relative z-10 flex items-center gap-2 text-[13px]">
+                        {icon}
+                        {label}
+                      </span>
+                    </button>
+                  </Fragment>
+                );
+              });
+            })()}
           </div>
         )}
-
+ 
         {formError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{formError}</p>}
-
+ 
         {/* ── Tab 1: Details ──────────────────────────────── */}
         {(!showRelationshipsTab || activeTab === "details") && (
           <div className="h-[480px] overflow-y-auto pr-1">
@@ -322,40 +384,53 @@ export function ContactFormDialog({
               disabled={isViewOnly}
               onChange={(field, value) => setField(field, value as never)}
             />
-
+ 
             {!companyContext && (
-              <div className="mb-[18px]">
-                <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Company</label>
-                <CustomSelect
-                  fullWidth
-                  label=""
-                  value={values.companyId}
-                  onChange={(val) => setField("companyId", val)}
-                  options={companyOptions}
-                  disabled={isViewOnly}
-                />
-                <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
-                  Select a company only if this contact works under an organization. Leave as &quot;None&quot; to list them as an individual standalone person.
-                </p>
+              <div className="mt-4 bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 transition-all duration-200 hover:border-slate-300/80">
+                <div className="flex items-center gap-2 mb-3.5 border-b border-slate-100 pb-2">
+                  <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  <span className="text-[11.5px] font-bold text-slate-600 tracking-wide uppercase">Organization Assignment</span>
+                </div>
+                <div className="mb-2">
+                  <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">Company</label>
+                  <CustomSelect
+                    fullWidth
+                    label=""
+                    value={values.companyId}
+                    onChange={(val) => setField("companyId", val)}
+                    options={companyOptions}
+                    disabled={isViewOnly}
+                  />
+                  <p className="mt-2 text-[12px] text-[var(--color-text-muted)] leading-relaxed">
+                    Select a company only if this contact works under an organization. Leave as &quot;None&quot; to list them as an individual standalone person.
+                  </p>
+                </div>
               </div>
             )}
           </div>
         )}
-
+ 
         {/* ── Tab 2: Relationships ────────────────────────── */}
         {showRelationshipsTab && activeTab === "relationships" && (
           <div className="h-[480px] overflow-y-auto pr-1">
             {tagError && <p className="mb-2 text-[12.5px] text-[var(--color-danger)]">{tagError}</p>}
-            {isLoadingTags ? (
-              <Spinner size={20} />
-            ) : (
-              <RelationshipHubDiagram
-                centerLabel={values.fullName}
-                spokes={tagSpokes}
-                emptyLabel={t("relationshipTags.emptyState")}
-              />
-            )}
-
+            
+            <div className="bg-slate-50/30 border border-slate-200/80 rounded-xl p-6 mb-4 flex flex-col items-center justify-center">
+              {isLoadingTags ? (
+                <div className="h-40 flex items-center justify-center">
+                  <Spinner size={20} />
+                </div>
+              ) : (
+                <RelationshipHubDiagram
+                  centerLabel={values.fullName}
+                  spokes={tagSpokes}
+                  emptyLabel={t("relationshipTags.emptyState")}
+                />
+              )}
+            </div>
+ 
             {!isViewOnly && canCreate && (
               <div className="mt-4 border-t border-[var(--color-border)] pt-4">
                 <div className="flex items-end gap-2.5">
@@ -385,7 +460,7 @@ export function ContactFormDialog({
             )}
           </div>
         )}
-
+ 
         <div className="mt-2 flex justify-end gap-2.5">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
             {isViewOnly ? "Close" : "Cancel"}

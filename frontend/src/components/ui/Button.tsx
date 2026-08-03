@@ -9,11 +9,11 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 // everywhere (dialog footers), matching what the old .dialog-actions .btn override used to force.
 // The two standalone full-width consumers (LoginForm, BackupsWidget) pass their own `w-full`.
 const BASE =
-  "rounded-lg px-[18px] py-2.5 text-sm font-semibold cursor-pointer transition-[background,opacity] duration-150 disabled:cursor-default disabled:opacity-60";
+  "rounded-lg px-[18px] py-2.5 text-sm font-semibold cursor-pointer border transition-[background,opacity,border-color,box-shadow] duration-150 disabled:cursor-default disabled:opacity-60 outline-none focus:outline-none";
 const VARIANT_CLASSES: Record<"primary" | "secondary", string> = {
-  primary: "bg-crm-primary text-white enabled:hover:bg-crm-primary-hover",
+  primary: "bg-crm-primary text-white border-transparent enabled:hover:bg-crm-primary-hover",
   secondary:
-    "bg-white text-crm-text border border-[var(--color-border)] enabled:hover:bg-[#f3f4f6]",
+    "bg-white text-crm-text border-[var(--color-border)] enabled:hover:bg-[#f3f4f6]",
 };
 
 export function Button({

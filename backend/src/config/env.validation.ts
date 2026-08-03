@@ -55,4 +55,11 @@ export const envValidationSchema = Joi.object({
   // Used to build the login link in the welcome email -- the frontend's own
   // public origin, not the backend's (NEXT_PUBLIC_API_URL is the reverse).
   APP_BASE_URL: Joi.string().default("http://localhost:3000"),
+
+  // How many trusted reverse-proxy hops sit in front of this app -- see
+  // main.ts's app.set("trust proxy", ...) comment. 0 (default) means don't
+  // trust X-Forwarded-For at all; raise only in an environment with a real
+  // proxy (e.g. nginx) actually in front, so auth_events' captured IP is the
+  // real client's, not an attacker-forgeable header.
+  TRUST_PROXY_HOPS: Joi.number().min(0).default(0),
 });

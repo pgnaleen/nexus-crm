@@ -4,7 +4,7 @@ import { useEffect, type MouseEvent, type ReactNode } from "react";
 
 interface DialogProps {
   open: boolean;
-  title: string;
+  title: ReactNode;
   onClose: () => void;
   children: ReactNode;
   maxWidth?: string;
@@ -32,7 +32,7 @@ export function Dialog({ open, title, onClose, children, maxWidth }: DialogProps
         className="dialog-panel" 
         role="dialog" 
         aria-modal="true" 
-        aria-label={title}
+        aria-label={typeof title === "string" ? title : undefined}
         style={maxWidth ? { maxWidth } : undefined}
       >
         <div className="dialog-header">
