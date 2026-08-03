@@ -73,6 +73,7 @@ export interface IDeal {
   expectedCloseDate?: string | null;
   competitors?: ICompetitorEntry[] | null;
   isTender: boolean;
+  createdAt: string;
 }
 
 export interface ISubStageHistory {

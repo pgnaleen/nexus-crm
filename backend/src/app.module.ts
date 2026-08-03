@@ -10,6 +10,7 @@ import { AuthModule } from "./modules/auth/auth.module";
 import { CertificationsModule } from "./modules/certifications/certifications.module";
 import { CompaniesModule } from "./modules/companies/companies.module";
 import { ContactsModule } from "./modules/contacts/contacts.module";
+import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { DbBackupModule } from "./modules/db-backup/db-backup.module";
 import { DealSourcesModule } from "./modules/deal-sources/deal-sources.module";
 import { MainStagesModule } from "./modules/deal-stages/main-stages.module";
@@ -51,6 +52,7 @@ import { UsersModule } from "./modules/users/users.module";
     IndustriesModule,
     PickersModule,
     PriorityTasksModule,
+    DashboardModule,
     UploadsModule,
     DbBackupModule,
     AuthModule,

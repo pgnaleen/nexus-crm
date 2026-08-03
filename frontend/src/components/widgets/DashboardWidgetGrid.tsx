@@ -1,21 +1,26 @@
 "use client";
 
-import { useEffect, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import ReactGridLayout, { useContainerWidth, type Layout, type LayoutItem } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import { CheckCircleIcon, EditIcon, PlusIcon, TrashIcon } from "@/components/ui/icons";
 import { Dialog } from "@/components/ui/Dialog";
+import { updateDashboardPreferences } from "@/lib/api/dashboard";
+import type { DashboardPreferenceResponse } from "@orelia/common";
 
 // Stages 1-3 of the widget-dashboard feature -- see epics-system.md, Story 1.8.
 //
-// Layout + which widgets are currently visible both persist to localStorage only for now, not
-// the backend -- this is still a dummy-data mock phase (per the project's mock-first workflow).
+// Layout + which widgets are currently visible persist to the backend
+// (`PUT /dashboard/preferences`, debounced) -- one row per user, replacing the
+// original localStorage-only mock phase. `initialPreferences` comes from a
+// server-side fetch in dashboard/page.tsx, so there's no client-side loading
+// flicker the way a localStorage read on mount would have.
 //
-// Permission filtering (which widgets a viewer is even offered) now happens one layer up, in
-// dashboard/page.tsx via widget-registry.tsx -- this component only ever sees the `widgets` map
-// it's handed, which is already filtered to what the signed-in user has access to.
-const LAYOUT_STORAGE_KEY = "orelia-dashboard-layout-v4";
-const VISIBLE_STORAGE_KEY = "orelia-dashboard-visible-v1";
+// Permission filtering (which widgets a viewer is even offered) happens one
+// layer up, in dashboard/page.tsx via widget-registry.tsx -- this component
+// only ever sees the `widgets` map it's handed, which is already filtered to
+// what the signed-in user has access to.
+const SAVE_DEBOUNCE_MS = 600;
 
 export interface WidgetEntry {
   label: string;
@@ -25,30 +30,7 @@ export interface WidgetEntry {
 interface DashboardWidgetGridProps {
   widgets: Record<string, WidgetEntry>;
   defaultLayout: Layout;
-}
-
-function loadLayout(defaultLayout: Layout): Layout {
-  if (typeof window === "undefined") return defaultLayout;
-  try {
-    const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
-    if (!raw) return defaultLayout;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : defaultLayout;
-  } catch {
-    return defaultLayout;
-  }
-}
-
-function loadVisibleKeys(allKeys: string[]): string[] {
-  if (typeof window === "undefined") return allKeys;
-  try {
-    const raw = window.localStorage.getItem(VISIBLE_STORAGE_KEY);
-    if (!raw) return allKeys;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((k) => allKeys.includes(k)) : allKeys;
-  } catch {
-    return allKeys;
-  }
+  initialPreferences?: DashboardPreferenceResponse | null;
 }
 
 // A widget removed from the grid needs *somewhere* to go when re-added from the panel -- appended
@@ -59,35 +41,46 @@ function placeNewWidget(key: string, currentLayout: Layout): LayoutItem {
   return { i: key, x: 0, y: maxY, w: 4, h: 3 };
 }
 
-export function DashboardWidgetGrid({ widgets, defaultLayout }: DashboardWidgetGridProps) {
+export function DashboardWidgetGrid({ widgets, defaultLayout, initialPreferences }: DashboardWidgetGridProps) {
   const { width, containerRef, mounted } = useContainerWidth();
   const [isEditMode, setIsEditMode] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
-  const [layout, setLayout] = useState<Layout>(defaultLayout);
-  const [visibleKeys, setVisibleKeys] = useState<string[]>(Object.keys(widgets));
 
   const allKeys = Object.keys(widgets);
+  const initialLayout =
+    initialPreferences && initialPreferences.layout.length > 0 ? initialPreferences.layout : defaultLayout;
+  const initialVisibleKeys = initialPreferences
+    ? initialPreferences.visibleWidgetKeys.filter((k) => allKeys.includes(k))
+    : allKeys;
+
+  const [layout, setLayout] = useState<Layout>(initialLayout);
+  const [visibleKeys, setVisibleKeys] = useState<string[]>(initialVisibleKeys);
+
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    setLayout(loadLayout(defaultLayout));
-    setVisibleKeys(loadVisibleKeys(allKeys));
-    // Only ever load from storage once on mount -- defaultLayout/widgets are fresh on every
-    // render from the caller, so they must not be dependencies here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
   }, []);
+
+  function scheduleSave(nextLayout: Layout, nextVisibleKeys: string[]) {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      updateDashboardPreferences({ layout: [...nextLayout], visibleWidgetKeys: nextVisibleKeys }).catch((err) => {
+        console.error("[DashboardWidgetGrid] failed to save preferences:", err);
+      });
+    }, SAVE_DEBOUNCE_MS);
+  }
 
   function persistVisibleKeys(next: string[]) {
     setVisibleKeys(next);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(VISIBLE_STORAGE_KEY, JSON.stringify(next));
-    }
+    scheduleSave(layout, next);
   }
 
   function persistLayout(next: Layout) {
     setLayout(next);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(next));
-    }
+    scheduleSave(next, visibleKeys);
   }
 
   function removeWidget(key: string) {
@@ -95,10 +88,11 @@ export function DashboardWidgetGrid({ widgets, defaultLayout }: DashboardWidgetG
   }
 
   function addWidget(key: string) {
-    persistVisibleKeys([...visibleKeys, key]);
-    if (!layout.some((item) => item.i === key)) {
-      persistLayout([...layout, placeNewWidget(key, layout)]);
-    }
+    const nextVisibleKeys = [...visibleKeys, key];
+    setVisibleKeys(nextVisibleKeys);
+    const nextLayout = layout.some((item) => item.i === key) ? layout : [...layout, placeNewWidget(key, layout)];
+    setLayout(nextLayout);
+    scheduleSave(nextLayout, nextVisibleKeys);
   }
 
   function toggleEditMode() {

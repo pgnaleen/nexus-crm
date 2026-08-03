@@ -161,6 +161,7 @@ export class DealsController {
       expectedCloseDate: deal.expectedCloseDate ?? null,
       competitors: deal.competitors ?? null,
       isTender: deal.isTender,
+      createdAt: deal.createdAt.toISOString(),
     };
   }
 }

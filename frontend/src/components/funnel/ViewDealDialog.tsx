@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode, Fragment } from "react";
-import { PERMISSIONS, type DealDocumentResponse, type DealNoteResponse, type DealPartnerResponse, type DealResponse, type DealRoleAssignmentResponse } from "@orelia/common";
+import { PERMISSIONS, type DealDocumentResponse, type DealNoteResponse, type DealPartnerResponse, type DealResponse, type DealRoleAssignmentResponse, type MainStageResponse } from "@orelia/common";
 import {
   createDealNote,
   deleteDeal,
@@ -14,6 +14,7 @@ import {
   listDealTeam,
   updateDealNote,
 } from "@/lib/api/deals";
+import { listMainStages } from "@/lib/api/main-stages";
 import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
@@ -104,6 +105,7 @@ export function ViewDealDialog({
   const [partners, setPartners] = useState<DealPartnerResponse[] | null>(null);
   const [team, setTeam] = useState<DealRoleAssignmentResponse[] | null>(null);
   const [notes, setNotes] = useState<DealNoteResponse[] | null>(null);
+  const [mainStages, setMainStages] = useState<MainStageResponse[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [draftNote, setDraftNote] = useState("");
@@ -134,14 +136,16 @@ export function ViewDealDialog({
       listDealPartners(dealId),
       listDealNotes(dealId),
       listDealTeam(dealId),
+      listMainStages(),
     ])
-      .then(([dealRes, documentsRes, partnersRes, notesRes, teamRes]) => {
+      .then(([dealRes, documentsRes, partnersRes, notesRes, teamRes, stagesRes]) => {
         if (cancelled) return;
         setDeal(dealRes);
         setDocuments(documentsRes);
         setPartners(partnersRes);
         setNotes(notesRes);
         setTeam(teamRes);
+        setMainStages(stagesRes);
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err instanceof ApiError ? err.message : "Failed to load deal");
@@ -252,18 +256,64 @@ export function ViewDealDialog({
 
   const costing = computeCosting(deal.estimatedValue ?? 0, deal.internalCosts ?? 0, deal.externalCosts ?? 0);
 
+  const weightPercent = mainStages?.find((ms) => ms.id === deal.mainStageId)?.weightPercent;
+
+  const dealAgeText = (() => {
+    if (!deal.createdAt) return "";
+    const created = new Date(deal.createdAt);
+    const now = new Date();
+    // Using UTC to accurately count day flips rather than 24h spans
+    const utc1 = Date.UTC(created.getFullYear(), created.getMonth(), created.getDate());
+    const utc2 = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    const diffDays = Math.floor((utc2 - utc1) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return "Created today";
+    if (diffDays < 30) return `Created ${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+    const diffMonths = Math.floor(diffDays / 30);
+    if (diffMonths < 12) return `Created ${diffMonths} month${diffMonths === 1 ? '' : 's'} ago`;
+    const diffYears = Math.floor(diffMonths / 12);
+    return `Created ${diffYears} year${diffYears === 1 ? '' : 's'} ago`;
+  })();
+
   const dialogTitle = (
-    <div className="flex items-center gap-3">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-crm-primary">
-        <FunnelIcon size={20} />
+    <div className="flex items-center gap-3 w-full pr-8">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 text-crm-primary border border-red-100 shadow-sm">
+        <FunnelIcon size={22} />
       </div>
-      <div className="flex flex-col min-w-0">
-        <span className="text-[15px] font-bold text-crm-text truncate">
-          {deal.name}
-        </span>
-        <span className="text-[11px] font-medium text-[var(--color-text-muted)] leading-none mt-0.5">
-          {deal.companyName || deal.contactName || "No Customer Assigned"}
-        </span>
+      <div className="flex items-center justify-between gap-6 flex-1 min-w-0">
+        <div className="flex flex-col min-w-0">
+          <span className="text-[16px] font-bold text-slate-800 truncate leading-tight">
+            {deal.name}
+          </span>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-[11.5px] font-semibold text-[var(--color-text-muted)]">
+              {deal.companyName || deal.contactName || "No Customer Assigned"}
+            </span>
+            {dealAgeText && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-slate-300" />
+                <span className="text-[11px] font-medium text-slate-500 tracking-wide">
+                  {dealAgeText}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+        
+        {weightPercent != null && (
+          <div className="hidden sm:flex flex-col w-36 shrink-0 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+            <div className="flex items-center justify-between text-[9.5px] font-bold text-slate-500 tracking-wider mb-1.5 uppercase">
+              <span>Stage Progress</span>
+              <span className="text-crm-primary">{weightPercent}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 shadow-inner">
+              <div
+                className="h-full rounded-full bg-[var(--color-crm-primary)] transition-all duration-700 ease-out shadow-[0_0_10px_var(--color-crm-primary-glow)]"
+                style={{ width: `${weightPercent}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

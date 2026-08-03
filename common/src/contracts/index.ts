@@ -17,3 +17,4 @@ export * from "./pickers.contracts";
 export * from "./priority-tasks.contracts";
 export * from "./certifications.contracts";
 export * from "./activity-log.contracts";
+export * from "./dashboard.contracts";
