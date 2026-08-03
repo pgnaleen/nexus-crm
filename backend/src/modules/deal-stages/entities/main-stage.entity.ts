@@ -17,4 +17,10 @@ export class MainStage extends AuditedTenantEntity {
 
   @Column({ default: false })
   isLost!: boolean;
+
+  // Feeds the Sales Pipeline Dashboard's "Weighted Pipeline" KPI. Nullable,
+  // not defaulted to 0 -- an unconfigured stage is distinct from one
+  // explicitly weighted at 0%, see the migration's own comment.
+  @Column({ type: "numeric", precision: 5, scale: 2, nullable: true })
+  weightPercent?: number | null;
 }

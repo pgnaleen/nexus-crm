@@ -5,6 +5,8 @@ export interface CreateMainStageRequest {
   position: number;
   isWon?: boolean;
   isLost?: boolean;
+  /** 0-100, or null to clear. Feeds the Sales Pipeline Dashboard's Weighted Pipeline KPI. */
+  weightPercent?: number | null;
 }
 
 export type UpdateMainStageRequest = Partial<CreateMainStageRequest>;
@@ -12,6 +14,8 @@ export type UpdateMainStageRequest = Partial<CreateMainStageRequest>;
 export interface MainStageResponse extends IMainStage {
   /** Active (non-deleted) Sub Stages under this Main Stage -- deleting it cascades to these. */
   dependentCount: number;
+  /** null means unconfigured, distinct from an explicit 0. */
+  weightPercent: number | null;
 }
 
 export interface CreateDealStageRequest {

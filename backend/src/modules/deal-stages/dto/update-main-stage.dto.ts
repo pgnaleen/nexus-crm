@@ -1,5 +1,5 @@
 import { UpdateMainStageRequest } from "@orelia/common";
-import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from "class-validator";
+import { IsBoolean, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength } from "class-validator";
 
 export class UpdateMainStageDto implements UpdateMainStageRequest {
   @IsOptional()
@@ -20,4 +20,10 @@ export class UpdateMainStageDto implements UpdateMainStageRequest {
   @IsOptional()
   @IsBoolean()
   isLost?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  weightPercent?: number | null;
 }

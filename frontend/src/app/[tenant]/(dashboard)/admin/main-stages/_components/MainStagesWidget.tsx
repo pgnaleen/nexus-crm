@@ -183,6 +183,9 @@ export function MainStagesWidget({
                 <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
                   Name
                 </th>
+                <th className="w-24 border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                  Weight %
+                </th>
                 <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
                   Created
                 </th>
@@ -205,6 +208,11 @@ export function MainStagesWidget({
                   </td>
                   <td className="border-b border-[var(--color-border)] p-3 font-medium text-crm-text">
                     {stage.name}
+                  </td>
+                  <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
+                    {stage.weightPercent != null ? `${stage.weightPercent}%` : (
+                      <span className="text-[var(--color-text-muted)]">—</span>
+                    )}
                   </td>
                   <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
                     {formatDate(stage.createdAt)}

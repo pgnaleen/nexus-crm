@@ -69,6 +69,7 @@ export class MainStagesController {
       position: stage.position,
       isWon: stage.isWon,
       isLost: stage.isLost,
+      weightPercent: stage.weightPercent ?? null,
       dependentCount,
       createdAt: stage.createdAt.toISOString(),
       updatedAt: stage.updatedAt.toISOString(),

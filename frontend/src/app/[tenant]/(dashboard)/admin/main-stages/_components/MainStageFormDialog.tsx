@@ -14,6 +14,7 @@ interface FormState {
   position: string;
   isWon: boolean;
   isLost: boolean;
+  weightPercent: string;
 }
 
 function toFormState(stage?: MainStageResponse): FormState {
@@ -22,6 +23,7 @@ function toFormState(stage?: MainStageResponse): FormState {
     position: stage?.position?.toString() ?? "0",
     isWon: stage?.isWon ?? false,
     isLost: stage?.isLost ?? false,
+    weightPercent: stage?.weightPercent != null ? String(stage.weightPercent) : "",
   };
 }
 
@@ -70,6 +72,13 @@ export function MainStageFormDialog({
       }
     }
 
+    if (values.weightPercent.trim() !== "") {
+      const weightParsed = Number(values.weightPercent);
+      if (isNaN(weightParsed) || weightParsed < 0 || weightParsed > 100) {
+        nextErrors.weightPercent = "Must be a number between 0 and 100";
+      }
+    }
+
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   }
@@ -84,6 +93,10 @@ export function MainStageFormDialog({
       position: parseInt(values.position, 10) || 0,
       isWon: values.isWon,
       isLost: values.isLost,
+      // null (not undefined) when cleared -- PATCH omits undefined keys
+      // entirely (JSON.stringify drops them), which would leave an
+      // already-set weight untouched instead of clearing it.
+      weightPercent: values.weightPercent.trim() === "" ? null : Number(values.weightPercent),
     };
 
     setIsSaving(true);
@@ -133,6 +146,23 @@ export function MainStageFormDialog({
         />
         <p className="-mt-2.5 mb-[18px] text-[13px] text-[var(--color-text-muted)]">
           Used to order stages in the pipeline. Lower numbers appear first.
+        </p>
+
+        <TextField
+          label="Weight %"
+          name="weightPercent"
+          type="number"
+          min="0"
+          max="100"
+          value={values.weightPercent}
+          error={errors.weightPercent}
+          disabled={isViewOnly}
+          placeholder="e.g. 50"
+          onChange={(e) => setField("weightPercent", e.target.value)}
+        />
+        <p className="-mt-2.5 mb-[18px] text-[13px] text-[var(--color-text-muted)]">
+          How complete a deal in this stage counts as, for the dashboard&apos;s Weighted Pipeline
+          total. Leave blank if this stage shouldn&apos;t count toward it yet.
         </p>
 
         {/* A deal can sit directly in this Main Stage with no Sub Stage at
