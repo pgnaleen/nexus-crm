@@ -1433,8 +1433,7 @@ export function AddDealDialog({
                   <TextField
                     label="Bid Bond Amount"
                     name="bidBondAmount"
-                    type="number"
-                    min="0"
+                    type="text"
                     value={values.bidBondAmount}
                     placeholder="0"
                     onChange={(e) => setField("bidBondAmount", e.target.value)}
@@ -1444,8 +1443,7 @@ export function AddDealDialog({
                 <TextField
                   label="EMD Amount"
                   name="emdAmount"
-                  type="number"
-                  min="0"
+                  type="text"
                   value={values.emdAmount}
                   placeholder="0"
                   onChange={(e) => setField("emdAmount", e.target.value)}
@@ -1576,8 +1574,7 @@ export function AddDealDialog({
                 <TextField
                   label={`Project Value without Tax (${values.currency})`}
                   name="projectValue"
-                  type="number"
-                  min="0"
+                  type="text"
                   value={values.projectValue}
                   placeholder="0"
                   onChange={(e) => setField("projectValue", e.target.value)}
@@ -1586,8 +1583,7 @@ export function AddDealDialog({
                 <TextField
                   label={`Internal Costs (${values.currency})`}
                   name="internalCosts"
-                  type="number"
-                  min="0"
+                  type="text"
                   value={values.internalCosts}
                   placeholder="0"
                   onChange={(e) => setField("internalCosts", e.target.value)}
@@ -1596,8 +1592,7 @@ export function AddDealDialog({
                 <TextField
                   label={`External Costs (${values.currency})`}
                   name="externalCosts"
-                  type="number"
-                  min="0"
+                  type="text"
                   value={values.externalCosts}
                   placeholder="0"
                   onChange={(e) => setField("externalCosts", e.target.value)}
