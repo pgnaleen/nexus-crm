@@ -1,31 +1,27 @@
 "use client";
 
+import { getCountryDataList } from "countries-list";
 import * as Flags from "country-flag-icons/react/3x2";
 import { CURRENCIES, formatCurrencyLabel } from "@/lib/currencies";
 import { SearchSelect, type SearchSelectOption } from "./SearchSelect";
 
 const CURRENCY_TO_COUNTRY: Record<string, string> = {
-  USD: "US",
-  EUR: "EU",
-  GBP: "GB",
-  LKR: "LK",
-  INR: "IN",
-  AUD: "AU",
-  CAD: "CA",
-  SGD: "SG",
-  JPY: "JP",
-  CNY: "CN",
-  CHF: "CH",
-  AED: "AE",
-  SAR: "SA",
-  QAR: "QA",
-  OMR: "OM",
-  BHD: "BH",
-  KWD: "KW",
-  NZD: "NZ",
-  HKD: "HK",
-  ZAR: "ZA",
+  EUR: "EU", // Map Euro directly to the European Union flag
+  USD: "US", // Ensure US Dollar maps directly to US
 };
+
+// Dynamically build the mappings from the database list of countries
+try {
+  const countryList = getCountryDataList();
+  for (const country of countryList) {
+    const primaryCurrency = country.currency?.[0];
+    if (primaryCurrency && !CURRENCY_TO_COUNTRY[primaryCurrency]) {
+      CURRENCY_TO_COUNTRY[primaryCurrency] = country.iso2;
+    }
+  }
+} catch (e) {
+  console.error("Failed to build currency-to-country mapping dynamically:", e);
+}
 
 const CURRENCY_OPTIONS: SearchSelectOption[] = CURRENCIES.map((code) => {
   const countryCode = CURRENCY_TO_COUNTRY[code];
