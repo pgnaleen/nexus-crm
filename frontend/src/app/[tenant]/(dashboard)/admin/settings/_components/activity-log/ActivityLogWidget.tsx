@@ -30,9 +30,12 @@ interface FilterState {
   actorId: string;
   module: string;
   search: string;
+  // Only ever meaningful/shown for a System-tenant viewer -- see
+  // ActivityLogWidget's own comment on isPlatformSession below.
+  tenantId: string;
 }
 
-const EMPTY_FILTERS: FilterState = { from: "", to: "", actorId: "", module: "", search: "" };
+const EMPTY_FILTERS: FilterState = { from: "", to: "", actorId: "", module: "", search: "", tenantId: "" };
 
 function hasActiveFilters(filters: FilterState): boolean {
   return Object.values(filters).some((value) => value !== "");
@@ -43,11 +46,13 @@ function FilterBar({
   onChange,
   actorOptions,
   moduleOptions,
+  tenantOptions,
 }: {
   filters: FilterState;
   onChange: (next: FilterState) => void;
   actorOptions: { value: string; label: string }[];
   moduleOptions: { value: string; label: string }[] | null;
+  tenantOptions: { value: string; label: string }[] | null;
 }) {
   return (
     <div className="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-[var(--color-border)] bg-[#f8fafc] px-4 py-3">
@@ -100,6 +105,18 @@ function FilterBar({
             value={filters.module}
             onChange={(value) => onChange({ ...filters, module: value })}
             options={[{ value: "", label: t("activityLog.filters.allModules") }, ...moduleOptions]}
+            fullWidth
+          />
+        </div>
+      )}
+
+      {tenantOptions && (
+        <div className="w-[180px]">
+          <CustomSelect
+            label=""
+            value={filters.tenantId}
+            onChange={(value) => onChange({ ...filters, tenantId: value })}
+            options={[{ value: "", label: t("activityLog.filters.allTenants") }, ...tenantOptions]}
             fullWidth
           />
         </div>
@@ -162,39 +179,58 @@ function matchesDateRange(occurredAt: string, filters: FilterState): boolean {
   return true;
 }
 
-function AuditLogPanel() {
+function AuditLogPanel({ isPlatformSession, currentTenantId }: { isPlatformSession: boolean; currentTenantId: string }) {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // Own-tenant scoping happens here for the mock; the real backend enforces
+  // it server-side (queryBuilderScoped) regardless of anything the client
+  // sends, per spec-activity-log.md's Edge Case 2 -- this client-side filter
+  // is purely so the mock demonstrates the same restriction, not the actual
+  // security boundary.
+  const tenantScoped = useMemo(
+    () => (isPlatformSession ? MOCK_AUDIT_ENTRIES : MOCK_AUDIT_ENTRIES.filter((entry) => entry.tenantId === currentTenantId)),
+    [isPlatformSession, currentTenantId],
+  );
+
   const actorOptions = useMemo(() => {
     const seen = new Map<string, string>();
-    for (const entry of MOCK_AUDIT_ENTRIES) {
+    for (const entry of tenantScoped) {
       if (entry.actorId && entry.actorName && !entry.actorIsPlatform) seen.set(entry.actorId, entry.actorName);
     }
     return [...seen.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
-  }, []);
+  }, [tenantScoped]);
 
   const moduleOptions = useMemo(() => {
-    const seen = new Set(MOCK_AUDIT_ENTRIES.map((entry) => entry.entityType));
+    const seen = new Set(tenantScoped.map((entry) => entry.entityType));
     return [...seen].map((value) => ({ value, label: entityLabel(value) })).sort((a, b) => a.label.localeCompare(b.label));
-  }, []);
+  }, [tenantScoped]);
+
+  const tenantOptions = useMemo(() => {
+    if (!isPlatformSession) return null;
+    const seen = new Map<string, string>();
+    for (const entry of tenantScoped) seen.set(entry.tenantId, entry.tenantName);
+    return [...seen.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [isPlatformSession, tenantScoped]);
 
   const filtered = useMemo(() => {
-    return MOCK_AUDIT_ENTRIES.filter((entry) => {
+    return tenantScoped.filter((entry) => {
       if (!matchesDateRange(entry.occurredAt, filters)) return false;
       if (filters.actorId && entry.actorId !== filters.actorId) return false;
       if (filters.module && entry.entityType !== filters.module) return false;
+      if (isPlatformSession && filters.tenantId && entry.tenantId !== filters.tenantId) return false;
       if (filters.search) {
         const haystack = `${entry.actorName ?? ""} ${entry.entityType} ${JSON.stringify(entry.changes ?? {})}`.toLowerCase();
         if (!haystack.includes(filters.search.toLowerCase())) return false;
       }
       return true;
     }).sort((a, b) => (a.occurredAt < b.occurredAt ? 1 : a.occurredAt > b.occurredAt ? -1 : a.id < b.id ? 1 : -1));
-  }, [filters]);
+  }, [tenantScoped, filters, isPlatformSession]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const columnCount = isPlatformSession ? 5 : 4;
 
   function updateFilters(next: FilterState) {
     setFilters(next);
@@ -203,7 +239,13 @@ function AuditLogPanel() {
 
   return (
     <div>
-      <FilterBar filters={filters} onChange={updateFilters} actorOptions={actorOptions} moduleOptions={moduleOptions} />
+      <FilterBar
+        filters={filters}
+        onChange={updateFilters}
+        actorOptions={actorOptions}
+        moduleOptions={moduleOptions}
+        tenantOptions={tenantOptions}
+      />
 
       {pageRows.length === 0 ? (
         <EmptyState hasFilters={hasActiveFilters(filters)} />
@@ -216,6 +258,11 @@ function AuditLogPanel() {
                 <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
                   {t("activityLog.table.when")}
                 </th>
+                {isPlatformSession && (
+                  <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                    {t("activityLog.table.tenant")}
+                  </th>
+                )}
                 <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
                   {t("activityLog.table.actor")}
                 </th>
@@ -241,6 +288,9 @@ function AuditLogPanel() {
                       <td className="border-b border-[var(--color-border)] p-3 whitespace-nowrap text-crm-text">
                         {formatDateTime(entry.occurredAt)}
                       </td>
+                      {isPlatformSession && (
+                        <td className="border-b border-[var(--color-border)] p-3 text-crm-text">{entry.tenantName}</td>
+                      )}
                       <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
                         {actorDisplayName(entry.actorId, entry.actorName, entry.actorIsPlatform)}
                       </td>
@@ -248,7 +298,7 @@ function AuditLogPanel() {
                     </tr>
                     {isExpanded && (
                       <tr key={`${entry.id}-detail`}>
-                        <td colSpan={4} className="border-b border-[var(--color-border)] bg-[#f8fafc] p-4">
+                        <td colSpan={columnCount} className="border-b border-[var(--color-border)] bg-[#f8fafc] p-4">
                           {rendered.lines.length > 0 && (
                             <div className="mb-3 grid grid-cols-2 gap-x-6 gap-y-1.5">
                               {rendered.lines.map((line) => (
@@ -283,26 +333,39 @@ function AuditLogPanel() {
   );
 }
 
-function AuthEventsPanel() {
+function AuthEventsPanel({ isPlatformSession, currentTenantId }: { isPlatformSession: boolean; currentTenantId: string }) {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
 
+  const tenantScoped = useMemo(
+    () => (isPlatformSession ? MOCK_AUTH_EVENTS : MOCK_AUTH_EVENTS.filter((event) => event.tenantId === currentTenantId)),
+    [isPlatformSession, currentTenantId],
+  );
+
   const actorOptions = useMemo(() => {
     const seen = new Map<string, string>();
-    for (const event of MOCK_AUTH_EVENTS) {
+    for (const event of tenantScoped) {
       if (event.userId) seen.set(event.userId, event.usernameAttempted);
     }
     return [...seen.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
-  }, []);
+  }, [tenantScoped]);
+
+  const tenantOptions = useMemo(() => {
+    if (!isPlatformSession) return null;
+    const seen = new Map<string, string>();
+    for (const event of tenantScoped) seen.set(event.tenantId, event.tenantName);
+    return [...seen.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [isPlatformSession, tenantScoped]);
 
   const filtered = useMemo(() => {
-    return MOCK_AUTH_EVENTS.filter((event) => {
+    return tenantScoped.filter((event) => {
       if (!matchesDateRange(event.occurredAt, filters)) return false;
       if (filters.actorId && event.userId !== filters.actorId) return false;
+      if (isPlatformSession && filters.tenantId && event.tenantId !== filters.tenantId) return false;
       if (filters.search && !event.usernameAttempted.toLowerCase().includes(filters.search.toLowerCase())) return false;
       return true;
     }).sort((a, b) => (a.occurredAt < b.occurredAt ? 1 : a.occurredAt > b.occurredAt ? -1 : a.id < b.id ? 1 : -1));
-  }, [filters]);
+  }, [tenantScoped, filters, isPlatformSession]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -314,7 +377,13 @@ function AuthEventsPanel() {
 
   return (
     <div>
-      <FilterBar filters={filters} onChange={updateFilters} actorOptions={actorOptions} moduleOptions={null} />
+      <FilterBar
+        filters={filters}
+        onChange={updateFilters}
+        actorOptions={actorOptions}
+        moduleOptions={null}
+        tenantOptions={tenantOptions}
+      />
 
       {pageRows.length === 0 ? (
         <EmptyState hasFilters={hasActiveFilters(filters)} />
@@ -326,6 +395,11 @@ function AuthEventsPanel() {
                 <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
                   {t("activityLog.table.when")}
                 </th>
+                {isPlatformSession && (
+                  <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
+                    {t("activityLog.table.tenant")}
+                  </th>
+                )}
                 <th className="border-b border-[var(--color-border)] px-3 py-2.5 text-left text-[11.5px] font-semibold tracking-[0.03em] text-[var(--color-text-muted)] uppercase">
                   {t("activityLog.table.actor")}
                 </th>
@@ -349,6 +423,9 @@ function AuthEventsPanel() {
                   <td className="border-b border-[var(--color-border)] p-3 whitespace-nowrap text-crm-text">
                     {formatDateTime(event.occurredAt)}
                   </td>
+                  {isPlatformSession && (
+                    <td className="border-b border-[var(--color-border)] p-3 text-crm-text">{event.tenantName}</td>
+                  )}
                   <td className="border-b border-[var(--color-border)] p-3 text-crm-text">{event.usernameAttempted}</td>
                   <td className="border-b border-[var(--color-border)] p-3 text-crm-text">
                     {event.eventType === AuthEventType.AccountLocked ? (
@@ -384,7 +461,20 @@ function AuthEventsPanel() {
   );
 }
 
-export function ActivityLogWidget({ permissions: _permissions }: { permissions: string[] }) {
+interface ActivityLogWidgetProps {
+  permissions: string[];
+  // True only for a genuine System-tenant session -- never for act-as-tenant
+  // (that's a different, existing mechanism: TenantActingAsSwitcher lets a
+  // System admin operate AS one tenant at a time across the whole app; this
+  // is a separate, additional capability specific to this page -- viewing
+  // every tenant's activity together, with an optional Tenant filter to
+  // narrow it down). Deliberate scope addition beyond the original spec,
+  // which deferred cross-tenant viewing entirely for v1.
+  isPlatformSession: boolean;
+  currentTenantId: string;
+}
+
+export function ActivityLogWidget({ permissions: _permissions, isPlatformSession, currentTenantId }: ActivityLogWidgetProps) {
   return (
     <div className="flex flex-col">
       <div className="mb-1 flex flex-col">
@@ -395,8 +485,16 @@ export function ActivityLogWidget({ permissions: _permissions }: { permissions: 
 
       <PageTabs
         tabs={[
-          { id: "audit", label: t("activityLog.tabs.auditLog"), panel: <AuditLogPanel /> },
-          { id: "auth", label: t("activityLog.tabs.authEvents"), panel: <AuthEventsPanel /> },
+          {
+            id: "audit",
+            label: t("activityLog.tabs.auditLog"),
+            panel: <AuditLogPanel isPlatformSession={isPlatformSession} currentTenantId={currentTenantId} />,
+          },
+          {
+            id: "auth",
+            label: t("activityLog.tabs.authEvents"),
+            panel: <AuthEventsPanel isPlatformSession={isPlatformSession} currentTenantId={currentTenantId} />,
+          },
         ]}
       />
     </div>

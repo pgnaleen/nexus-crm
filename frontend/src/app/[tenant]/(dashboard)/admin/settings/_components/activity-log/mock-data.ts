@@ -6,7 +6,18 @@ import type { AuditLogEntryResponse, AuthEventResponse } from "@orelia/common";
 // shape and edge case called out in spec-activity-log.md's I/O matrix:
 // flat snapshot, field diff, boolean flag, id-array delta, join-table rows,
 // an unmapped entity_type, a NULL changes payload, a dangling actor, and a
-// platform (act-as-tenant) actor. Deleted once real API wiring lands.
+// platform (act-as-tenant) actor -- plus a second tenant's rows (t-helix),
+// so the System-tenant cross-tenant view/filter has something real to show.
+// Deleted once real API wiring lands.
+
+// Real tenant ids from the dev database (not placeholder strings) -- so that
+// viewing this page as an actual logged-in session, the own-tenant
+// restriction and the cross-tenant filter both have real matching data to
+// prove themselves against, rather than every row being hidden because a
+// fake mock id never equals any real session's tenantId.
+const SYSTEM_TENANT = { id: "dc1d772b-216a-4082-bf5d-3be877cf94cc", name: "System" };
+const HELIX_TENANT = { id: "a0354d51-07fa-4222-b7d6-1aeaa205ece2", name: "Helix" };
+
 export const MOCK_AUDIT_ENTRIES: AuditLogEntryResponse[] = [
   {
     id: "a1",
@@ -14,6 +25,8 @@ export const MOCK_AUDIT_ENTRIES: AuditLogEntryResponse[] = [
     action: "insert",
     entityType: "user",
     entityId: "u1",
+    tenantId: SYSTEM_TENANT.id,
+    tenantName: SYSTEM_TENANT.name,
     actorId: "admin1",
     actorName: "Nimal Perera",
     actorIsPlatform: false,
@@ -25,6 +38,8 @@ export const MOCK_AUDIT_ENTRIES: AuditLogEntryResponse[] = [
     action: "update",
     entityType: "deal",
     entityId: "d1",
+    tenantId: SYSTEM_TENANT.id,
+    tenantName: SYSTEM_TENANT.name,
     actorId: "admin1",
     actorName: "Nimal Perera",
     actorIsPlatform: false,
@@ -39,6 +54,8 @@ export const MOCK_AUDIT_ENTRIES: AuditLogEntryResponse[] = [
     action: "update",
     entityType: "user",
     entityId: "u2",
+    tenantId: SYSTEM_TENANT.id,
+    tenantName: SYSTEM_TENANT.name,
     actorId: "admin1",
     actorName: "Nimal Perera",
     actorIsPlatform: false,
@@ -50,6 +67,8 @@ export const MOCK_AUDIT_ENTRIES: AuditLogEntryResponse[] = [
     action: "update",
     entityType: "user",
     entityId: "u1",
+    tenantId: SYSTEM_TENANT.id,
+    tenantName: SYSTEM_TENANT.name,
     actorId: "u1",
     actorName: "Jane Doe",
     actorIsPlatform: false,
@@ -61,6 +80,8 @@ export const MOCK_AUDIT_ENTRIES: AuditLogEntryResponse[] = [
     action: "update",
     entityType: "user",
     entityId: "u3",
+    tenantId: SYSTEM_TENANT.id,
+    tenantName: SYSTEM_TENANT.name,
     actorId: "admin1",
     actorName: "Nimal Perera",
     actorIsPlatform: false,
@@ -72,6 +93,8 @@ export const MOCK_AUDIT_ENTRIES: AuditLogEntryResponse[] = [
     action: "update",
     entityType: "rbac_role",
     entityId: "role-sales",
+    tenantId: SYSTEM_TENANT.id,
+    tenantName: SYSTEM_TENANT.name,
     actorId: "admin1",
     actorName: "Nimal Perera",
     actorIsPlatform: false,
@@ -83,6 +106,8 @@ export const MOCK_AUDIT_ENTRIES: AuditLogEntryResponse[] = [
     action: "delete",
     entityType: "deal",
     entityId: "d9",
+    tenantId: SYSTEM_TENANT.id,
+    tenantName: SYSTEM_TENANT.name,
     actorId: "admin1",
     actorName: "Nimal Perera",
     actorIsPlatform: false,
@@ -94,6 +119,8 @@ export const MOCK_AUDIT_ENTRIES: AuditLogEntryResponse[] = [
     action: "insert",
     entityType: "deal_partner",
     entityId: "join-1",
+    tenantId: SYSTEM_TENANT.id,
+    tenantName: SYSTEM_TENANT.name,
     actorId: "admin1",
     actorName: "Nimal Perera",
     actorIsPlatform: false,
@@ -105,6 +132,8 @@ export const MOCK_AUDIT_ENTRIES: AuditLogEntryResponse[] = [
     action: "delete",
     entityType: "relationship_company_contact_map",
     entityId: "join-2",
+    tenantId: SYSTEM_TENANT.id,
+    tenantName: SYSTEM_TENANT.name,
     actorId: "admin1",
     actorName: "Nimal Perera",
     actorIsPlatform: false,
@@ -116,6 +145,8 @@ export const MOCK_AUDIT_ENTRIES: AuditLogEntryResponse[] = [
     action: "update",
     entityType: "deal",
     entityId: "d1",
+    tenantId: SYSTEM_TENANT.id,
+    tenantName: SYSTEM_TENANT.name,
     actorId: null,
     actorName: null,
     actorIsPlatform: false,
@@ -127,6 +158,8 @@ export const MOCK_AUDIT_ENTRIES: AuditLogEntryResponse[] = [
     action: "update",
     entityType: "tenant",
     entityId: "t1",
+    tenantId: SYSTEM_TENANT.id,
+    tenantName: SYSTEM_TENANT.name,
     actorId: "sysadmin1",
     actorName: null,
     actorIsPlatform: true,
@@ -138,10 +171,44 @@ export const MOCK_AUDIT_ENTRIES: AuditLogEntryResponse[] = [
     action: "delete",
     entityType: "deal_tender_detail",
     entityId: "td1",
+    tenantId: SYSTEM_TENANT.id,
+    tenantName: SYSTEM_TENANT.name,
     actorId: "admin1",
     actorName: "Nimal Perera",
     actorIsPlatform: false,
     changes: null,
+  },
+  // Helix Corp's own rows -- only visible to a System-tenant viewer with the
+  // cross-tenant view on, either unfiltered or filtered to this tenant. A
+  // Helix session must never see these two, nor the System rows above.
+  {
+    id: "a13",
+    occurredAt: "2026-08-02T10:05:00.000Z",
+    action: "insert",
+    entityType: "company",
+    entityId: "co1",
+    tenantId: HELIX_TENANT.id,
+    tenantName: HELIX_TENANT.name,
+    actorId: "helix-admin1",
+    actorName: "Ruwan Silva",
+    actorIsPlatform: false,
+    changes: { name: "Orbit Logistics", country: "Sri Lanka" },
+  },
+  {
+    id: "a14",
+    occurredAt: "2026-08-01T22:48:00.000Z",
+    action: "update",
+    entityType: "employee",
+    entityId: "emp1",
+    tenantId: HELIX_TENANT.id,
+    tenantName: HELIX_TENANT.name,
+    actorId: "helix-admin1",
+    actorName: "Ruwan Silva",
+    actorIsPlatform: false,
+    changes: {
+      currentDesignation: { old: "Sales Executive", new: "Senior Sales Executive" },
+      nicPassportNumber: { old: "[redacted]", new: "[redacted]" },
+    },
   },
 ];
 
@@ -149,6 +216,8 @@ export const MOCK_AUTH_EVENTS: AuthEventResponse[] = [
   {
     id: "e1",
     occurredAt: "2026-08-02T09:00:12.000Z",
+    tenantId: SYSTEM_TENANT.id,
+    tenantName: SYSTEM_TENANT.name,
     eventType: AuthEventType.LoginSucceeded,
     reason: null,
     userId: "admin1",
@@ -159,6 +228,8 @@ export const MOCK_AUTH_EVENTS: AuthEventResponse[] = [
   {
     id: "e2",
     occurredAt: "2026-08-02T08:58:40.000Z",
+    tenantId: SYSTEM_TENANT.id,
+    tenantName: SYSTEM_TENANT.name,
     eventType: AuthEventType.LoginFailed,
     reason: AuthEventReason.BadPassword,
     userId: "admin1",
@@ -169,6 +240,8 @@ export const MOCK_AUTH_EVENTS: AuthEventResponse[] = [
   {
     id: "e3",
     occurredAt: "2026-08-02T08:45:02.000Z",
+    tenantId: SYSTEM_TENANT.id,
+    tenantName: SYSTEM_TENANT.name,
     eventType: AuthEventType.AccountLocked,
     reason: AuthEventReason.LockedOut,
     userId: "u5",
@@ -179,6 +252,8 @@ export const MOCK_AUTH_EVENTS: AuthEventResponse[] = [
   {
     id: "e4",
     occurredAt: "2026-08-02T08:44:58.000Z",
+    tenantId: SYSTEM_TENANT.id,
+    tenantName: SYSTEM_TENANT.name,
     eventType: AuthEventType.LoginFailed,
     reason: AuthEventReason.LockedOut,
     userId: "u5",
@@ -189,6 +264,8 @@ export const MOCK_AUTH_EVENTS: AuthEventResponse[] = [
   {
     id: "e5",
     occurredAt: "2026-08-02T02:12:00.000Z",
+    tenantId: SYSTEM_TENANT.id,
+    tenantName: SYSTEM_TENANT.name,
     eventType: AuthEventType.LoginFailed,
     reason: AuthEventReason.UnknownUser,
     userId: null,
@@ -199,11 +276,25 @@ export const MOCK_AUTH_EVENTS: AuthEventResponse[] = [
   {
     id: "e6",
     occurredAt: "2026-08-01T19:20:00.000Z",
+    tenantId: SYSTEM_TENANT.id,
+    tenantName: SYSTEM_TENANT.name,
     eventType: AuthEventType.Logout,
     reason: null,
     userId: "admin1",
     usernameAttempted: "nimal.perera",
     ipAddress: "10.20.0.14",
     userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0",
+  },
+  {
+    id: "e7",
+    occurredAt: "2026-08-02T11:02:00.000Z",
+    tenantId: HELIX_TENANT.id,
+    tenantName: HELIX_TENANT.name,
+    eventType: AuthEventType.LoginSucceeded,
+    reason: null,
+    userId: "helix-admin1",
+    usernameAttempted: "ruwan.silva",
+    ipAddress: "172.16.4.9",
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) Safari/605.1",
   },
 ];

@@ -21,8 +21,9 @@ interface SidebarProps {
 // delete, or manage while it still exists on some resources). This mirrors the same grouping
 // logic RolePermissionsDialog already uses, and means this file never needs editing again just
 // because a resource's specific permission set changes (e.g. Manage being removed).
-function hasAnyPermissionForPrefix(permissions: string[], prefix: string): boolean {
-  return permissions.some((p) => p.startsWith(`${prefix}:`));
+function hasAnyPermissionForPrefix(permissions: string[], prefix: string | string[]): boolean {
+  const prefixes = Array.isArray(prefix) ? prefix : [prefix];
+  return prefixes.some((p) => permissions.some((permission) => permission.startsWith(`${p}:`)));
 }
 
 // Below this width the sidebar auto-collapses to the icon-only rail (unless
@@ -76,7 +77,17 @@ function badgeClasses(isActive: boolean): string {
   return isActive ? `${BADGE_LINK_BASE} ${BADGE_LINK_ACTIVE}` : BADGE_LINK_BASE;
 }
 
-const CRM_CONFIG_ITEMS: { label: string; segment: string; prefix?: string; isRoot?: boolean }[] = [
+interface NavItem {
+  label: string;
+  segment: string;
+  // A single prefix, or several -- Settings holds both Backups (prefix
+  // "backup") and Audits (prefix "audit_log") as tabs on one page, so it's
+  // visible to a user holding EITHER, not just one specific resource.
+  prefix?: string | string[];
+  isRoot?: boolean;
+}
+
+const CRM_CONFIG_ITEMS: NavItem[] = [
   { label: "Teams", segment: "teams", prefix: "teams" },
   { label: "Relationship Types", segment: "relationship-types", prefix: "relationship_type" },
   { label: "Deal Sources", segment: "deal-sources", prefix: "deal_source" },
@@ -84,12 +95,16 @@ const CRM_CONFIG_ITEMS: { label: string; segment: string; prefix?: string; isRoo
   { label: "Sub Stages", segment: "sub-stages", prefix: "sub_stage" },
 ];
 
-const ADMIN_ITEMS: { label: string; segment: string; prefix?: string; isRoot?: boolean }[] = [
+const ADMIN_ITEMS: NavItem[] = [
   { label: "Tenants", segment: "tenants", prefix: "tenants" },
   { label: "Roles", segment: "roles", prefix: "rbac" },
   { label: "Users", segment: "users", isRoot: true, prefix: "users" },
   { label: "Departments", segment: "departments", prefix: "department" },
-  { label: "Backups", segment: "backups", prefix: "backup" },
+  // Backups + Activity Log ("Audits") live together as tabs under one
+  // Settings page (frontend/.../admin/settings/page.tsx) rather than two
+  // separate top-level nav items -- segment stays "settings" to match the
+  // page's actual route.
+  { label: "Settings", segment: "settings", prefix: ["backup", "audit_log"] },
 ];
 
 export function Sidebar({ tenantSlug, permissions, relationshipTypes, mainStages }: SidebarProps) {

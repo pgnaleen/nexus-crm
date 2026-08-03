@@ -451,10 +451,12 @@
       "searchPlaceholder": "Search activity...",
       "allActors": "All actors",
       "allModules": "All modules",
+      "allTenants": "All tenants",
       "clear": "Clear filters"
     },
     "table": {
       "when": "When (Asia/Colombo)",
+      "tenant": "Tenant",
       "actor": "Actor",
       "activity": "Activity",
       "eventType": "Event",

@@ -50,6 +50,9 @@ const RESOURCE_DISPLAY_NAME: Record<string, string> = {
   department: "Departments",
   sub_stage: "Sub Stages",
   backup: "DB Backups",
+  // Doesn't exist as a real permission yet -- AUDIT_LOG_VIEW is added in
+  // Phase 2 of spec-activity-log.md. Harmless to map ahead of time.
+  audit_log: "Activity Log",
 };
 
 // Action suffix -> display label. The underlying permission key stays "_update" (renaming ~40
