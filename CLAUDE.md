@@ -458,6 +458,21 @@ is no `_MANAGE` wildcard, on any resource, new or existing.
 
 **Rule:** never add a new `_MANAGE` permission key to any resource, from now on, no exceptions.
 
+**Approved exception — `AUDIT_LOG_VIEW`.** The Activity Log feature
+(`_bmad-output/3-feature-specs/spec-activity-log.md`) gets exactly **one** permission key,
+`audit_log:view`, not the usual four — added 2026-08-03. Audit data (`audit_logs`/`auth_events`)
+is read-only by nature: there is no create/update/delete action a user ever takes on it directly,
+so `_CREATE`/`_UPDATE`/`_DELETE` variants would be dead keys nothing could ever check. This is a
+narrower exception than the `_MANAGE` wildcard rule above (which replaces four granular
+permissions with one broad one) — `AUDIT_LOG_VIEW` isn't standing in for anything, the other three
+just don't apply to a read-only resource. Deliberately **not** added to `PLATFORM_ONLY_PERMISSIONS`
+in `permissions.ts` — a tenant admin can hold it and see their own tenant's activity; only the
+optional `allTenants`/`tenantId` cross-tenant widening is independently re-derived server-side from
+a genuine System-tenant session, never from the permission itself (see the endpoint registry's
+Activity Log section for how that's enforced). Do not treat this as license to add other
+single-permission resources without the same "genuinely has no create/update/delete action"
+justification — it's an exception for this one read-only case, not a second pattern.
+
 **Migration complete** for `TENANTS`, `USERS`, `RBAC`, `TEAMS`, `RELATIONSHIP_TYPE`,
 `RELATIONSHIP`, `MAIN_STAGE`, `SUB_STAGE`, `DEPARTMENT`, `DEAL_SOURCE` — all ten `_MANAGE` keys
 deleted from `permissions.ts`, every controller guard and frontend `hasManage` fallback trimmed,

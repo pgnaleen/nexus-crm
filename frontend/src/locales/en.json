@@ -484,6 +484,10 @@
       "noneYet": "No activity recorded yet.",
       "noMatch": "No activity matches the current filters — showing the last 30 days, widen the range to see older activity."
     },
+    "loading": "Loading activity…",
+    "errors": {
+      "loadFailed": "Couldn't load activity. Try again."
+    },
     "pagination": {
       "showing": "Showing {from}–{to} of {total}",
       "previous": "Previous",

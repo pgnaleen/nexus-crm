@@ -17,7 +17,10 @@ out of date with `CLAUDE.md`.
    (gated on the *consumer's* permission, for dropdown/filter lookups only). See `CLAUDE.md` →
    "RBAC Routes vs. System-Internal (Picker) Routes." Never default into one without deciding.
 3. **New permissions are exactly four**: `_VIEW`, `_CREATE`, `_UPDATE`, `_DELETE`. Never add a
-   `_MANAGE` key. See `CLAUDE.md` → "Permission Model."
+   `_MANAGE` key. See `CLAUDE.md` → "Permission Model." **Approved exception:** a resource with
+   genuinely no create/update/delete action of its own (e.g. `AUDIT_LOG_VIEW` — audit data is
+   read-only) gets exactly one `_VIEW`-only key instead of four dead ones. Not license to shortcut
+   a resource that does have real mutations — see CLAUDE.md's own note on this exception.
 
 ## 1. Backend
 

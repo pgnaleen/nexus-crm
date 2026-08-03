@@ -1,22 +1,31 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AuthEventType } from "@orelia/common";
-import type { AuditLogEntryResponse, AuthEventResponse } from "@orelia/common";
+import type {
+  ActivityLogFilterOptionsResponse,
+  ActivityLogQuery,
+  AuditLogEntryResponse,
+  AuthEventResponse,
+} from "@orelia/common";
+import { getActivityLogFilterOptions, getAuditLog, getAuthEvents } from "@/lib/api/activity-log";
+import { ApiError } from "@/lib/api/client";
 import { PageTabs } from "@/components/ui/PageTabs";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { ChevronDownIcon, ChevronRightIcon, SearchIcon } from "@/components/ui/icons";
 import { t } from "@/lib/i18n";
 import { formatDateTime, wallClockToUtc } from "@/lib/format-datetime";
 import { entityLabel, renderAuditEntry } from "./changes-renderer";
-import { MOCK_AUDIT_ENTRIES, MOCK_AUTH_EVENTS } from "./mock-data";
 
-// Local-state pagination/filtering for the mock-first review pass -- the
-// real backend endpoints (/activity-log/audit, /activity-log/auth) apply
-// the identical filters server-side once wired (spec-activity-log.md
-// section C). Kept at 10/page here purely so the mock data set (12/6 rows)
-// demonstrates pagination without needing a much larger fixture.
+// Server-side pagination/filtering against the real /activity-log/audit and
+// /activity-log/auth endpoints (spec-activity-log.md section C) -- the mock
+// data set this widget used during the review pass is gone now that the
+// backend is real. Kept at 10/page to match the mock-first pass's own page
+// size.
 const PAGE_SIZE = 10;
+// A search/date-range edit fires on every keystroke -- debounced so typing
+// "acme" doesn't fire 4 requests, only the one after the user pauses.
+const FILTER_DEBOUNCE_MS = 350;
 
 function actorDisplayName(actorId: string | null, actorName: string | null, isPlatform: boolean): string {
   if (isPlatform) return t("activityLog.actor.platform");
@@ -39,6 +48,57 @@ const EMPTY_FILTERS: FilterState = { from: "", to: "", actorId: "", module: "", 
 
 function hasActiveFilters(filters: FilterState): boolean {
   return Object.values(filters).some((value) => value !== "");
+}
+
+// Shared by both panels and the filter-options fetch -- from/to/actorId/
+// search/tenant scoping is identical for the audit log and auth events
+// queries, only `modules` (audit-only) differs per caller.
+function baseQueryFromFilters(filters: FilterState, isPlatformSession: boolean): ActivityLogQuery {
+  const query: ActivityLogQuery = {};
+  if (filters.from) query.from = wallClockToUtc(filters.from);
+  if (filters.to) query.to = wallClockToUtc(filters.to);
+  if (filters.actorId) query.actorId = filters.actorId;
+  if (filters.search) query.search = filters.search;
+  // Cross-tenant viewing is only ever honored server-side for a genuine
+  // System-tenant session regardless of what's sent here -- see
+  // ActivityLogService.applyTenantScope. A platform viewer defaults to every
+  // tenant's rows unless they've narrowed to one via the Tenant filter.
+  if (isPlatformSession) {
+    if (filters.tenantId) {
+      query.tenantId = filters.tenantId;
+    } else {
+      query.allTenants = true;
+    }
+  }
+  return query;
+}
+
+function useActivityLogFilterOptions(
+  filters: Pick<FilterState, "from" | "to" | "tenantId">,
+  isPlatformSession: boolean,
+): ActivityLogFilterOptionsResponse | null {
+  const [options, setOptions] = useState<ActivityLogFilterOptionsResponse | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const query = baseQueryFromFilters({ ...EMPTY_FILTERS, ...filters }, isPlatformSession);
+    getActivityLogFilterOptions({ from: query.from, to: query.to, allTenants: query.allTenants, tenantId: query.tenantId })
+      .then((result) => {
+        if (!cancelled) setOptions(result);
+      })
+      .catch(() => {
+        // Filter options are a convenience, not the primary data -- a failed
+        // fetch just leaves dropdowns showing "All" options, never blocks
+        // the table itself from loading.
+        if (!cancelled) setOptions(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.from, filters.to, filters.tenantId, isPlatformSession]);
+
+  return options;
 }
 
 function FilterBar({
@@ -172,64 +232,81 @@ function EmptyState({ hasFilters }: { hasFilters: boolean }) {
   );
 }
 
-function matchesDateRange(occurredAt: string, filters: FilterState): boolean {
-  const time = new Date(occurredAt).getTime();
-  if (filters.from && time < new Date(wallClockToUtc(filters.from)).getTime()) return false;
-  if (filters.to && time > new Date(wallClockToUtc(filters.to)).getTime()) return false;
-  return true;
+function LoadingState() {
+  return (
+    <div className="empty-state">
+      <p className="empty-state-title">{t("activityLog.loading")}</p>
+    </div>
+  );
 }
 
-function AuditLogPanel({ isPlatformSession, currentTenantId }: { isPlatformSession: boolean; currentTenantId: string }) {
+function ErrorState({ message }: { message: string }) {
+  return (
+    <div className="empty-state">
+      <p className="empty-state-title text-[var(--color-danger)]">{message}</p>
+    </div>
+  );
+}
+
+function AuditLogPanel({ isPlatformSession, currentTenantId: _currentTenantId }: { isPlatformSession: boolean; currentTenantId: string }) {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [items, setItems] = useState<AuditLogEntryResponse[]>([]);
+  const [total, setTotal] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Own-tenant scoping happens here for the mock; the real backend enforces
-  // it server-side (queryBuilderScoped) regardless of anything the client
-  // sends, per spec-activity-log.md's Edge Case 2 -- this client-side filter
-  // is purely so the mock demonstrates the same restriction, not the actual
-  // security boundary.
-  const tenantScoped = useMemo(
-    () => (isPlatformSession ? MOCK_AUDIT_ENTRIES : MOCK_AUDIT_ENTRIES.filter((entry) => entry.tenantId === currentTenantId)),
-    [isPlatformSession, currentTenantId],
+  const filterOptions = useActivityLogFilterOptions(filters, isPlatformSession);
+
+  const actorOptions = useMemo(
+    () => (filterOptions?.actors ?? []).map((actor) => ({ value: actor.id, label: actor.name })),
+    [filterOptions],
+  );
+  const moduleOptions = useMemo(
+    () => (filterOptions?.modules ?? []).map((m) => ({ value: m.value, label: entityLabel(m.value) })).sort((a, b) => a.label.localeCompare(b.label)),
+    [filterOptions],
+  );
+  const tenantOptions = useMemo(
+    () => (isPlatformSession ? (filterOptions?.tenants ?? []).map((tenant) => ({ value: tenant.id, label: tenant.name })) : null),
+    [filterOptions, isPlatformSession],
   );
 
-  const actorOptions = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const entry of tenantScoped) {
-      if (entry.actorId && entry.actorName && !entry.actorIsPlatform) seen.set(entry.actorId, entry.actorName);
-    }
-    return [...seen.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [tenantScoped]);
+  useEffect(() => {
+    let cancelled = false;
+    const query: ActivityLogQuery = {
+      ...baseQueryFromFilters(filters, isPlatformSession),
+      page,
+      pageSize: PAGE_SIZE,
+      modules: filters.module ? [filters.module] : undefined,
+    };
+    const handle = setTimeout(() => {
+      setIsLoading(true);
+      setError(null);
+      getAuditLog(query)
+        .then((result) => {
+          if (cancelled) return;
+          setItems(result.items);
+          setTotal(result.total);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setError(err instanceof ApiError ? err.message : t("activityLog.errors.loadFailed"));
+          setItems([]);
+          setTotal(0);
+        })
+        .finally(() => {
+          if (!cancelled) setIsLoading(false);
+        });
+    }, FILTER_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, page, isPlatformSession]);
 
-  const moduleOptions = useMemo(() => {
-    const seen = new Set(tenantScoped.map((entry) => entry.entityType));
-    return [...seen].map((value) => ({ value, label: entityLabel(value) })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [tenantScoped]);
-
-  const tenantOptions = useMemo(() => {
-    if (!isPlatformSession) return null;
-    const seen = new Map<string, string>();
-    for (const entry of tenantScoped) seen.set(entry.tenantId, entry.tenantName);
-    return [...seen.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [isPlatformSession, tenantScoped]);
-
-  const filtered = useMemo(() => {
-    return tenantScoped.filter((entry) => {
-      if (!matchesDateRange(entry.occurredAt, filters)) return false;
-      if (filters.actorId && entry.actorId !== filters.actorId) return false;
-      if (filters.module && entry.entityType !== filters.module) return false;
-      if (isPlatformSession && filters.tenantId && entry.tenantId !== filters.tenantId) return false;
-      if (filters.search) {
-        const haystack = `${entry.actorName ?? ""} ${entry.entityType} ${JSON.stringify(entry.changes ?? {})}`.toLowerCase();
-        if (!haystack.includes(filters.search.toLowerCase())) return false;
-      }
-      return true;
-    }).sort((a, b) => (a.occurredAt < b.occurredAt ? 1 : a.occurredAt > b.occurredAt ? -1 : a.id < b.id ? 1 : -1));
-  }, [tenantScoped, filters, isPlatformSession]);
-
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const columnCount = isPlatformSession ? 5 : 4;
 
   function updateFilters(next: FilterState) {
@@ -247,7 +324,11 @@ function AuditLogPanel({ isPlatformSession, currentTenantId }: { isPlatformSessi
         tenantOptions={tenantOptions}
       />
 
-      {pageRows.length === 0 ? (
+      {isLoading ? (
+        <LoadingState />
+      ) : error ? (
+        <ErrorState message={error} />
+      ) : items.length === 0 ? (
         <EmptyState hasFilters={hasActiveFilters(filters)} />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
@@ -272,7 +353,7 @@ function AuditLogPanel({ isPlatformSession, currentTenantId }: { isPlatformSessi
               </tr>
             </thead>
             <tbody>
-              {pageRows.map((entry) => {
+              {items.map((entry) => {
                 const rendered = renderAuditEntry(entry.action, entry.entityType, entry.changes);
                 const isExpanded = expandedId === entry.id;
                 return (
@@ -328,47 +409,64 @@ function AuditLogPanel({ isPlatformSession, currentTenantId }: { isPlatformSessi
         </div>
       )}
 
-      <Pagination page={page} pageCount={pageCount} total={filtered.length} onChange={setPage} />
+      <Pagination page={page} pageCount={pageCount} total={total} onChange={setPage} />
     </div>
   );
 }
 
-function AuthEventsPanel({ isPlatformSession, currentTenantId }: { isPlatformSession: boolean; currentTenantId: string }) {
+function AuthEventsPanel({ isPlatformSession, currentTenantId: _currentTenantId }: { isPlatformSession: boolean; currentTenantId: string }) {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
+  const [items, setItems] = useState<AuthEventResponse[]>([]);
+  const [total, setTotal] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const tenantScoped = useMemo(
-    () => (isPlatformSession ? MOCK_AUTH_EVENTS : MOCK_AUTH_EVENTS.filter((event) => event.tenantId === currentTenantId)),
-    [isPlatformSession, currentTenantId],
+  const filterOptions = useActivityLogFilterOptions(filters, isPlatformSession);
+
+  const actorOptions = useMemo(
+    () => (filterOptions?.actors ?? []).map((actor) => ({ value: actor.id, label: actor.name })),
+    [filterOptions],
+  );
+  const tenantOptions = useMemo(
+    () => (isPlatformSession ? (filterOptions?.tenants ?? []).map((tenant) => ({ value: tenant.id, label: tenant.name })) : null),
+    [filterOptions, isPlatformSession],
   );
 
-  const actorOptions = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const event of tenantScoped) {
-      if (event.userId) seen.set(event.userId, event.usernameAttempted);
-    }
-    return [...seen.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [tenantScoped]);
+  useEffect(() => {
+    let cancelled = false;
+    const query: ActivityLogQuery = {
+      ...baseQueryFromFilters(filters, isPlatformSession),
+      page,
+      pageSize: PAGE_SIZE,
+    };
+    const handle = setTimeout(() => {
+      setIsLoading(true);
+      setError(null);
+      getAuthEvents(query)
+        .then((result) => {
+          if (cancelled) return;
+          setItems(result.items);
+          setTotal(result.total);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setError(err instanceof ApiError ? err.message : t("activityLog.errors.loadFailed"));
+          setItems([]);
+          setTotal(0);
+        })
+        .finally(() => {
+          if (!cancelled) setIsLoading(false);
+        });
+    }, FILTER_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, page, isPlatformSession]);
 
-  const tenantOptions = useMemo(() => {
-    if (!isPlatformSession) return null;
-    const seen = new Map<string, string>();
-    for (const event of tenantScoped) seen.set(event.tenantId, event.tenantName);
-    return [...seen.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [isPlatformSession, tenantScoped]);
-
-  const filtered = useMemo(() => {
-    return tenantScoped.filter((event) => {
-      if (!matchesDateRange(event.occurredAt, filters)) return false;
-      if (filters.actorId && event.userId !== filters.actorId) return false;
-      if (isPlatformSession && filters.tenantId && event.tenantId !== filters.tenantId) return false;
-      if (filters.search && !event.usernameAttempted.toLowerCase().includes(filters.search.toLowerCase())) return false;
-      return true;
-    }).sort((a, b) => (a.occurredAt < b.occurredAt ? 1 : a.occurredAt > b.occurredAt ? -1 : a.id < b.id ? 1 : -1));
-  }, [tenantScoped, filters, isPlatformSession]);
-
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   function updateFilters(next: FilterState) {
     setFilters(next);
@@ -385,7 +483,11 @@ function AuthEventsPanel({ isPlatformSession, currentTenantId }: { isPlatformSes
         tenantOptions={tenantOptions}
       />
 
-      {pageRows.length === 0 ? (
+      {isLoading ? (
+        <LoadingState />
+      ) : error ? (
+        <ErrorState message={error} />
+      ) : items.length === 0 ? (
         <EmptyState hasFilters={hasActiveFilters(filters)} />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
@@ -418,7 +520,7 @@ function AuthEventsPanel({ isPlatformSession, currentTenantId }: { isPlatformSes
               </tr>
             </thead>
             <tbody>
-              {pageRows.map((event) => (
+              {items.map((event) => (
                 <tr key={event.id} className="transition-colors duration-150 hover:bg-[#f7f8fc]">
                   <td className="border-b border-[var(--color-border)] p-3 whitespace-nowrap text-crm-text">
                     {formatDateTime(event.occurredAt)}
@@ -456,7 +558,7 @@ function AuthEventsPanel({ isPlatformSession, currentTenantId }: { isPlatformSes
         </div>
       )}
 
-      <Pagination page={page} pageCount={pageCount} total={filtered.length} onChange={setPage} />
+      <Pagination page={page} pageCount={pageCount} total={total} onChange={setPage} />
     </div>
   );
 }
