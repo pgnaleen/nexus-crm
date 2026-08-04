@@ -1,13 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode, Fragment } from "react";
-import { PERMISSIONS, type DealDocumentResponse, type DealNoteResponse, type DealPartnerResponse, type DealResponse, type DealRoleAssignmentResponse, type MainStageResponse } from "@orelia/common";
+import {
+  EvaluationType,
+  PERMISSIONS,
+  SubmissionMode,
+  type DealDocumentResponse,
+  type DealNoteResponse,
+  type DealPartnerResponse,
+  type DealResponse,
+  type DealRoleAssignmentResponse,
+  type DealTenderDetailsResponse,
+  type MainStageResponse,
+} from "@orelia/common";
 import {
   createDealNote,
   deleteDeal,
   deleteDealNote,
   getDeal,
   getDealDependentsCount,
+  getDealTenderDetails,
   listDealDocuments,
   listDealNotes,
   listDealPartners,
@@ -27,9 +39,21 @@ import { DealActivityLog } from "./DealActivityLog";
 const TEXTAREA_CLASS =
   "w-full resize-y rounded-lg border border-[var(--color-border)] px-3 py-2.5 font-[inherit] text-sm transition-colors duration-150 focus:outline-none focus:border-[var(--color-crm-primary)] focus:shadow-[0_0_0_3px_var(--color-crm-primary-glow)]";
 
-type TabId = "dealInfo" | "delivery" | "costing" | "documents" | "notes" | "competition" | "team" | "history";
+const SUBMISSION_MODE_LABELS: Record<SubmissionMode, string> = {
+  [SubmissionMode.Online]: "Online",
+  [SubmissionMode.Physical]: "Physical",
+  [SubmissionMode.Hybrid]: "Hybrid",
+};
 
-const TABS: readonly [TabId, string][] = [
+const EVALUATION_TYPE_LABELS: Record<EvaluationType, string> = {
+  [EvaluationType.Technical]: "Technical",
+  [EvaluationType.Financial]: "Financial",
+  [EvaluationType.TechnicalAndFinancial]: "Technical & Financial",
+};
+
+type TabId = "dealInfo" | "tender" | "delivery" | "costing" | "documents" | "notes" | "competition" | "team" | "history";
+
+const BASE_TABS: readonly [TabId, string][] = [
   ["dealInfo", "Deal Information"],
   ["delivery", "Delivery"],
   ["costing", "Costing"],
@@ -106,6 +130,7 @@ export function ViewDealDialog({
   const [team, setTeam] = useState<DealRoleAssignmentResponse[] | null>(null);
   const [notes, setNotes] = useState<DealNoteResponse[] | null>(null);
   const [mainStages, setMainStages] = useState<MainStageResponse[] | null>(null);
+  const [tenderDetails, setTenderDetails] = useState<DealTenderDetailsResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [draftNote, setDraftNote] = useState("");
@@ -154,6 +179,20 @@ export function ViewDealDialog({
       cancelled = true;
     };
   }, [dealId]);
+
+  // Tender details live behind their own endpoint, separate from GET /deals/:id --
+  // only fetched once we know the deal is actually a tender, to avoid a wasted
+  // request on the majority of non-tender deals.
+  useEffect(() => {
+    if (!deal?.isTender) return;
+    let cancelled = false;
+    getDealTenderDetails(dealId).then((res) => {
+      if (!cancelled) setTenderDetails(res);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dealId, deal?.isTender]);
 
   async function postNote() {
     const text = draftNote.trim();
@@ -256,6 +295,12 @@ export function ViewDealDialog({
 
   const costing = computeCosting(deal.estimatedValue ?? 0, deal.internalCosts ?? 0, deal.externalCosts ?? 0);
 
+  // Tender tab is only shown for deals flagged as tenders, inserted right after
+  // Deal Information -- same position AddDealDialog uses for its own tender tab.
+  const TABS: readonly [TabId, string][] = deal.isTender
+    ? [["dealInfo", "Deal Information"], ["tender", "Tender"], ...BASE_TABS.slice(1)]
+    : BASE_TABS;
+
   const weightPercent = mainStages?.find((ms) => ms.id === deal.mainStageId)?.weightPercent;
 
   const dealAgeText = (() => {
@@ -344,6 +389,8 @@ export function ViewDealDialog({
             let icon = null;
             if (id === "dealInfo") {
               icon = <FunnelIcon size={14} />;
+            } else if (id === "tender") {
+              icon = <LegalIcon size={14} />;
             } else if (id === "delivery") {
               icon = (
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -491,6 +538,69 @@ export function ViewDealDialog({
               <Field label="Customer Pain Point" value={deal.customerPainPoint} />
             </div>
           </div>
+        </div>
+      )}
+
+      {activeTab === "tender" && (
+        <div className="h-[min(620px,calc(100vh-250px))] overflow-y-auto pr-1 space-y-4">
+          {!tenderDetails ? (
+            <p className="text-[13.5px] text-[var(--color-text-muted)]">Loading…</p>
+          ) : (
+            <>
+              {/* Card 1: Tender Identity */}
+              <div className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 transition-all duration-200 hover:border-slate-300/80">
+                <div className="flex items-center gap-2 mb-3 border-b border-slate-100 pb-2">
+                  <span className="text-slate-500"><LegalIcon size={14} /></span>
+                  <span className="text-[11.5px] font-bold text-slate-600 tracking-wide uppercase">Tender Identity</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3.5">
+                  <Field label="Tender Reference Number" value={tenderDetails.tenderReference} />
+                  <Field label="Issuing Body" value={tenderDetails.issuingBody} />
+                </div>
+              </div>
+
+              {/* Card 2: Tender Specs */}
+              <div className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 transition-all duration-200 hover:border-slate-300/80">
+                <div className="flex items-center gap-2 mb-3 border-b border-slate-100 pb-2">
+                  <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                  </svg>
+                  <span className="text-[11.5px] font-bold text-slate-600 tracking-wide uppercase">Tender Specs</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3.5">
+                  <Field
+                    label="Submission Mode"
+                    value={tenderDetails.submissionMode ? SUBMISSION_MODE_LABELS[tenderDetails.submissionMode] : undefined}
+                  />
+                  <Field
+                    label="Evaluation Type"
+                    value={tenderDetails.evaluationType ? EVALUATION_TYPE_LABELS[tenderDetails.evaluationType] : undefined}
+                  />
+                </div>
+              </div>
+
+              {/* Card 3: Bid Security & Financials */}
+              <div className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 transition-all duration-200 hover:border-slate-300/80">
+                <div className="flex items-center gap-2 mb-3 border-b border-slate-100 pb-2">
+                  <span className="text-slate-550"><FinanceIcon size={14} /></span>
+                  <span className="text-[11.5px] font-bold text-slate-600 tracking-wide uppercase">Bid Security & Financials</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3.5">
+                  <Field label="Bid Bond Required" value={tenderDetails.bidBondRequired ? "Yes" : "No"} />
+                  {tenderDetails.bidBondRequired && (
+                    <Field
+                      label={`Bid Bond Amount (${deal.currency})`}
+                      value={tenderDetails.bidBondAmount != null ? formatLkr(tenderDetails.bidBondAmount) : undefined}
+                    />
+                  )}
+                  <Field
+                    label={`EMD Amount (${deal.currency})`}
+                    value={tenderDetails.emdAmount != null ? formatLkr(tenderDetails.emdAmount) : undefined}
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
