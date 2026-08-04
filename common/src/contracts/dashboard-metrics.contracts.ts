@@ -1,11 +1,13 @@
 // Real backend data for dashboard widgets, bundled by permission section --
-// see widget-registry.tsx's own grouping, which this mirrors 1:1. All money
-// fields are normalized to USD server-side via FxRatesService before they
-// ever reach these shapes, so the frontend never mixes currencies.
+// see widget-registry.tsx's own grouping, which this mirrors 1:1. Every money
+// field in DealsMetricsResponse is normalized server-side (via FxRatesService)
+// into whichever currency the caller requested (?currency= on
+// GET /dashboard/metrics/deals, default "USD") -- `currency` on the response
+// itself says which one, so the frontend never has to guess or mix.
 
 export interface DashboardStatCards {
   totalDeals: number;
-  pipelineValueUsd: number;
+  pipelineValue: number;
   winLossRatePercent: number;
   avgGpMarginPercent: number;
   salesVelocityDays: number;
@@ -13,8 +15,8 @@ export interface DashboardStatCards {
 
 export interface MonthlyRevenuePoint {
   month: string; // "YYYY-MM"
-  actualUsd: number;
-  projectedUsd: number;
+  actual: number;
+  projected: number;
 }
 
 export interface StageCount {
@@ -24,7 +26,7 @@ export interface StageCount {
 
 export interface StageValue {
   stageName: string;
-  valueUsd: number;
+  value: number;
 }
 
 export interface SourceMonthCount {
@@ -41,12 +43,13 @@ export interface DepartmentCount {
 export interface AtRiskDealSummary {
   id: string;
   name: string;
-  valueUsd: number;
+  value: number;
   daysStuck: number;
   stageName: string;
 }
 
 export interface DealsMetricsResponse {
+  currency: string;
   statCards: DashboardStatCards;
   revenueForecast: MonthlyRevenuePoint[];
   dealsByStage: StageCount[];

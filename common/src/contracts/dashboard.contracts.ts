@@ -12,9 +12,12 @@ export interface DashboardLayoutItem {
 export interface DashboardPreferenceResponse {
   visibleWidgetKeys: string[];
   layout: DashboardLayoutItem[];
+  // null = no preference saved yet -- the frontend falls back to "USD".
+  currency: string | null;
 }
 
 export interface UpdateDashboardPreferenceRequest {
   visibleWidgetKeys: string[];
   layout: DashboardLayoutItem[];
+  currency?: string | null;
 }

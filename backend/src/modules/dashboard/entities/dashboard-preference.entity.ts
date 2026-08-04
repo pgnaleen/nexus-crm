@@ -18,4 +18,12 @@ export class DashboardPreference extends AuditedTenantEntity {
 
   @Column({ type: "jsonb" })
   layout!: DashboardLayoutItem[];
+
+  // The dashboard's chosen display currency (ISO 4217, e.g. "LKR") -- every
+  // Deal can carry its own currency, so widgets convert on the fly via
+  // FxRatesService into whichever one is picked here. Nullable: no row (or a
+  // row saved before this column existed) means "no preference saved yet",
+  // and the frontend/service both fall back to "USD" in that case.
+  @Column({ type: "varchar", length: 3, nullable: true })
+  currency?: string | null;
 }

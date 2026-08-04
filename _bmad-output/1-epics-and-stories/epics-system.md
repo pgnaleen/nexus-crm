@@ -341,6 +341,159 @@ Built in the same pass:
   permissions/section access — every widget is listed to everyone for now, exactly as documented
   above; that part genuinely is later work, not this correction.
 
+### Story 1.9: Permission-Filtered Widgets & Backend-Persisted Layout — CONFIRMED / DONE
+
+As a **dashboard user**,
+I want **to only ever see widgets for sections I actually have access to, and have my arrangement
+survive across devices/browsers**,
+So that **the dashboard reflects my real permissions instead of showing every widget to everyone,
+and I don't lose my layout every time I clear localStorage or switch machines**.
+
+Closes the two gaps Story 1.8 documented as deliberately deferred: no per-widget permission
+filtering, and localStorage-only persistence.
+
+**Acceptance Criteria:**
+
+**Given** a signed-in user
+**When** the Dashboard loads
+**Then** only widgets whose section(s) they hold any permission for are shown — the same "any
+permission under this resource prefix" rule `Sidebar.tsx` already uses for nav items, not an
+exact permission key
+
+**Given** the "Add widgets" panel is open
+**When** it lists hidden widgets
+**Then** it only offers ones the viewer actually has access to (no more "every widget listed to
+everyone," Story 1.8's documented limitation)
+
+**Given** a user rearranges, hides, or shows widgets
+**When** they reload on a different device or browser
+**Then** their layout and visibility are restored from the backend, not lost — `localStorage`
+retired entirely
+
+**Confirmation note (2026-08-04):** Built `frontend/src/lib/permissions.ts` (shared
+`hasAnyPermissionForPrefix`, moved out of `Sidebar.tsx` so both share one implementation instead
+of two copies of the same rule) and `frontend/src/components/widgets/widget-registry.tsx` (every
+widget's required section prefix(es) + default grid position — e.g. Partners Insight requires
+BOTH `deals` and `relationship`, since it blends two sections' data). `dashboard/page.tsx` became
+an async Server Component that filters the registry against `session.permissions` before ever
+building the widget map, matching every other page in the app's own session-fetching pattern.
+
+New backend module `backend/src/modules/dashboard/` — `DashboardPreference` entity (one row per
+tenant+user, extends `AuditedTenantEntity`, migrated live against the dev DB),
+`GET`/`PUT /dashboard/preferences`, gated by authentication only (no `PermissionsGuard` — same
+access model as Priority Tasks, since every user only ever reads/writes their own row).
+`DashboardWidgetGrid.tsx`'s `localStorage` read/writes were replaced with a debounced `PUT`.
+
+Verified live end to end with a real Super Admin session (`docker exec` against the running
+containers, real login, real JWT cookie): `GET /dashboard/preferences` correctly returns an empty
+body (Nest's `isNil` check treats `null` the same as `undefined`, which `serverFetch` already
+handles by treating an empty response body as `null`) before any save; a `PUT` with a real layout
+persisted; a follow-up `GET` returned the exact saved data back; and a real authenticated fetch of
+the rendered dashboard page showed the heading, edit controls, and "Add widgets" panel with no
+server error.
+
+### Story 1.10: Real Backend Data for Dashboard Widgets, with a User-Selectable Display Currency — CONFIRMED / DONE (partial scope)
+
+As a **dashboard user**,
+I want **the widgets to show my tenant's real deal/tenant/user/task numbers instead of mock data,
+and to be able to pick which currency amounts display in**,
+So that **the dashboard is actually useful for real decisions, and a deal in one currency doesn't
+get silently mixed with or misread against a deal in another**.
+
+Replaces hardcoded `DUMMY_*` data with real aggregate queries for the widgets that have clear
+backing columns in the schema — explicitly **not all 16 widgets** (see Deferred below).
+
+**Acceptance Criteria:**
+
+**Given** a user with `DEALS_VIEW`
+**When** the Dashboard loads
+**Then** stat cards, revenue forecast/trend, deals-by-stage/value/source/department, at-risk
+deals, and the sales funnel all show real numbers from the tenant's own deals — not mock data
+
+**Given** a user with `DEALS_VIEW` **and** `RELATIONSHIP_VIEW`
+**When** Partners Insight renders
+**Then** it shows deal counts grouped by companies actually tagged `systemRole=Partner` — not just
+any company linked via `deal_partners_map`
+
+**Given** a user with only `DEALS_VIEW` (no `RELATIONSHIP_VIEW`)
+**When** `/dashboard/metrics/partners` is called
+**Then** it 403s — AND, not OR, on the two permissions
+
+**Given** deals recorded in different currencies (e.g. one in USD, one in LKR)
+**When** any money figure is aggregated (pipeline value, revenue forecast, value by stage,
+at-risk deal value)
+**Then** every deal's value is converted into a single currency via `FxRatesService.convert()`
+before summing — never a currency-mixed total
+
+**Given** the dashboard's currency selector
+**When** a user picks a different display currency
+**Then** every widget showing money re-renders with amounts converted into that currency, and the
+choice persists per-user (survives reload, same as widget layout)
+
+**Given** `TENANTS_VIEW` / `USERS_VIEW` respectively
+**When** Tenant Growth / Users by Role render
+**Then** they show real per-month tenant creation counts and real RBAC role membership counts
+
+**Given** any authenticated user
+**When** Task Completion renders
+**Then** it shows the tenant-wide % of Priority Tasks actually completed — canonical per-task
+status, not per-user (unlike every other Priority Tasks query in the codebase)
+
+**Deferred, still dummy data — explicit, not an oversight:** `TargetRevenueGaugeWidget` (no
+quota/target table anywhere in the schema), the Pipeline Coverage stat card (same missing
+denominator), `WinLossReasonsChartWidget` (no win/loss-reason field on Deal), and
+`TeamPerformanceRadarWidget` (only "deals closed" is derivable — response time/follow-ups/
+upsells/satisfaction have no backing columns anywhere). Each needs its own new-schema/product
+decision before it can go real; scoped out of this story deliberately, per an explicit decision
+made when this work was planned.
+
+**Confirmation note (2026-08-04):** 5 new bundled endpoints
+(`backend/src/modules/dashboard/dashboard-metrics.controller.ts` +
+`dashboard-metrics.service.ts`), one per permission section rather than one per widget — mirrors
+`widget-registry.tsx`'s own grouping so `dashboard/page.tsx` fetches each section's data in one
+call. `getRequiredBundles()` in `widget-registry.tsx` ensures a bundle is only fetched if the
+permission-filtered widget list actually needs it (never a guaranteed-403 call, never a wasted
+call for a still-dummy widget). `avgGpMarginPercent` replicates `computeCosting()`'s formula
+server-side so it matches what a deal's own detail page already shows (currency-independent, a
+ratio, so it needs no conversion). `revenueForecast.projected` uses `MainStage.weightPercent`
+(null treated as 0). Task completion resolves each task's canonical status via `DISTINCT ON`,
+preferring a holder-type row over a `delegated` tracker row for the same task — a naive
+`GROUP BY` would double-count a task that's simultaneously tracked by its delegator and held by
+its recipient. `salesFunnel` and `revenueTrend` are not separate queries — they reuse
+`dealsByStage`/`revenueForecast.actual` respectively.
+
+Verified against a direct `psql` query on the real dev DB: 5 real deals, and `totalDeals`,
+`pipelineValue` ($505,000 = $5,000 + $500,000), `avgGpMarginPercent` (85% = avg of 100% and 70%
+margin across the two deals with a value), `dealsByStage`/`valueByStage`, and `atRiskDeals` (2
+deals stuck 15 days) all matched exactly. Confirmed live via a real authenticated fetch of
+`/system/dashboard` that the real numbers render with no application error.
+
+**Currency selector, added same day after a follow-up product decision:** initial build fixed
+every money figure to USD, converted via the existing `FxRatesService` (confirmed to already pull
+from a live daily-refreshed API, `exchangerate-api.com`, cached in `fx_rates` — not fake data).
+Revised to let the user pick the display currency instead: `DealsMetricsResponse` fields dropped
+their `Usd` suffix (`pipelineValueUsd` → `pipelineValue`, etc.) and the response gained a top-level
+`currency` field; `GET /dashboard/metrics/deals` accepts `?currency=`, threaded through
+`DashboardMetricsService`'s `convertTo()` (renamed from the USD-only `toUsd()`). A new nullable
+`currency` column on `dashboard_preferences` (migrated live) persists the choice per user, same
+table/upsert as layout/visibility. New `DashboardCurrencySelector.tsx` (a dropdown sourced from
+the existing `CURRENCIES`/`formatCurrencyLabel` in `frontend/src/lib/currencies.ts`) lives in
+`DashboardWidgetGrid`'s header; selecting a currency immediately `PUT`s the preference and updates
+the page's `?currency=` URL param via `router.replace`, which drives a fresh server render of
+`dashboard/page.tsx` with the new currency (the money figures are server-fetched props, so this is
+the only way to get new numbers — the grid's own layout/visibility client state is untouched by
+this, no remount). New shared `frontend/src/lib/dashboard/currency-format.ts::formatDashboardAmount`
+replaced each widget's own hardcoded `$`-prefixed formatter, using `Intl.NumberFormat`'s
+`narrowSymbol` display for the prefix.
+
+Verified live: inserted temporary test FX rates (1 USD, 300 LKR-per-USD) directly into `fx_rates`,
+restarted the backend to reload `FxRatesService`'s in-memory cache, and confirmed
+`/dashboard/metrics/deals?currency=lkr` returned exactly 300× the USD figures ($505,000 →
+₨151,500,000) before deleting the test rows and restarting again to restore the real (currently
+unconfigured, `FX_RATE_API_KEY` unset in this dev environment) empty-cache state. Confirmed the
+real dashboard page renders correctly both with and without a `?currency=` param, selector visible,
+no application error.
+
 ### Story 1.7: Final QA Verification — NOT STARTED
 
 Confirm color usage, component classes, and that no logic was altered anywhere in the migration,

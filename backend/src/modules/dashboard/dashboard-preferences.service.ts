@@ -22,7 +22,7 @@ export class DashboardPreferencesService {
         return null;
       }
       this.logger.debug(`getForUser returning saved preferences for ${userId}`);
-      return { visibleWidgetKeys: row.visibleWidgetKeys, layout: row.layout };
+      return { visibleWidgetKeys: row.visibleWidgetKeys, layout: row.layout, currency: row.currency ?? null };
     } catch (err) {
       this.logger.error(`getForUser failed for ${userId}: ${(err as Error).message}`, (err as Error).stack);
       throw err;
@@ -34,7 +34,7 @@ export class DashboardPreferencesService {
   // never loads with relations anyway, but keeping the same shape.
   async upsertForUser(userId: string, dto: UpdateDashboardPreferenceDto): Promise<DashboardPreferenceResponse> {
     this.logger.debug(
-      `upsertForUser called (userId=${userId}, ${dto.visibleWidgetKeys.length} visible widget(s), ${dto.layout.length} layout item(s))`,
+      `upsertForUser called (userId=${userId}, ${dto.visibleWidgetKeys.length} visible widget(s), ${dto.layout.length} layout item(s), currency=${dto.currency ?? "unchanged"})`,
     );
     try {
       const existing = await this.repo.findOneScoped({ where: { userId } });
@@ -42,10 +42,11 @@ export class DashboardPreferencesService {
         this.logger.debug(`Updating existing dashboard preferences row for ${userId}`);
         existing.visibleWidgetKeys = dto.visibleWidgetKeys;
         existing.layout = dto.layout;
+        if (dto.currency !== undefined) existing.currency = dto.currency;
         existing.updatedBy = userId;
         const saved = await this.repo.saveScoped(existing);
         this.logger.debug(`upsertForUser succeeded (update) for ${userId}`);
-        return { visibleWidgetKeys: saved.visibleWidgetKeys, layout: saved.layout };
+        return { visibleWidgetKeys: saved.visibleWidgetKeys, layout: saved.layout, currency: saved.currency ?? null };
       }
 
       this.logger.debug(`No existing row for ${userId}, creating a new one`);
@@ -53,12 +54,13 @@ export class DashboardPreferencesService {
         userId,
         visibleWidgetKeys: dto.visibleWidgetKeys,
         layout: dto.layout,
+        currency: dto.currency ?? null,
         createdBy: userId,
         updatedBy: userId,
       });
       const saved = await this.repo.saveScoped(created);
       this.logger.debug(`upsertForUser succeeded (create) for ${userId}`);
-      return { visibleWidgetKeys: saved.visibleWidgetKeys, layout: saved.layout };
+      return { visibleWidgetKeys: saved.visibleWidgetKeys, layout: saved.layout, currency: saved.currency ?? null };
     } catch (err) {
       this.logger.error(`upsertForUser failed for ${userId}: ${(err as Error).message}`, (err as Error).stack);
       throw err;
