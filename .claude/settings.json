@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+
+  "model": "claude-sonnet-5",
+
+  "autoCompactEnabled": true,
+
+  "fallbackModel": ["claude-sonnet-5", "claude-haiku-4-5"],
+
+  "cleanupPeriodDays": 20,
+
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/filter-verbose-output.sh"
+          }
+        ]
+      }
+    ]
+  },
+
+  "companyAnnouncements": [
+    "Cost tip: run /clear between unrelated tasks â a stale long session resends full context on every message.",
+    "Default model here is Sonnet. Switch to Opus only for hard architecture/reasoning work: /model opus",
+    "Run /mcp to see and disable MCP servers you aren't using this session â unused servers still cost context.",
+    "Run /usage anytime to see your current session's token/cost breakdown."
+  ]
+}
