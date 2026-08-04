@@ -49,6 +49,7 @@ interface CurrencySelectProps {
   onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  variant?: "default" | "pill";
 }
 
 // Reusable "currency" picker -- searchable dropdown backed by the runtime's
@@ -60,9 +61,10 @@ export function CurrencySelect({
   onChange,
   placeholder = "Select a currency...",
   disabled,
+  variant = "default",
 }: CurrencySelectProps) {
   return (
-    <div className="mb-[18px]">
+    <div className={variant === "pill" ? "" : "mb-[18px]"}>
       {label && (
         <label className="mb-1.5 block text-[13px] font-semibold text-[var(--color-text-muted)]">{label}</label>
       )}
@@ -73,6 +75,7 @@ export function CurrencySelect({
         placeholder={placeholder}
         searchPlaceholder="Search currencies..."
         disabled={disabled}
+        variant={variant}
       />
     </div>
   );

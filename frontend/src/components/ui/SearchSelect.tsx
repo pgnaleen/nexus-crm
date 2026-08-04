@@ -24,6 +24,7 @@ interface SearchSelectProps {
   // Filter-bar sizing (matches the search input / CustomSelect at py-2 /
   // 13px) -- the default stays the taller form-field size used in dialogs.
   compact?: boolean;
+  variant?: "default" | "pill";
 }
 
 export function SearchSelect({
@@ -38,6 +39,7 @@ export function SearchSelect({
   onAddNew,
   disabled,
   compact,
+  variant = "default",
 }: SearchSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -80,17 +82,23 @@ export function SearchSelect({
       {label && <label className="field-label">{label}</label>}
       <button
         type="button"
-        className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 text-crm-text transition-colors duration-150 disabled:cursor-default disabled:opacity-60 ${
-          compact ? "bg-white py-2 text-[13px]" : "py-2.5 text-sm"
-        } ${
-          isOpen ? "border-crm-primary" : "border-[var(--color-border)] hover:border-crm-primary"
-        }`}
+        className={
+          variant === "pill"
+            ? `flex items-center justify-between gap-2 rounded-full border px-3 text-slate-700 font-bold transition-all duration-200 h-8 ${
+                isOpen ? "border-crm-primary shadow-[0_2px_8px_rgba(230,57,70,0.12)]" : "border-slate-200 hover:border-crm-primary hover:shadow-[0_2px_8px_rgba(230,57,70,0.12)] hover:bg-slate-50"
+              } disabled:cursor-default disabled:opacity-60`
+            : `flex w-full items-center justify-between gap-2 rounded-lg border px-3 text-crm-text transition-colors duration-150 disabled:cursor-default disabled:opacity-60 ${
+                compact ? "bg-white py-2 text-[13px]" : "py-2.5 text-sm"
+              } ${
+                isOpen ? "border-crm-primary" : "border-[var(--color-border)] hover:border-crm-primary"
+              }`
+        }
         onClick={() => !disabled && setIsOpen((o) => !o)}
         disabled={disabled}
       >
         <span
           className={`flex-1 flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-left ${
-            !selected ? "text-[var(--color-text-muted)]" : ""
+            !selected && variant !== "pill" ? "text-[var(--color-text-muted)]" : ""
           }`}
         >
           {selected ? (
@@ -123,7 +131,7 @@ export function SearchSelect({
       </button>
 
       {isOpen && !disabled && (
-        <div className="search-select-menu">
+        <div className={`search-select-menu ${variant === "pill" ? "!w-[280px] !left-auto right-0" : ""}`}>
           <div className="search-select-search-box">
             <SearchIcon size={14} />
             <input

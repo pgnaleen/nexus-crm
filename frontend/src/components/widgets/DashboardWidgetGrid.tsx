@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import ReactGridLayout, { useContainerWidth, type Layout, type LayoutItem } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import { CheckCircleIcon, EditIcon, PlusIcon, TrashIcon } from "@/components/ui/icons";
 import { Dialog } from "@/components/ui/Dialog";
+import { DashboardCurrencySelector } from "@/components/widgets/DashboardCurrencySelector";
 import { updateDashboardPreferences } from "@/lib/api/dashboard";
 import type { DashboardPreferenceResponse } from "@orelia/common";
 
@@ -31,6 +33,10 @@ interface DashboardWidgetGridProps {
   widgets: Record<string, WidgetEntry>;
   defaultLayout: Layout;
   initialPreferences?: DashboardPreferenceResponse | null;
+  // The currency dashboard/page.tsx already resolved and fetched the deals bundle in (URL param
+  // > saved preference > "USD") -- this component only reflects/persists a change, it doesn't
+  // own the resolution logic.
+  currency: string;
 }
 
 // A widget removed from the grid needs *somewhere* to go when re-added from the panel -- appended
@@ -41,8 +47,10 @@ function placeNewWidget(key: string, currentLayout: Layout): LayoutItem {
   return { i: key, x: 0, y: maxY, w: 4, h: 3 };
 }
 
-export function DashboardWidgetGrid({ widgets, defaultLayout, initialPreferences }: DashboardWidgetGridProps) {
+export function DashboardWidgetGrid({ widgets, defaultLayout, initialPreferences, currency }: DashboardWidgetGridProps) {
   const { width, containerRef, mounted } = useContainerWidth();
+  const router = useRouter();
+  const pathname = usePathname();
   const [isEditMode, setIsEditMode] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
 
@@ -95,6 +103,21 @@ export function DashboardWidgetGrid({ widgets, defaultLayout, initialPreferences
     scheduleSave(nextLayout, nextVisibleKeys);
   }
 
+  // Unlike layout/visibility, a currency change needs an immediate (not
+  // debounced) save and an immediate URL update -- the money figures
+  // themselves live in `widgets` (built server-side in dashboard/page.tsx
+  // from the deals bundle fetched in the OLD currency), so the only way to
+  // get new numbers is a fresh server render with the new `?currency=`.
+  function handleCurrencyChange(nextCurrency: string) {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    updateDashboardPreferences({ layout: [...layout], visibleWidgetKeys: visibleKeys, currency: nextCurrency }).catch(
+      (err) => {
+        console.error("[DashboardWidgetGrid] failed to save currency preference:", err);
+      },
+    );
+    router.replace(`${pathname}?currency=${nextCurrency}`);
+  }
+
   function toggleEditMode() {
     const next = !isEditMode;
     setIsEditMode(next);
@@ -109,6 +132,7 @@ export function DashboardWidgetGrid({ widgets, defaultLayout, initialPreferences
       <div className="mb-3 flex items-center justify-between">
         <h2 className="m-0 text-[26px] font-bold text-crm-text">Dashboard</h2>
         <div className="flex items-center gap-2">
+          <DashboardCurrencySelector value={currency} onChange={handleCurrencyChange} />
           {isEditMode && (
             <button
               type="button"
