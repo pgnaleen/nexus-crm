@@ -7,6 +7,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { UserStatusBadge } from "@/components/ui/UserStatusBadge";
+import { UserIcon } from "@/components/ui/icons";
 
 interface UserDetailsDialogProps {
   user: UserSummaryResponse;
@@ -53,9 +54,28 @@ export function UserDetailsDialog({ user, onClose }: UserDetailsDialogProps) {
     };
   }, [user.id]);
 
+  const dialogTitle = (
+    <div className="flex items-center gap-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-crm-primary">
+        <UserIcon size={20} />
+      </div>
+      <div className="flex flex-col min-w-0">
+        <span className="text-[15px] font-bold text-crm-text truncate">User Details</span>
+        <span className="text-[11px] font-medium text-[var(--color-text-muted)] leading-none mt-0.5">
+          {user.displayName}
+        </span>
+      </div>
+    </div>
+  );
+
   return (
+<<<<<<< Updated upstream
     <Dialog open title="User Details" onClose={onClose}>
       {loadError && <p className="field-error">{loadError}</p>}
+=======
+    <Dialog open title={dialogTitle} onClose={onClose}>
+      {loadError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{loadError}</p>}
+>>>>>>> Stashed changes
 
       {isLoading || !detail ? (
         <div className="dialog-loading">

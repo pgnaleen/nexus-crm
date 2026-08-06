@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { minLength, required, validate } from "@/lib/validation";
+import { FunnelIcon } from "@/components/ui/icons";
 
 interface FormState {
   name: string;
@@ -92,10 +93,32 @@ export function SubStageFormDialog({
     }
   }
 
+  const titleText = mode === "create" ? "Add Sub Stage" : mode === "view" ? "View Sub Stage" : "Edit Sub Stage";
+
+  const dialogTitle = (
+    <div className="flex items-center gap-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-crm-primary">
+        <FunnelIcon size={20} />
+      </div>
+      <div className="flex flex-col min-w-0">
+        <span className="text-[15px] font-bold text-crm-text truncate">{titleText}</span>
+        {subStage && (
+          <span className="text-[11px] font-medium text-[var(--color-text-muted)] leading-none mt-0.5">
+            {subStage.name}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <Dialog
       open
+<<<<<<< Updated upstream
       title={mode === "create" ? "Add Sub Stage" : "Edit Sub Stage"}
+=======
+      title={dialogTitle}
+>>>>>>> Stashed changes
       onClose={onClose}
       maxWidth="480px"
     >

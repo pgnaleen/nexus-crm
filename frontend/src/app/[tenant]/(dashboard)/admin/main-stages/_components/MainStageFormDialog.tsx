@@ -8,6 +8,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import { minLength, required, validate } from "@/lib/validation";
+import { FunnelIcon } from "@/components/ui/icons";
 
 interface FormState {
   name: string;
@@ -83,10 +84,32 @@ export function MainStageFormDialog({
     }
   }
 
+  const titleText = mode === "create" ? "Add Main Stage" : mode === "view" ? "View Main Stage" : "Edit Main Stage";
+
+  const dialogTitle = (
+    <div className="flex items-center gap-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-crm-primary">
+        <FunnelIcon size={20} />
+      </div>
+      <div className="flex flex-col min-w-0">
+        <span className="text-[15px] font-bold text-crm-text truncate">{titleText}</span>
+        {mainStage && (
+          <span className="text-[11px] font-medium text-[var(--color-text-muted)] leading-none mt-0.5">
+            {mainStage.name}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <Dialog
       open
+<<<<<<< Updated upstream
       title={mode === "create" ? "Add Main Stage" : "Edit Main Stage"}
+=======
+      title={dialogTitle}
+>>>>>>> Stashed changes
       onClose={onClose}
       maxWidth="480px"
     >

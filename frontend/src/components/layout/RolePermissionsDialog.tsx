@@ -8,7 +8,7 @@ import { ApiError } from "@/lib/api/client";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
-import { SearchIcon } from "@/components/ui/icons";
+import { SearchIcon, ShieldIcon } from "@/components/ui/icons";
 
 interface RolePermissionsDialogProps {
   role: RbacRoleResponse;
@@ -130,9 +130,28 @@ export function RolePermissionsDialog({ role, resources, onClose, onSaved }: Rol
 
   const groups = useMemo(() => groupByPrefix(filteredResources), [filteredResources]);
 
+  const dialogTitle = (
+    <div className="flex items-center gap-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-crm-primary">
+        <ShieldIcon size={20} />
+      </div>
+      <div className="flex flex-col min-w-0">
+        <span className="text-[15px] font-bold text-crm-text truncate">Permissions</span>
+        <span className="text-[11px] font-medium text-[var(--color-text-muted)] leading-none mt-0.5">
+          {role.name}
+        </span>
+      </div>
+    </div>
+  );
+
   return (
+<<<<<<< Updated upstream
     <Dialog open title={`Permissions — ${role.name}`} onClose={onClose} maxWidth="850px">
       {formError && <p className="field-error">{formError}</p>}
+=======
+    <Dialog open title={dialogTitle} onClose={onClose} maxWidth="850px">
+      {formError && <p className="mt-1.5 text-[12.5px] text-[var(--color-danger)]">{formError}</p>}
+>>>>>>> Stashed changes
 
       {!isLoading && (
         <div className="permissions-controls">

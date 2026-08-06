@@ -8,6 +8,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import { minLength, required, validate } from "@/lib/validation";
+import { ShieldIcon } from "@/components/ui/icons";
 
 interface FormState {
   name: string;
@@ -68,8 +69,26 @@ export function RoleFormDialog({ mode, role, onClose, onSaved }: RoleFormDialogP
     }
   }
 
+  const dialogTitle = (
+    <div className="flex items-center gap-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-crm-primary">
+        <ShieldIcon size={20} />
+      </div>
+      <div className="flex flex-col min-w-0">
+        <span className="text-[15px] font-bold text-crm-text truncate">
+          {mode === "create" ? "Add Role" : "Edit Role"}
+        </span>
+        {mode === "edit" && role && (
+          <span className="text-[11px] font-medium text-[var(--color-text-muted)] leading-none mt-0.5">
+            {role.name}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+
   return (
-    <Dialog open title={mode === "create" ? "Add Role" : "Edit Role"} onClose={onClose}>
+    <Dialog open title={dialogTitle} onClose={onClose}>
       <form onSubmit={handleSubmit}>
         {formError && <p className="field-error">{formError}</p>}
 

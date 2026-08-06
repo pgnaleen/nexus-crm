@@ -7,6 +7,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { groupByPrefix } from "@/components/layout/RolePermissionsDialog";
+import { ShieldIcon } from "@/components/ui/icons";
 
 interface RoleDetailsDialogProps {
   role: RbacRoleResponse;
@@ -39,8 +40,22 @@ export function RoleDetailsDialog({ role, resources, onClose }: RoleDetailsDialo
   const grantedResources = resources.filter((res) => grantedIds.has(res.id));
   const groups = groupByPrefix(grantedResources);
 
+  const dialogTitle = (
+    <div className="flex items-center gap-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-crm-primary">
+        <ShieldIcon size={20} />
+      </div>
+      <div className="flex flex-col min-w-0">
+        <span className="text-[15px] font-bold text-crm-text truncate">Role Details</span>
+        <span className="text-[11px] font-medium text-[var(--color-text-muted)] leading-none mt-0.5">
+          {role.name}
+        </span>
+      </div>
+    </div>
+  );
+
   return (
-    <Dialog open title={`Role — ${role.name}`} onClose={onClose} maxWidth="720px">
+    <Dialog open title={dialogTitle} onClose={onClose} maxWidth="720px">
       <div className="role-details-meta">
         <div className="role-details-meta-item">
           <span className="role-details-meta-label">Description</span>

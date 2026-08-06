@@ -15,7 +15,14 @@ import { PasswordField } from "@/components/ui/PasswordField";
 import { PasswordStrengthHint } from "@/components/ui/PasswordStrengthHint";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { RoleCardPicker } from "@/components/ui/RoleCardPicker";
+<<<<<<< Updated upstream
 import { email, minLength, pattern, required, strongPassword, validate } from "@/lib/validation";
+=======
+import { SearchSelect } from "@/components/ui/SearchSelect";
+import { UserIcon } from "@/components/ui/icons";
+import { email, minLength, pattern, required, validate } from "@/lib/validation";
+import { t } from "@/lib/i18n";
+>>>>>>> Stashed changes
 
 const USERNAME_REGEX = /^[a-z0-9._-]+$/;
 
@@ -185,9 +192,57 @@ export function UserFormDialog({ mode, user, onClose, onSaved }: UserFormDialogP
     }
   }
 
+  const dialogTitle = (
+    <div className="flex items-center gap-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-crm-primary">
+        <UserIcon size={20} />
+      </div>
+      <div className="flex flex-col min-w-0">
+        <span className="text-[15px] font-bold text-crm-text truncate">
+          {mode === "create" ? "Add User" : "Edit User"}
+        </span>
+        {mode === "edit" && user && (
+          <span className="text-[11px] font-medium text-[var(--color-text-muted)] leading-none mt-0.5">
+            {user.displayName}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+
   return (
+<<<<<<< Updated upstream
     <Dialog open title={mode === "create" ? "Add User" : "Edit User"} onClose={onClose} maxWidth="640px">
       {isLoadingDetail ? (
+=======
+    <Dialog open title={dialogTitle} onClose={onClose} maxWidth="640px">
+      {undelivered ? (
+        <div>
+          <div className="rounded-lg border border-crm-primary/30 bg-crm-primary-tint p-4">
+            <h3 className="mb-2 text-sm font-semibold text-crm-text">
+              {t("users.welcomeEmailFailed.title")}
+            </h3>
+            <p className="mb-3 text-[13px] leading-relaxed text-crm-text">
+              {t("users.welcomeEmailFailed.body", {
+                displayName: undelivered.displayName,
+                email: undelivered.email,
+              })}
+            </p>
+            <p className="mb-3 text-[13px] leading-relaxed text-[var(--color-text-muted)]">
+              {t(REASON_KEYS[undelivered.reason ?? "send_failed"])}
+            </p>
+            <p className="text-[13px] leading-relaxed text-[var(--color-text-muted)]">
+              {t("users.welcomeEmailFailed.nextStep")}
+            </p>
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button type="button" onClick={onClose}>
+              {t("users.welcomeEmailFailed.acknowledge")}
+            </Button>
+          </div>
+        </div>
+      ) : isLoadingDetail ? (
+>>>>>>> Stashed changes
         <div className="dialog-loading">
           <Spinner size={28} />
         </div>

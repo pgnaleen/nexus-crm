@@ -18,6 +18,7 @@ import { EmailField } from "@/components/ui/EmailField";
 import { PhoneField } from "@/components/ui/PhoneField";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { email, minLength, pattern, required, validate } from "@/lib/validation";
+import { BuildingIcon } from "@/components/ui/icons";
 
 const SLUG_REGEX = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
@@ -148,8 +149,26 @@ export function TenantFormDialog({ mode, tenant, plans, industries, onClose, onS
     }
   }
 
+  const dialogTitle = (
+    <div className="flex items-center gap-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-crm-primary">
+        <BuildingIcon size={20} />
+      </div>
+      <div className="flex flex-col min-w-0">
+        <span className="text-[15px] font-bold text-crm-text truncate">
+          {mode === "create" ? "Add Tenant" : "Edit Tenant"}
+        </span>
+        {mode === "edit" && tenant && (
+          <span className="text-[11px] font-medium text-[var(--color-text-muted)] leading-none mt-0.5">
+            {tenant.name}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+
   return (
-    <Dialog open title={mode === "create" ? "Add Tenant" : "Edit Tenant"} onClose={onClose} maxWidth="720px">
+    <Dialog open title={dialogTitle} onClose={onClose} maxWidth="720px">
       <form onSubmit={handleSubmit}>
         {formError && <p className="field-error">{formError}</p>}
 

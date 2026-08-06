@@ -8,6 +8,11 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
 import { minLength, required, validate } from "@/lib/validation";
+<<<<<<< Updated upstream
+=======
+import { t } from "@/lib/i18n";
+import { SlidersIcon } from "@/components/ui/icons";
+>>>>>>> Stashed changes
 
 interface FormState {
   name: string;
@@ -79,10 +84,37 @@ export function RelationshipTypeFormDialog({
     }
   }
 
+  const titleText =
+    mode === "create"
+      ? "Add Relationship Type"
+      : mode === "view"
+        ? "View Relationship Type"
+        : "Edit Relationship Type";
+
+  const dialogTitle = (
+    <div className="flex items-center gap-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-crm-primary">
+        <SlidersIcon size={20} />
+      </div>
+      <div className="flex flex-col min-w-0">
+        <span className="text-[15px] font-bold text-crm-text truncate">{titleText}</span>
+        {relationshipType && (
+          <span className="text-[11px] font-medium text-[var(--color-text-muted)] leading-none mt-0.5">
+            {relationshipType.name}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <Dialog
       open
+<<<<<<< Updated upstream
       title={mode === "create" ? "Add Relationship Type" : "Edit Relationship Type"}
+=======
+      title={dialogTitle}
+>>>>>>> Stashed changes
       onClose={onClose}
       maxWidth="480px"
     >
