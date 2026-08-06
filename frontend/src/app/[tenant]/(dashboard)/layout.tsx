@@ -17,6 +17,9 @@ import { ForcedPasswordChangeGate } from "./_components/ForcedPasswordChangeGate
 // CLAUDE.md's rule, red stays confined to buttons/active-nav-item/badges/focus rings, never the
 // shell background itself. Every color here is a var() reference into globals.css's @theme
 // block, not a raw hex value -- changing the shell color only ever requires editing that block.
+// The two absolutely-positioned blurred circles below (bg-crm-shell-gradient-end/30,
+// bg-crm-shell/30) are the corner glow blobs; sidebar nav-item hover is a separate plain
+// white/10 overlay, not part of this background.
 const SHELL_BG =
   "relative bg-crm-shell [background-image:radial-gradient(rgba(255,255,255,0.07)_1px,transparent_1px),linear-gradient(160deg,var(--color-crm-shell-gradient-start)_0%,var(--color-crm-shell)_55%,var(--color-crm-shell-gradient-end)_100%)] [background-size:22px_22px,100%_100%]";
 

@@ -4,7 +4,6 @@ export class AddRefreshTokenGraceWindow1784700000008 implements MigrationInterfa
     name = 'AddRefreshTokenGraceWindow1784700000008'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
-        // See _bmad-output/planning-artifacts/plan-auth-cross-tab-session-sync.md,
         // Fix A -- grace-window reuse for a just-rotated refresh token, so two
         // near-simultaneous callers presenting the same old token (two open
         // tabs, or the proactive middleware refresh landing close to a
