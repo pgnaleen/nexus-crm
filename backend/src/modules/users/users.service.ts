@@ -6,9 +6,9 @@ import { randomInt } from "crypto";
 import { Not, Repository } from "typeorm";
 import { AuditLogService } from "../../core/audit-log/audit-log.service";
 import { MailService } from "../../core/mail/mail.service";
-import { TenantContextService } from "../../core/tenant";
 import { EmployeesService } from "../employees/employees.service";
 import { RbacService } from "../rbac/rbac.service";
+import { Tenant } from "../tenants/entities/tenant.entity";
 import { ChangeOwnPasswordDto } from "./dto/change-own-password.dto";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
@@ -73,7 +73,8 @@ export class UsersService {
     // is only ever written from here (User Management), via these methods.
     private readonly employeesService: EmployeesService,
     private readonly mailService: MailService,
-    private readonly tenantContext: TenantContextService,
+    @InjectRepository(Tenant)
+    private readonly tenantRepo: Repository<Tenant>,
   ) {}
 
   findAll(): Promise<User[]> {
@@ -174,21 +175,28 @@ export class UsersService {
       // send must never fail the account creation above, which has already
       // committed. The outcome is returned to the caller so the admin is told
       // about it, rather than shown an unqualified success.
-      let tenantSlug: string | undefined;
-      try {
-        tenantSlug = this.tenantContext.getTenantSlug();
-      } catch {
-        this.logger.warn("create: no tenant context available, skipping welcome email");
+      //
+      // The login link's tenant slug is looked up from `saved.tenantId` --
+      // the tenant the new user's row was actually inserted under -- rather
+      // than from the ambient TenantContextService. Ambient context reflects
+      // whichever tenant the *acting admin's request* is scoped to, and while
+      // that's normally the same tenant, it's a second source of truth for a
+      // value the row itself already has; reading it straight off `saved`
+      // guarantees the emailed link always matches the account that was just
+      // created, however the request got here.
+      const tenant = await this.tenantRepo.findOneBy({ id: saved.tenantId });
+      if (!tenant) {
+        this.logger.warn(`create: user ${saved.id} references unknown tenant ${saved.tenantId}, skipping welcome email`);
       }
 
       let welcomeEmail: MailDeliveryResult;
-      if (tenantSlug) {
+      if (tenant) {
         welcomeEmail = await this.mailService.sendWelcomeEmail({
           to: dto.loggingEmail,
           displayName: dto.displayName,
           username: dto.username,
           temporaryPassword,
-          tenantSlug,
+          tenantSlug: tenant.slug,
         });
       } else {
         welcomeEmail = { sent: false, reason: "no_tenant_context" };
