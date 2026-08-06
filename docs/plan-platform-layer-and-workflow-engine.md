@@ -305,6 +305,53 @@ extension installed yet per the docker-compose scan; this would be a new additio
 a `pgvector` extension on the existing Postgres 16 instance rather than a wholly separate vector
 DB service, given the current all-in-one-Postgres infra pattern).
 
+## Phase 10 — Existing-system bug fixes & quality backlog
+
+These are bugs/gaps in the **already-shipped** CRM, unrelated to the platform/workflow initiative
+above — grouped here because they surfaced at the same time, not because they depend on any of
+Phases 0–9. They have no dependency relationship with the mermaid graph above and can be picked up
+by whoever's free, in any order, independent of the platform work's sequencing.
+
+1. **Employee creation form: missing mandatory field validations + incorrect employment status
+   options.** The form allows submission past fields that should be required, and offers
+   employment-status choices that shouldn't be selectable at creation time (e.g. a brand-new
+   employee shouldn't be creatable as already `Terminated`/`Resigned`). Fix is two-part: add the
+   missing required-field validation (client-side + a server-side check, since client validation
+   alone is never sufficient), and restrict the status dropdown's options at creation to the
+   subset that's actually valid for a new hire.
+2. **Duplicate contacts allowed under the same company.** No uniqueness check exists today —
+   the same person can be added as a Contact under the same Company more than once. Add a
+   pre-create check (e.g. name + phone/email match within the same company) that rejects an
+   obvious duplicate with a clear error, matching this codebase's existing "validate up front,
+   clear 4xx" convention. Existing duplicate rows already in the database are a separate, explicit
+   cleanup decision (same precedent as the residual soft-orphan data issue already documented in
+   `CLAUDE.md`) — not silently merged as a side effect of shipping the fix.
+3. **RBAC: View permission should auto-enable when Create/Edit/Delete is granted**, for User
+   Management, Teams, Roles, and Employees specifically (the four resources named in the report).
+   Today a role can apparently be saved with e.g. `_CREATE` checked but `_VIEW` unchecked, which is
+   an incoherent permission state (a user who can create a record but can't view it/the list it
+   lives in). Fix in both the `RolePermissionsDialog` UI (auto-check View when any of the other
+   three is checked, and prevent unchecking View while any of the other three stays checked) and
+   the backend role-save path (defense in depth — don't rely on the UI alone to hold the invariant).
+4. **User Management: user status (Disable/Locked) has no effect.** A user set to a
+   non-`Active` status can apparently still authenticate/operate normally — the status change isn't
+   actually enforced anywhere in the auth path. This is a real access-control gap, not just a
+   cosmetic bug: find where `status` should be checked (login, and/or the JWT validation/guard
+   path) and enforce it there, then confirm a Disabled/Locked user is actually rejected end-to-end.
+5. **Add Company → Contact tab: country dropdown not rendering properly.** Scoped UI bug in the
+   Company form's contact sub-section.
+6. **Multiple sectors, multiple account tiers on Company/Customer creation.** Today these appear
+   to be single-select fields; the ask is to support selecting more than one sector and more than
+   one account tier per company. This is bigger than the other items on this list — it's a data
+   model change (single FK/enum column → many-to-many, needs its own join table per this project's
+   join-table conventions) plus a UI change from single-select to multi-select, plus a migration
+   decision for whatever single values already exist on current Company rows (carry the existing
+   single value forward as that company's first entry, not dropped).
+7. **Company → Contact view only shows names, not phone number.** The contact list/detail view
+   is missing the phone number (T.P. number) field even though the underlying Contact record likely
+   already stores it — most likely a response-shape or display-template gap rather than a missing
+   column; confirm which before starting.
+
 ## Decisions made
 
 | Question | Decision |
