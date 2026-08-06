@@ -3,6 +3,15 @@
 Part of the split bugs tracker — see [`../BUGS.md`](../BUGS.md) for the severity legend shared
 across every file in this folder. Unresolved unless noted.
 
+- 🟡 `GET /pickers/users` (`pickers.controller.ts:277-282`) is the only picker route with **no
+  `PermissionsGuard`/`@RequirePermission` at all** — it's gated solely by the global `JwtAuthGuard`,
+  so any authenticated user in any tenant can enumerate the tenant's user list (id + name). Every
+  other route in that controller is gated on its consumer's permission per `CLAUDE.md`'s picker rule
+  (e.g. `/pickers/departments` on `[DEALS_VIEW, EMPLOYEES_CREATE, EMPLOYEES_UPDATE]`,
+  `pickers.controller.ts:131-132`). The inline comment at `:277` acknowledges the omission as
+  deliberate, but it's inconsistent with the stated rule — the rule says *gate on the consumer's
+  permission*, not *skip the gate*. Decide whether that's intended and either gate it or document
+  the exception. Found during the 2026-08-06 architecture verification pass, not the original review.
 - 🟠 `deals.service.ts` create()/update() accept client-supplied `companyId`/`ownerId`/`contactId`/
   `sourceId`/`mainStageId`/`currentStageId` with no cross-tenant ownership check — a tenant-A user
   who knows/guesses a tenant-B UUID can link a deal to it and the response leaks that tenant's

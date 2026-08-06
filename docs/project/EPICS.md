@@ -27,8 +27,8 @@ their original per-file numbering (e.g. Epic 3's stories are still 1.1–1.10 in
 | 5 — Priority Tracker: Event-Sourced Flow, Task Chat & Real-Time Sync | done — 5/5 | [`epics/epic-5-realtime-flow.md`](./epics/epic-5-realtime-flow.md) |
 | 6 — User Management: Account Provisioning & Credential Lifecycle | in-progress — 1/8 | [`epics/epic-6-user-management.md`](./epics/epic-6-user-management.md) |
 | 7 — Activity Log: Audit Trail Visibility & Authentication Events | done — 6/6 | [`epics/epic-7-activity-log.md`](./epics/epic-7-activity-log.md) |
-| 8 — Finance: Navigation Shell, Configuration & Financial Management | backlog — 0/10 | [`epics/epic-8-finance.md`](./epics/epic-8-finance.md) |
-| 9 — Legal: Contract Management & Configurable Foundations | backlog — 0/10 | [`epics/epic-9-legal.md`](./epics/epic-9-legal.md) |
+| 8 — Finance: Navigation Shell, Configuration & Financial Management | backlog — 0/11 | [`epics/epic-8-finance.md`](./epics/epic-8-finance.md) |
+| 9 — Legal: Contract Management & Configurable Foundations | backlog — 0/11 | [`epics/epic-9-legal.md`](./epics/epic-9-legal.md) |
 
 ---
 
@@ -37,6 +37,21 @@ their original per-file numbering (e.g. Epic 3's stories are still 1.1–1.10 in
 Items from `_bmad-output/2-current-work/open-items.md` that don't map to one specific story below,
 condensed (severity: 🔴 critical · 🟠 high · 🟡 medium · ⚪ low):
 
+- 🔴 **No way to establish tenant context outside an HTTP request** — tenant scoping is
+  request-scoped `AsyncLocalStorage`, and `TenantContextService.run()` has exactly one call site in
+  the whole repo: the HTTP interceptor (`tenant-context.interceptor.ts:89`). Outside a request
+  `getStore()` throws (`tenant-context.service.ts:24-26`), so any background/inbound-callback code
+  that touches tenant-scoped data cannot work today. Worse, it fails *silently* in audit:
+  `AuditLogService.record()` catches the missing context and writes the row as a **platform-level**
+  entry rather than a tenant-scoped one (`audit-log.service.ts:110-115`). There is also no
+  system-actor convention — `record()`'s `actorId` is an explicit parameter, never derived
+  (`audit-log.service.ts:122`). Neither existing scheduled job hits this because both are
+  tenant-agnostic by design (`fx-rates.service.ts:48-77`, `db-backup.service.ts:39-44`) — **there is
+  no precedent anywhere for a tenant-scoped background job.** This single gap blocks *two* separate
+  initiatives: the Camunda plan's engine callbacks and Legal Epic 9's Story 1.9 nightly job. Build
+  it once as shared infrastructure — tracked as Phase 1.5 in
+  [`plans/plan-camunda-approval-workflows.md`](./plans/plan-camunda-approval-workflows.md).
+  Surfaced by the 2026-08-06 Camunda/Finance/Legal architecture verification pass.
 - 🟠 User creation is not transactional — a failed employee link during `POST /users` orphans an
   account with a generated password nobody was emailed, and retrying then 409s on the username.
   `users.service.ts::create()`. No story number; should ship alongside Epic 6.

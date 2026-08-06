@@ -1,4 +1,4 @@
-# Epic 9: Legal — Contract Management & Configurable Foundations (backlog — 0/10)
+# Epic 9: Legal — Contract Management & Configurable Foundations (backlog — 0/11)
 
 Part of the split epics tracker — see [`../EPICS.md`](../EPICS.md) for the status-source note and
 the "Unsorted / Current Focus" cross-cutting items shared across every file in this folder.
@@ -223,27 +223,76 @@ general-purpose Contract update DTO.
   party/status (Pending→DueSoon→Overdue→Completed/Waived). "Replace the set" on edit follows the
   same validate-then-transaction pattern as `relationship-parties.service.ts::updateCompany`'s
   industry-link diff.
-- [ ] 1.7 Contract Documents — zero new upload plumbing: reuse the existing polymorphic
-  `documents` table and `S3Service` wholesale, adding only a new owner type and S3 key-prefix
-  constant. `LegalContractDocumentsService` as a direct sibling of `deal-documents.service.ts`.
+- [ ] 1.7 Contract Documents — reuse the existing polymorphic `documents` table and `S3Service`
+  wholesale rather than building new storage plumbing. `LegalContractDocumentsService` as a direct
+  sibling of `deal-documents.service.ts` (which is a thin delegating wrapper over `DocumentsService`
+  — a good template to copy). **Correction to an earlier draft's "zero new plumbing / only a new
+  enum value + key prefix"** — verified 2026-08-06, adding an owner type actually takes four things,
+  all additive and low-risk but not free:
+  1. a **database migration** — `owner_type` is a real Postgres enum (`documents_owner_type_enum`,
+     created in `1784700000018-RepurposeDealDocumentsAsGenericDocuments.ts:26`), so it needs
+     `ALTER TYPE … ADD VALUE`, not just a TypeScript enum edit
+     (`common/src/enums/document-owner-type.enum.ts`);
+  2. an entry in `HARD_RETIRE_ON_REPLACE` (`documents.service.ts:13-17`);
+  3. a new `*_SEGMENT` constant (`core/storage/storage.constants.ts:16-20`);
+  4. a new upload endpoint in `uploads.controller.ts` — these are hand-written one per segment
+     (`:117/153/189/228/265`), not generic.
 - [ ] 1.8 Approval Stage engine (MVP) — a tenant configures an ordered list of approval stages per
   contract type (or "all types"); each stage names one or more approvers (`ANY_ONE`/`ALL`), with
   one optional value-threshold condition per stage. Deliberately **not** a BPMN engine: no
   branching, no arbitrary conditions, no timer escalation — see "The Camunda question" below for
   why, and for the swap-seam (`LegalApprovalGateService.getStatus()`) that lets a future Camunda
   integration replace this without touching the `Contract` entity or its status machine.
-- [ ] 1.9 Nightly status-recompute job + real notifications — `LegalStatusRecomputeJob` (`@Cron`,
-  same pattern as `fx-rates.service.ts`), per-tenant scoped, daily: recomputes contract/obligation
-  status transitions (writing one audit-log row per transition) and calls two new `MailService`
-  methods (`sendContractExpiringSoonEmail`, `sendObligationOverdueEmail`). This is the concrete fix
-  for the old system's dead `alerts`/obligation model, which was stored but never actually
-  processed or delivered to anyone.
+- [ ] 1.9 Nightly status-recompute job + real notifications — `LegalStatusRecomputeJob`,
+  per-tenant scoped, daily: recomputes contract/obligation status transitions (writing one
+  audit-log row per transition) and calls two new `MailService` methods
+  (`sendContractExpiringSoonEmail`, `sendObligationOverdueEmail`). This is the concrete fix for the
+  old system's dead `alerts`/obligation model, which was stored but never actually processed or
+  delivered to anyone.
+  **⚠ This story is blocked on shared infrastructure that does not exist yet, and an earlier draft
+  cited a precedent that turns out not to apply.** Corrected 2026-08-06:
+  - There is **no `@Cron` decorator anywhere in this backend.** Both existing scheduled jobs
+    register imperatively via `SchedulerRegistry` + `new CronJob(...)` in `onModuleInit` —
+    `fx-rates.service.ts:48-77` and `db-backup.service.ts:39-44`. Follow that shape.
+  - More importantly, **`fx-rates.service.ts` is not a precedent for a per-tenant job at all** —
+    it is entirely tenant-agnostic: `fx_rates` extends the platform-level `AuditedEntity` with no
+    `tenantId`, is upserted by currency code (`:125-133`), and never touches tenant context.
+    `db-backup` is likewise global. **There is no precedent anywhere in this codebase for a
+    tenant-scoped background job.**
+  - The blocker: tenant scoping is request-scoped `AsyncLocalStorage`, and
+    `TenantContextService.run()` has exactly one call site — the HTTP interceptor
+    (`tenant-context.interceptor.ts:89`). Outside a request, `getStore()` throws
+    (`tenant-context.service.ts:24-26`). This job must therefore establish tenant context itself,
+    per tenant, and needs a system-actor id to pass to `AuditLogService.record()` (whose `actorId`
+    is an explicit parameter, never derived — `audit-log.service.ts:122`).
+  - **This is the same missing capability that blocks the Camunda plan's engine callbacks.** It is
+    now tracked once, as shared infrastructure, in
+    [`../plans/plan-camunda-approval-workflows.md`](../plans/plan-camunda-approval-workflows.md)'s
+    Phase 1.5 and in `EPICS.md`'s current-focus list. **Do not build a Legal-only workaround** —
+    take the shared capability as a dependency.
+  - On `MailService`: it currently has exactly two public methods, `isEnabled()` (`:37`) and
+    `sendWelcomeEmail()` (`:56`), with **no SendGrid template ids** — bodies are hand-built by
+    private `buildWelcomeText` (`:90`) / `buildWelcomeHtml` (`:113`). Adding two emails means
+    writing two body-builder pairs against a single prior example with no shared layout to reuse.
+    Mechanically simple, but size it as real work, not "just call MailService."
 - [ ] 1.10 Audit trail on every Legal write — every new table extends `AuditedTenantEntity` from
   its first commit and every create/update/delete calls `AuditLogService.record()`, per the
   standard audit rule in `CLAUDE.md`. The old system had no audit trail on any legal write at all,
   and its tenant scoping specifically was retrofitted only after a real IDOR vulnerability shipped
   — this story (and the base-class choice throughout the epic) is what makes that gap structurally
   unreachable here instead of something to remember to add later.
+- [ ] 1.11 Legal picker endpoints — the Contracts form (Story 1.5) needs pickers for Suppliers,
+  Legal Entities and Contract Types, and the Approval Stages config (1.8) needs an approver/user
+  picker. Per `CLAUDE.md`'s picker rule these are **system-internal routes gated on the consumer's
+  permission** — i.e. whatever permission the Contracts screen itself requires — never on each
+  resource's own admin permission, so a contract author who isn't a suppliers-list admin can still
+  pick a supplier. They go in the **consolidated**
+  `backend/src/modules/pickers/pickers.controller.ts`, not this module's own controller. (Note:
+  `CLAUDE.md`'s claim that pickers are still scattered per-module is stale — that consolidation
+  already shipped; see the tombstone at `departments.controller.ts:38-39`.) Also apply the
+  "selectable scope" rule: exclude `isActive: false` Suppliers/Legal Entities/Contract Types from
+  picker results, while edit forms keep an already-selected inactive value visible. This story was
+  missing from the original epic and is a genuine prerequisite for 1.5.
 
 ## The Camunda question (design note under Story 1.8)
 
@@ -257,10 +306,28 @@ unresolved licensing question.
 
 `ContractsService` never touches approval tables directly — it only ever asks
 `LegalApprovalGateService.getStatus(contractId)`. When/if the Camunda initiative reaches its own
-Phase 5, a tenant can opt into a Zeebe-backed implementation of that same interface with zero
-change to the `Contract` entity, its status machine, or any screen. The engine is designed
-generically (keyed by `entityType`, not hardcoded to Contracts) so a future Case Management epic
-can reuse Story 1.8's own tables directly instead of needing a second bespoke engine.
+Phase 5, a Zeebe-backed implementation can replace that service with zero change to the `Contract`
+entity, its status machine, or any screen. The engine is designed generically (keyed by
+`entityType`, not hardcoded to Contracts) so a future Case Management epic can reuse Story 1.8's
+own tables directly instead of needing a second bespoke engine.
+
+**Be precise about what makes that swap cheap — it is call discipline, not an interface.** An
+earlier draft of this note implied `getStatus()` follows an established swap-seam pattern in this
+codebase. It does not: there is **no DI-token, abstract-class, or strategy seam anywhere in
+`backend/src`** (verified 2026-08-06 — the only custom providers in the whole backend are three
+framework tokens: `APP_GUARD` in `auth.module.ts:20-21`, `APP_INTERCEPTOR` in `core.module.ts:38-39`,
+and TypeORM's `useFactory` in `database.module.ts:11`; zero `@Inject(TOKEN)` service injections,
+zero injection tokens, zero abstract service base classes). Tellingly, the three boundaries that
+would most plausibly have wanted one — `S3Service`, `MailService`, `FxRatesService` — all
+deliberately went concrete-class, each documented in its own comments as "the single integration
+boundary," enforced by discipline rather than by a type.
+
+So: **keep `LegalApprovalGateService` a plain concrete class**, consistent with those three. The
+real guarantee this design offers is that `ContractsService` calls exactly one method on it and
+never reaches past it — which means replacing the implementation later is a small, well-bounded
+edit, *not* that a pluggable seam already exists. Introducing this codebase's first DI-token
+indirection speculatively, for a swap that may never happen (Camunda is still pre-Phase-0/1 and
+only reaches contracts at its Phase 5), would be the more expensive choice.
 
 ## Diagram — story sequencing
 
@@ -272,15 +339,26 @@ flowchart TD
     S12 --> S15["1.5 Contracts core + status machine"]
     S13 --> S15
     S14 --> S15
+    S111["1.11 Picker endpoints"] --> S15
+    S12 --> S111
+    S13 --> S111
+    S14 --> S111
     S15 --> S16["1.6 Obligations"]
     S15 --> S17["1.7 Documents"]
     S15 --> S18["1.8 Approval engine"]
     S16 --> S19["1.9 Nightly job + notifications"]
     S18 --> S19
+    RAT["Shared: run-as-tenant /<br/>system-actor context<br/>(NOT in this epic)"] -.blocks.-> S19
     S110["1.10 Audit trail (cross-cutting)"] -.applies to.-> S15
     S110 -.applies to.-> S16
     S110 -.applies to.-> S18
 ```
+
+Story 1.11's pickers depend on 1.2/1.3/1.4 existing (there's nothing to pick until then) and gate
+1.5's Contracts form. Story 1.9 is additionally blocked on the shared run-as-tenant capability
+described in its own entry — that work belongs to
+[`../plans/plan-camunda-approval-workflows.md`](../plans/plan-camunda-approval-workflows.md)'s
+Phase 1.5, not to this epic.
 
 ## Chart — rough phasing (illustrative sizing only — not committed dates)
 

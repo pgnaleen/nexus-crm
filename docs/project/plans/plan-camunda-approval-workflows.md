@@ -83,8 +83,10 @@ for exactly this kind of problem. Two design choices keep it under our own contr
 becoming "someone else's product bolted onto ours":
 
 - **Self-hosted, not Camunda's cloud service.** We run our own private copy inside our own
-  existing hosting environment (we already host Postgres/backend/frontend ourselves — this adds
-  one more service to that same setup). Client approval data never leaves our infrastructure.
+  existing hosting environment (we already host Postgres/backend/frontend ourselves). Client
+  approval data never leaves our infrastructure. **Note this is more than "one more container"** —
+  see §4's infrastructure delta and §6's first risk; the honest version is in §6, and this bullet
+  should not be read as contradicting it.
 - **Our own screens, not Camunda's.** We build ORELIA's own "Workflow Designer" and "My
   Approvals" screens, styled to match the rest of the product exactly. Camunda's engine runs
   underneath, invisible to the end user — it never feels like a third-party tool was dropped in.
@@ -99,13 +101,55 @@ than adopting a tool that already solves it well.
 
 ## 4. Technical Explanation
 
-**Engine:** Camunda 8 (its "Zeebe" execution engine), self-hosted as a new service in our
-existing Docker-based deployment, alongside the current Postgres/backend/frontend.
+**Engine:** Camunda 8 (its "Zeebe" execution engine), self-hosted in our existing Docker-based
+deployment alongside the current Postgres/backend/frontend.
+
+**Infrastructure delta — must be enumerated in Phase 0, not estimated from "one more service."**
+What exists today (verified 2026-08-06) is exactly four compose services: `postgres`, a one-shot
+`setup`, `backend`, `frontend`. **No Redis, no message queue, no Elasticsearch, no worker
+container** — and the backend runs as a *single* instance (`core/realtime/realtime.service.ts:8`
+depends on that fact). Camunda 8 self-managed is not one container: it is a Zeebe broker plus
+gateway, and if Operate/Tasklist are run at all (even just for engineers to debug process
+definitions) they require Elasticsearch, which is itself a heavier operational commitment than
+anything currently in this stack. Phase 0 must produce the **actual container list and its
+memory/disk footprint on the target host**, because the whole cost/ops estimate rests on it.
+
+**Deployment prerequisite — this plan lands on unstable ground today.** Per
+[`PLANS.md`](./PLANS.md)'s Production Deployment Hardening plan, as of now: there is exactly **one
+environment** (no staging), Postgres runs inside `goldbond-postgres` — *a container belonging to an
+unrelated project on the same EC2 host* — the backend runs from `Dockerfile.dev` (`pnpm dev`,
+hot-reload) in production, deploys are manual over SSH with no CI/CD and no verified database
+backup, and `deploy.sh:17` references a `docker-compose.prod.yml` **that does not exist in the
+repository**. Adding a distributed workflow engine on top of that is materially riskier than the
+engine itself. **Phase 1 should not start until Production Deployment Hardening's Phase 0/1 has
+landed** — that dependency is now part of this plan's Phase 0 checklist below.
 
 **Multi-tenancy:** Zeebe natively supports scoping process definitions and running instances by
-tenant ID — this maps directly onto ORELIA's existing per-company tenant model, so each
-company's workflows and running approvals stay isolated exactly like the rest of their data
-already is.
+tenant ID, and those ids line up 1:1 with ORELIA's own tenant uuids. **The ids match; the
+*context* does not — and that gap is real work, not a detail.** Verified against the codebase
+2026-08-06:
+
+- ORELIA's tenant scoping is **request-scoped `AsyncLocalStorage`**. `TenantContextService.run()`
+  (`backend/src/core/tenant/tenant-context.service.ts:18-20`) has **exactly one call site in the
+  entire repository** — the HTTP interceptor (`tenant-context.interceptor.ts:89`), which reads
+  `req.user` / the act-as-tenant cookie. `getStore()` throws
+  `"TenantContext accessed outside of a request scope"` (`tenant-context.service.ts:24-26`).
+- The runtime sequence below has the engine calling *back into* the backend
+  (`ZB-->>BE: Process finished`). That is **not** an HTTP request carrying a user JWT. With no
+  tenant context established, every `BaseTenantRepository` call on that path throws.
+- The audit failure mode is worse than a crash because it is **silent**: `AuditLogService.record()`
+  catches the missing context and writes the row as a **platform-level** entry instead of a
+  tenant-scoped one (`backend/src/core/audit-log/audit-log.service.ts:110-115`). Engine-initiated
+  approvals would quietly land in the wrong scope rather than failing loudly.
+- `actorId` is an explicit parameter that is never derived from context
+  (`audit-log.service.ts:122`). A timer-based escalation has no human actor — there is no
+  system-actor convention in this codebase today.
+
+**Consequence:** a "run as tenant" / system-actor context API must be designed and built **before**
+Phase 2, and it is a prerequisite of Phase 2, not a task inside it. It is not Camunda-specific —
+Legal Epic 9's Story 1.9 nightly job needs exactly the same capability (see that epic's own note),
+so this should be built once, deliberately, as shared infrastructure. Tracked in `EPICS.md`'s
+"Unsorted / Current Focus".
 
 **Backend integration:** one new backend module is the *only* thing that talks to the engine.
 It: deploys a company's saved workflow to the engine; starts a new approval "instance" when
@@ -113,6 +157,16 @@ something needs approving (e.g. a deal moves stage); lists a user's pending appr
 through our own permission system first, never trusting the engine's own idea of who's allowed
 what; and completes an approval (approve/reject) once verified through our own login/permissions.
 Every one of those actions gets an audit-log entry, same as everything else in the system today.
+
+**On that "only one module" boundary — achievable, but counter-cultural here, so it has to be an
+enforced written rule rather than an assumption.** Direct cross-module repository access is the
+current norm in this codebase, not the exception: `relationship-types.module.ts:44-45` re-declares
+Companies/Contacts repositories as its own providers; `dashboard-metrics.service.ts:38-42` injects
+`Repository<Deal>`/`Repository<Tenant>` raw; `users.module.ts:22-26` explicitly exports
+`TypeOrmModule` *so that other modules can bypass `UsersService`*. The closest existing precedent
+for a genuine integration boundary — `S3Service`, `MailService`, `FxRatesService` — is enforced
+**by comment and discipline, not by an interface** (there is no DI-token or abstract-class seam
+anywhere in `backend/src`). Add the rule to `CLAUDE.md` when Phase 2 starts.
 
 **Designer screen:** built using `bpmn-js`, a free, open-source drag-and-drop diagram library
 (the same one that powers Camunda's own tools, but usable standalone). We embed it directly in
@@ -231,8 +285,9 @@ change the plan.
 
 | Phase | What happens | Risk if skipped |
 |---|---|---|
-| **0 — Verify & scope** | Confirm licensing allows embedding in a resold product; rough infra cost/ops estimate | Could discover a licensing blocker *after* investing real build time |
+| **0 — Verify & scope** | Confirm licensing allows embedding in a resold product; enumerate the **actual** container list + host footprint (see §4 — not "one more service"); confirm Production Deployment Hardening Phase 0/1 has landed | Could discover a licensing blocker *after* investing real build time; could size the infra off a number that was never true |
 | **1 — Infra spike (prototype)** | Stand up the engine in a dev environment, prove a basic "deploy a workflow → run it → approve a step" round-trip works end-to-end | No proof the approach actually works before committing further |
+| **1.5 — "Run as tenant" / system-actor context** *(new — prerequisite of Phase 2)* | Build the shared capability for establishing tenant context and a system actor outside an HTTP request (see §4). **Not Camunda-specific** — Legal Epic 9 Story 1.9's nightly job needs the identical capability, so it is built once, here, as shared infrastructure | Every engine callback throws on tenant-scoped reads, and engine-initiated audit rows land silently in the *wrong* (platform-level) scope |
 | **2 — Backend integration module** | Build the real integration layer: permissions, audit logging, task management | — |
 | **3 — Designer screen** | Build the drag-and-drop "Workflow Designer" admin screen, per-company, with its own permissions | — |
 | **4 — Approval screen + first real hook** | Build "My Approvals" UI; wire into deal-approval as the first live use case, opt-in per company | — |

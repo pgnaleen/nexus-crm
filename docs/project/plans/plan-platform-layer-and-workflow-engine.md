@@ -1,5 +1,30 @@
 # Platform Layer, Workflow Engine & New Modules — Strategic Development Plan
 
+> **⚠ Read this first — overlap notice (added 2026-08-06).**
+>
+> This document was written without knowledge of
+> [`plan-camunda-approval-workflows.md`](./plan-camunda-approval-workflows.md), which already
+> proposes adopting self-hosted Camunda 8 (Zeebe) for this same codebase. **That document is
+> authoritative for Camunda**; this one is not. Where the two disagree, follow it:
+>
+> | | `plan-camunda-approval-workflows.md` (authoritative) | This document |
+> |---|---|---|
+> | First use case | Deal approval (`deals.service.ts::moveStage`) | Employee onboarding |
+> | Licensing gate | **Blocking open item** — must be resolved before any infra work | Not mentioned at all |
+> | Status | Awaiting Phase 0/1 sign-off | Never submitted for sign-off |
+>
+> The licensing question is the important one: Camunda's self-managed terms for embedding in a
+> **resold** product are unconfirmed, and that blocks Phase 0. Any Camunda content below
+> (Phases 2, 5, 6 and the workflow catalog) must be read as subordinate to that unresolved gate.
+>
+> The genuinely non-overlapping parts of this plan — the platform/super-tenant layer, on-demand
+> module enabling, and the tender-ingestion phases (7–9) — stand on their own and do not depend on
+> the Camunda decision. The phase numbering here is local to this document and does **not**
+> correspond to the phase numbering in the authoritative plan.
+>
+> **Not yet reconciled:** which document ultimately owns the workflow-engine roadmap is an open
+> decision for the chief architect. Nothing has been deleted pending that call.
+
 **Scope:** Turn Orelia CRM from a single-layer multi-tenant CRM into a two-layer platform: regular
 tenants underneath, and a **Platform (System) layer** above them that owns cross-tenant shared
 services — Finance, Legal, HR — plus a BPMN workflow engine (Camunda) for recruitment/onboarding

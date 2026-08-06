@@ -380,17 +380,22 @@ new route, don't default into the wrong one:
   search-selects, filters, and column headers elsewhere in the app. Never expose a resource's
   full fields or admin actions through one of these.
 
-**Current state:** each resource module currently defines its own `/resource/picker` endpoint
-inside that resource's own controller (e.g. `GET /departments/picker` in
-`departments.controller.ts`, alongside `companies.controller.ts`, `contacts.controller.ts`,
-`employees.controller.ts`), gated on a broad permission like `DEALS_READ` rather than that
-resource's own admin permissions — e.g. a user without Department-admin rights still needs to
-pick a Department when creating a Deal. This already follows the rule below correctly, but the
-endpoints themselves are scattered one per module instead of collected in one place.
-Consolidating them into a single dedicated pickers module/controller (one file mirroring the
-frontend's own `frontend/src/lib/pickers/server.ts`, which already aggregates every picker fetch
-function in one place) is a one-time cleanup — track it in
-`docs/project/BUGS.md` rather than doing it piecemeal as a side effect of unrelated feature work.
+**Current state ✅ consolidated** (this paragraph previously described the pre-consolidation state
+and was stale; corrected 2026-08-06 after direct verification). Every picker route now lives in one
+place: `backend/src/modules/pickers/pickers.controller.ts` (`@Controller("pickers")`), mirroring the
+frontend's own `frontend/src/lib/pickers/server.ts`. No resource controller hosts a picker route any
+more — `departments.controller.ts:38-39` carries a tombstone comment for its moved
+`GET /departments/picker`, and a grep across every `*.controller.ts` finds picker routes in no other
+file. Each route is gated on the *consumer's* permission per the rule below, e.g.
+`GET /pickers/departments` on `[DEALS_VIEW, EMPLOYEES_CREATE, EMPLOYEES_UPDATE]`
+(`pickers.controller.ts:131-132`), `GET /pickers/companies` on the `DEALS_OR_RELATIONSHIP_PERMISSION`
+set (`:41`).
+
+**New pickers go in that controller** — do not add a `/picker` route to a resource's own
+controller. Note `@RequirePermission` treats an array as **OR**, not AND
+(`permissions.guard.ts:31-33`). One known inconsistency: `GET /pickers/users` (`:277-282`) has no
+`PermissionsGuard` at all, only the global JWT guard — logged in
+`docs/project/bugs/security-review.md`, not a pattern to copy.
 
 **Rule:** a system-internal/picker route must never be gated behind the resource's own admin
 permissions. Gate it on whatever permission the *consumers* of that dropdown/filter actually hold

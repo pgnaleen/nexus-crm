@@ -1,4 +1,4 @@
-# Epic 8: Finance — Navigation Shell, Configuration & Financial Management (backlog — 0/10)
+# Epic 8: Finance — Navigation Shell, Configuration & Financial Management (backlog — 0/11)
 
 Part of the split epics tracker — see [`../EPICS.md`](../EPICS.md) for the status-source note and
 the "Unsorted / Current Focus" cross-cutting items shared across every file in this folder.
@@ -151,6 +151,13 @@ erDiagram
   category, qty, unit price, budget amount, utilization, note. Inline add/edit/delete. Excel
   "download template → fill offline → upload → parse → bulk-import" round-trip, template generated
   from 1.2's config instead of a fixed 13-row list (see sequence diagram below).
+  **Needs a new backend dependency — none exists today.** There is no `xlsx`/`exceljs`/`sheetjs` in
+  any `package.json` in this repo (verified 2026-08-06), and this story requires server-side
+  `.xlsx` *generation* (template download) **and** *parsing* (upload). Pick and get sign-off on the
+  library as part of this story rather than discovering it mid-build. Also: the existing upload path
+  takes the file extension and `ContentType` from the client (`splitExt(originalname)`,
+  `storage/s3.service.ts:70`) — a known open bug in `EPICS.md`'s current-focus list. **The new
+  parse endpoint must not inherit that pattern**; validate the real content type server-side.
 - [ ] 1.4 Expense Management — Operating Expense Tracking (Financial Operations) — budget-vs-actual
   tracking per category per period, live utilization % (color-coded thresholds), categories sourced
   from 1.2.
@@ -175,11 +182,36 @@ erDiagram
   are ordinary Role rows — a tenant admin can edit or clone them afterward exactly like any other
   role; nothing about them is hardcoded or special-cased.
 - [ ] 1.10 Sensitive Finance data visibility — an additive `FINANCE_SENSITIVE_VIEW` permission
-  (same shape as the existing single-permission `AUDIT_LOG_VIEW` exception in `CLAUDE.md` — not a
-  `_MANAGE` wildcard, and not a replacement for the base four) so specific finance data stays
-  hidden from users who hold base `FINANCE_VIEW` but aren't cleared for it. Exact scope — which
-  data counts as sensitive, and whether it's hidden per-module, per-field, or per-tenant-configured
-  — is an open decision, see below.
+  (not a `_MANAGE` wildcard, and not a replacement for the base four) so specific finance data
+  stays hidden from users who hold base `FINANCE_VIEW` but aren't cleared for it. Exact scope —
+  which data counts as sensitive, and whether it's hidden per-module, per-field, or
+  per-tenant-configured — is an open decision, see below.
+  **Precedent to copy is `EMPLOYEES_VIEW_SENSITIVE` (`common/src/constants/permissions.ts:94`),
+  not `AUDIT_LOG_VIEW`** — these are different shapes, and an earlier draft of this story cited the
+  wrong one. `AUDIT_LOG_VIEW` (`permissions.ts:84`) is a resource that has *only* one permission
+  because audit data is read-only and the other three would be dead keys; `FINANCE_SENSITIVE_VIEW`
+  is a *fifth, additive* permission on a resource that already has all four — exactly what
+  `EMPLOYEES_VIEW_SENSITIVE` is, and it ships a working reference implementation. Three
+  implementation details to inherit from it:
+  - The check lives in the **controller, not the service** — `employees.controller.ts:259-262`
+    (`hasSensitiveAccess()` helper), applied at `:195-200`. `employees.service.ts:116` explicitly
+    comments that stripping happens in the controller.
+  - It also **strips sensitive fields off inbound PATCH DTOs** (`employees.controller.ts:222-227`),
+    not just out of responses. This story must cover write-prevention too, not only hiding — a user
+    without the permission must not be able to *set* those fields either.
+  - `@RequirePermission` is **OR-only** (`permissions.guard.ts:31-33`) — there is no AND support, so
+    "`FINANCE_VIEW` *and* `FINANCE_SENSITIVE_VIEW`" cannot be expressed declaratively. It must be
+    the manual two-step the employees module uses; don't try the declarative route.
+- [ ] 1.11 Finance picker endpoints — every dropdown this epic introduces (Chart-of-Accounts
+  segments/OpEx categories/departments feeding the Budget, Expense and Headcount forms) needs a
+  picker route. Per `CLAUDE.md`'s picker rule these are **system-internal routes gated on the
+  consumer's permission** (`FINANCE_VIEW`), never on the resource's own admin permission, and they
+  go in the **consolidated** `backend/src/modules/pickers/pickers.controller.ts` — not this
+  module's own controller. (Note: `CLAUDE.md`'s claim that pickers are still scattered per-module
+  is stale; that consolidation already shipped — `departments.controller.ts:38-39` carries the
+  tombstone for its moved route.) Frontend fetches aggregate into
+  `frontend/src/lib/pickers/server.ts` like every other picker. This story was missing from the
+  original epic and is a genuine prerequisite for 1.3/1.4/1.5's forms.
 
 ## Diagram — Excel round-trip (Story 1.3, ported from the old system)
 
@@ -251,7 +283,15 @@ flowchart TD
     S11 --> S19["1.9 Role templates<br/>(Finance Manager / Finance User)"]
     S110["1.10 Sensitive data gate<br/>(FINANCE_SENSITIVE_VIEW)"] --> S19
     S15 -.scope depends on decision.-> S110
+    S12 --> S111["1.11 Picker endpoints"]
+    S111 --> S13
+    S111 --> S14
+    S111 --> S15
 ```
+
+Story 1.11's pickers read their options from 1.2's Chart of Accounts config, and every data-entry
+form in 1.3/1.4/1.5 depends on them — so it slots directly after 1.2, before the three core
+modules, rather than at the end of the epic despite its number.
 
 ## Chart — rough phasing (illustrative sizing only — not committed dates)
 

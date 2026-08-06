@@ -17,7 +17,7 @@ Epic 6).
 | Category | File | Count |
 |---|---|---|
 | User provisioning & credential lifecycle (Epic 6) | [`bugs/user-provisioning.md`](./bugs/user-provisioning.md) | 11 |
-| Security review (commit `9fd864f`, 2026-07-20) | [`bugs/security-review.md`](./bugs/security-review.md) | 14 |
+| Security review (commit `9fd864f`, 2026-07-20) | [`bugs/security-review.md`](./bugs/security-review.md) | 15 |
 | Relationship Tags Tab review (2026-07-31) | [`bugs/relationship-tags-review.md`](./bugs/relationship-tags-review.md) | 6 |
 | Roles / Permission dialog review | [`bugs/roles-permissions-review.md`](./bugs/roles-permissions-review.md) | 8 |
 | Priority Tracker code review (2026-07-24) | [`bugs/priority-tracker-review.md`](./bugs/priority-tracker-review.md) | 10 |

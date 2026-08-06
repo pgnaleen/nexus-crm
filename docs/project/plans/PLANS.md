@@ -149,4 +149,41 @@ Asking for approval on Phase 0 (license check) + Phase 1 (throwaway prototype) o
 build — see the source plan for the full phased breakdown, pros/cons, and architecture diagrams.
 A separate, unrelated recommendation (adopt **n8n** for external-system integrations, e.g. Slack/
 accounting notifications on deal events) is noted in the same source plan but isn't part of this
-ask.
+ask. Verified 2026-08-06 that neither Finance (Epic 8) nor Legal (Epic 9) assumes n8n exists or is
+decided — it appears nowhere else in the docs tree or codebase.
+
+**Findings from the 2026-08-06 architecture verification pass** (plan updated in place):
+- **New Phase 1.5 — "run as tenant" / system-actor context, a prerequisite of Phase 2.** Tenant
+  scoping is request-scoped `AsyncLocalStorage` with exactly one `run()` call site (the HTTP
+  interceptor), so engine-initiated callbacks have no tenant context; audit rows would silently
+  land platform-level instead of failing loudly. **Legal Epic 9's Story 1.9 needs the identical
+  capability** — built once, shared. Also logged in `EPICS.md`'s current-focus list.
+- **Infra delta was understated** as "one more service" in §3/§4, contradicting the plan's own §6.
+  Phase 0 must now enumerate the real container list and host footprint.
+- **New Phase 0 dependency on the Production Deployment Hardening plan (§3 above)** — one
+  environment, no staging, prod running `Dockerfile.dev`, and a `docker-compose.prod.yml` referenced
+  by `deploy.sh:17` that doesn't exist in the repo.
+- The "only one module talks to the engine" boundary is achievable but **counter-cultural** here
+  (cross-module raw repository access is the norm) — it needs to become a written `CLAUDE.md` rule
+  at Phase 2, not an assumption.
+
+---
+
+## 5. Platform/Super-Tenant Layer, Module Enabling & Tender Ingestion — Not Submitted
+
+Source: [`plan-platform-layer-and-workflow-engine.md`](./plan-platform-layer-and-workflow-engine.md)
+(+ [`-estimation.md`](./plan-platform-layer-and-workflow-engine-estimation.md), a task-level
+breakdown with person-day estimates). Covers a platform/super-tenant layer above the existing
+tenants, on-demand per-tenant module enabling, platform-level Finance/Legal/HR surfaces, and an
+automated Sri-Lankan tender scraping → LLM-extraction → suggestion-inbox pipeline (with optional
+RAG relevance ranking).
+
+**Status: never submitted for sign-off, and partially overlapping.** Its Camunda content duplicates
+plan §4 above with a *different* first use case and — critically — **no mention of the licensing
+blocker**. Plan §4 is authoritative for Camunda; that document now carries an overlap notice saying
+so. **Open decision for the chief architect: which document owns the workflow-engine roadmap.**
+Nothing has been deleted pending that call.
+
+Its non-overlapping parts (platform layer, module enabling, tender ingestion) don't depend on the
+Camunda decision and could be considered independently. Note its phase numbering is local to itself
+and does not line up with §4's.
