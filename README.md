@@ -169,7 +169,7 @@ docker compose exec backend pnpm --filter @orelia/common build
 - **EC2** (Ubuntu) at `sales.orelit.com`, with **nginx** (native, terminating TLS) reverse-proxying `/` → `localhost:3000` (frontend) and `/api/` → `localhost:3001` (backend).
 - **Database: AWS RDS Postgres** (`DB_HOST` points at the RDS endpoint; `DB_SSL=true` in the server's `.env`).
 - The stack runs from **`~/nexus-crm/docker-compose.prod.yml`** — a **server-local file, not tracked in this repo**. It builds from `Dockerfile.dev` but the frontend runs a real `next build && next start`, with `NEXT_PUBLIC_API_URL: https://sales.orelit.com` and `API_INTERNAL_URL: http://backend:3001` set in the compose file itself.
-- Secrets live in **`~/nexus-crm/.env` on the server** (plain file, gitignored, hand-maintained). Any credential shared with an external system (e.g. the RDS password) must be changed **on both sides in the same action**, then verified with a real login — see the postmortems in `_bmad-output/4-design-plans/plan-production-deployment.md`.
+- Secrets live in **`~/nexus-crm/.env` on the server** (plain file, gitignored, hand-maintained). Any credential shared with an external system (e.g. the RDS password) must be changed **on both sides in the same action**, then verified with a real login — see the postmortems in `docs/project/PLANS.md`.
 
 ### Branch model
 
@@ -229,7 +229,7 @@ Running the default `docker-compose.yml` on the server silently deploys the **de
 
 ### Hardening roadmap
 
-Environment separation (staging), CI/CD, real production Dockerfiles, a dedicated smoke-tested backup/restore drill, and secrets management are planned and prioritized in `_bmad-output/4-design-plans/plan-production-deployment.md` — including postmortems of the incidents that motivated each phase.
+Environment separation (staging), CI/CD, real production Dockerfiles, a dedicated smoke-tested backup/restore drill, and secrets management are planned and prioritized in `docs/project/PLANS.md` — including postmortems of the incidents that motivated each phase.
 
 ## Troubleshooting
 

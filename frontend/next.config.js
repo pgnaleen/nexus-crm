@@ -7,8 +7,7 @@ const nextConfig = {
     // RolePermissionsDialog) would otherwise fail `next build` in the
     // production deploy. This previously lived as an uncommitted hand-edit
     // on the prod server -- committed here so deploys are reproducible.
-    // Remove once those errors are fixed (tracked in
-    // _bmad-output/implementation-artifacts/todo-master-remaining-work.md).
+    // Remove once those errors are fixed (tracked in docs/project/BUGS.md).
     ignoreBuildErrors: true,
   },
 };

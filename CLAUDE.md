@@ -10,8 +10,7 @@
 `@import "tailwindcss/utilities.css"` + `@plugin "flyonui"` — **Preflight is deliberately
 excluded** (no `@import "tailwindcss/preflight.css"` / no plain `@import "tailwindcss"`), so
 Tailwind's base-element reset never touches the existing hand-written CSS. Verified via a full
-`next build` + visual regression pass across login, dashboard, funnel board, Add Deal dialog, and
-an admin section (Users) — zero visual change, zero console/build errors from the CSS pipeline.
+build + visual regression pass, zero regressions.
 
 The frontend's existing screens (`frontend/src/app/globals.css`'s `.field`/`.dialog-tab`/etc.
 classes, `Button`/`TextField`/`Dialog`/`SearchSelect` components) are still 100% hand-written CSS
@@ -50,7 +49,7 @@ grey.
 
 **Brand color note.** `#ED1B24` was chosen by the client on 2026-07-28 as a brand-authority call
 (it's the value the delivered Nexus logo SVGs were exported with) — do not re-litigate the exact
-hex; see `_bmad-output/6-finished-archive/claude-md-decision-log.md` for the two rejected
+hex; see `docs/project/DECISIONS.md` for the two rejected
 candidates and why. This does not change where red is allowed to appear (see the rule above) —
 the shell background stays navy with no red in it at all.
 
@@ -62,14 +61,10 @@ above for why a separate token exists instead of deriving it. If a future Tailwi
 express `color-mix()` or an alpha modifier here, collapse this token back into
 `--color-crm-primary` and delete this note.
 
-**Shell background technique.** The dashboard/sidebar shell (`frontend/src/app/[tenant]/
-(dashboard)/layout.tsx`) uses the same dot+gradient+blur-blob technique as the login page
-(`frontend/src/app/[tenant]/page.module.css`), but anchored entirely to the `--color-crm-shell*`
-tokens above instead of the login page's own separate blue hex values — a radial-gradient dot
-texture, a soft linear-gradient from `-gradient-start` through `--color-crm-shell` to
-`-gradient-end`, plus two blurred glow blobs (`bg-crm-shell-gradient-end/30`,
-`bg-crm-shell/30`). Sidebar nav-item hover state is a plain `white/10` overlay, not red — the
-written rule above only lists the *active* item as an approved red usage, not hover.
+**Shell background technique** (dot+gradient+blur-blob, anchored to the `--color-crm-shell*`
+tokens above) is documented next to its implementation in `layout.tsx`'s `SHELL_BG` comment, not
+here. Sidebar nav-item hover state is a plain `white/10` overlay, not red — the written rule
+above only lists the *active* item as an approved red usage, not hover.
 
 **Approved exception — Priority Deck quadrant palettes.** The Priority Tracker's Eisenhower board
 (`frontend/src/app/[tenant]/(dashboard)/priority/`) carries its own sixteen `--color-pd-*` tokens in
@@ -80,8 +75,7 @@ signed off by the client. The justification: four quadrants need four mutually d
 and these are content-area fills inside one module, never app chrome. The exception does **not**
 extend beyond that board — buttons, focus rings, nav, and every other surface still follow the rules
 above, and no other module may introduce blue by citing this precedent. Documented so it stops being
-re-flagged as a violation on every review. (Epic 2 of
-`_bmad-output/1-epics-and-stories/epics-task-management.md`, Story 2.1.)
+re-flagged as a violation on every review. (Epic 4, Story 2.1 — see `docs/project/EPICS.md`.)
 
 **Single-source-of-truth rule:** never hardcode a raw hex or `rgba()` color value in a component
 for anything that represents one of the tokens above — reference the token instead, either as a
@@ -157,10 +151,8 @@ existing (not-yet-migrated) screen or component, or when asked about migration p
 ## Audit, Deletion & Logging Rules
 
 These apply to every table, service, and API call added from now on — not just new features.
-One-time setup work needed to make these rules fully true (e.g. adding `deletedBy`, creating the
-`audit_logs` table) is tracked separately in
-`_bmad-output/6-finished-archive/todo-audit-infrastructure.md`, not here. This section is
-the standing rule; that file is the one-time build list.
+The one-time setup work this required (`deletedBy` column, `audit_logs` table) has been
+completed; any residual follow-up is tracked in `docs/project/BUGS.md`, not here.
 
 ### Audit columns on every table
 
@@ -175,7 +167,7 @@ never a bare entity with its own ad-hoc columns. That gives every table, automat
 
 **Rule:** no insert or update may leave `createdBy`/`updatedBy` unset. The service layer must
 always set these from the authenticated user's id — never leave them to default to null on a
-real write. (`deletedBy` follows the same rule for soft-deletes once it exists — see the todo doc.)
+real write. (`deletedBy` follows the same rule for soft-deletes.)
 
 **Exemption — pure join/link tables.** A bare many-to-many join table whose only job is to
 associate two already-audited rows (no state of its own beyond the pair + who created it) is
@@ -203,7 +195,7 @@ silent or one-click cascading deletes.
 **Rule — a cascade must reach the real leaf entity, not stop at a join/tag table.** A join/tag-
 table-only cascade (soft-deleting the link row but never the Company/Contact/etc. it points at)
 shipped once and stayed invisible for a while — full incident in
-`_bmad-output/6-finished-archive/claude-md-decision-log.md`. The rule going forward, for any *new*
+`docs/project/DECISIONS.md`. The rule going forward, for any *new*
 cascade: when a cascade's warning dialog tells the user N records will be deleted, the code must
 actually soft-delete all N of those records (each with its own audit log row), not just the
 association row that pointed at them. Before shipping any new cascade, trace it all the way to the
@@ -232,12 +224,9 @@ actually changed).
 one deliberate exception to the "never swallow, always rethrow" rule elsewhere in this doc: it
 logs the failure as an error and returns, it does not rethrow.
 
-**Rollout status (audited + completed 2026-07-28):** `AuditLogService.record()` is now wired into
-create/update/delete for every table with its own service: `relationship_type`,
-`relationship_party` (company/contact tagging), `department`, `deal_source`, `user`, `rbac_role`
-(+ role-resource/role-user assignment), `team`, `tenant`, `deal`, `deal_partner`, `deal_document`,
-`deal_note`, `deal_tender_detail`, `employee`, `certification`, `priority_task` (+
-`priority_task_share`), and `main_stage`/`sub_stage` (`backend/src/modules/deal-stages/`).
+**Rollout status:** `AuditLogService.record()` is wired into create/update/delete for every table
+that has its own service (audited complete 2026-07-28) — check the specific service file rather
+than trust a static list here, since new tables land after this note was written.
 
 ### Terminal logging
 
@@ -247,7 +236,7 @@ create/update/delete for every table with its own service: `relationship_type`,
   every request. Do not remove or bypass this when adding new routes.
 - **Frontend:** not yet satisfied — `serverFetch` (`frontend/src/lib/api/server-client.ts`) and
   `apiFetch` (`frontend/src/lib/api/client.ts`) currently make requests silently. Once added
-  (tracked in the todo doc), every call through either helper must log method, path, and
+  (tracked in `docs/project/BUGS.md`), every call through either helper must log method, path, and
   status/duration — to the Next.js server terminal for `serverFetch`, and the browser console for
   `apiFetch` — matching the backend's pattern.
 
@@ -280,9 +269,8 @@ a debugger.
 Reference implementation: `backend/src/modules/pickers/pickers.controller.ts` and the picker
 methods in `companies.service.ts`/`contacts.service.ts`/`employees.service.ts`/
 `departments.service.ts`/`industries.service.ts` — every endpoint there follows this exactly.
-Retrofitting this to every already-built endpoint is tracked as its own item in
-`_bmad-output/6-finished-archive/todo-audit-infrastructure.md`, not done piecemeal here —
-same "new code follows the rule now, old code catches up later as its own pass" precedent used for
+This has been retrofitted to every already-built endpoint (complete 2026-07-22) — same
+"new code follows the rule now, old code catches up later as its own pass" precedent used for
 i18n and the picker-permission split above.
 
 ## TypeORM Gotcha: never `save()` an entity that was loaded with relations
@@ -296,7 +284,7 @@ This is a hard rule, not a style preference: loading an entity with relations an
 that same object silently **nulls every relation-backed FK column on the row** — reproduced with
 as little as one relation loaded, regardless of which fields the mutation actually touched. Full
 incident writeup (the `deals.service.ts` bug this was discovered from) is in
-`_bmad-output/6-finished-archive/claude-md-decision-log.md`. If a future resource's
+`docs/project/DECISIONS.md`. If a future resource's
 `findOneOrFail` needs relations for its own display purposes, split it into two methods the way
 `deals.service.ts` does (`findOneOrFail` for relations/response, a private `findOneBareOrFail` for
 the entity that actually gets mutated and saved), never one method serving both purposes.
@@ -318,9 +306,9 @@ Both halves matter and neither substitutes for the other:
   non-destructive instead of merely unlikely.
 
 Full incident writeup (the `RelationshipPartiesService.updateCompany()` bug this was discovered
-from) is in `_bmad-output/6-finished-archive/claude-md-decision-log.md`. The trigger is not
+from) is in `docs/project/DECISIONS.md`. The trigger is not
 exotic: pickers in this codebase fetch their options once on mount and never refresh (a known,
-deferred issue — see `_bmad-output/2-current-work/deferred-work.md`), so a form left open across
+deferred issue — see `docs/project/BUGS.md`), so a form left open across
 someone else's admin edit submits a stale id as a matter of course.
 
 **Before shipping any new "replace the set" write path, prove it by sending a deliberately bad id
@@ -330,7 +318,7 @@ links are still there afterward.** A passing typecheck says nothing about either
 ## API Endpoint Registry
 
 Every backend endpoint is tracked in a single table-view reference:
-`_bmad-output/2-current-work/api-endpoint-registry.md`. It lists, per endpoint: method,
+`docs/project/api-endpoint-registry.md`. It lists, per endpoint: method,
 path, RBAC-vs-picker type, required permission(s), purpose, request data shape, response data
 shape, controller/service location, frontend consumer(s), and whether it's been brought up to the
 "Deep debug logging inside every backend endpoint" standard above. The intent is that someone can
@@ -353,7 +341,7 @@ is no `_MANAGE` wildcard, on any resource, new or existing.
 **Rule:** never add a new `_MANAGE` permission key to any resource, from now on, no exceptions.
 
 **Approved exception — `AUDIT_LOG_VIEW`.** The Activity Log feature
-(`_bmad-output/3-feature-specs/spec-activity-log.md`) gets exactly **one** permission key,
+(`docs/project/specs/activity-log.md`) gets exactly **one** permission key,
 `audit_log:view`, not the usual four — added 2026-08-03. Audit data (`audit_logs`/`auth_events`)
 is read-only by nature: there is no create/update/delete action a user ever takes on it directly,
 so `_CREATE`/`_UPDATE`/`_DELETE` variants would be dead keys nothing could ever check. This is a
@@ -367,15 +355,14 @@ Activity Log section for how that's enforced). Do not treat this as license to a
 single-permission resources without the same "genuinely has no create/update/delete action"
 justification — it's an exception for this one read-only case, not a second pattern.
 
-**Migration complete** for `TENANTS`, `USERS`, `RBAC`, `TEAMS`, `RELATIONSHIP_TYPE`,
-`RELATIONSHIP`, `MAIN_STAGE`, `SUB_STAGE`, `DEPARTMENT`, `DEAL_SOURCE` — all ten `_MANAGE` keys
-deleted, zero access lost (verified via direct DB query). Full detail in
-`_bmad-output/6-finished-archive/claude-md-decision-log.md`. Companies/Contacts/Deals never had a
-`_MANAGE` key at all (already 4-permission by design).
+**Migration complete:** all ten resources that ever had a `_MANAGE` key have had it deleted, zero
+access lost (verified via direct DB query; full detail and the resource list in
+`docs/project/DECISIONS.md`). Companies/Contacts/Deals never had one at all (already
+4-permission by design).
 
 **Not yet migrated:** `DEAL_STAGES_MANAGE` — a dead wildcard (zero controllers ever checked it)
 superseded by `MAIN_STAGE_*`/`SUB_STAGE_*`'s own granular permissions. Tracked as its own task in
-`_bmad-output/4-design-plans/plan-funnel-deal-management.md` (Task 4), since it needs no
+`docs/project/PLANS.md` (Task 4), since it needs no
 migration (nothing to move access to) — just deletion, once picked up.
 
 ## RBAC Routes vs. System-Internal (Picker) Routes
@@ -403,8 +390,7 @@ endpoints themselves are scattered one per module instead of collected in one pl
 Consolidating them into a single dedicated pickers module/controller (one file mirroring the
 frontend's own `frontend/src/lib/pickers/server.ts`, which already aggregates every picker fetch
 function in one place) is a one-time cleanup — track it in
-`_bmad-output/6-finished-archive/todo-audit-infrastructure.md` rather than doing it
-piecemeal as a side effect of unrelated feature work.
+`docs/project/BUGS.md` rather than doing it piecemeal as a side effect of unrelated feature work.
 
 **Rule:** a system-internal/picker route must never be gated behind the resource's own admin
 permissions. Gate it on whatever permission the *consumers* of that dropdown/filter actually hold
@@ -494,6 +480,6 @@ implementation for retrofitting every other section.
 Retrofitting every other *already-built* section (Tenants/Roles/Users/Teams, Relationship
 Types/Deal Sources/Main Stages/Sub Stages, Relationships, Deals, Employee Management, and shared
 UI primitives' own built-in text) to this is tracked in
-`_bmad-output/6-finished-archive/todo-system-wide-i18n-and-permissions.md`, not done
+`docs/project/EPICS.md` (Unsorted / Current Focus), not done
 piecemeal here. New features from now on must be built with this from the start —
-see `_bmad-output/1-epics-and-stories/feature-development-guideline.md` for the full checklist.
+see `docs/project/feature-development-guideline.md` for the full checklist.
