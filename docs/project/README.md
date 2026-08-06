@@ -18,7 +18,7 @@ one specific story yet.
 - **[`DECISIONS.md`](./DECISIONS.md)** — incident post-mortems and the reasoning behind standing
   rules in `CLAUDE.md` (why a rule exists, what broke, how it was fixed). Read it for the "why";
   `CLAUDE.md` itself is what to actually follow.
-- **[`PLANS.md`](./PLANS.md)** — active, unresolved design plans and open questions only. A plan
+- **[`plans/PLANS.md`](./plans/PLANS.md)** — active, unresolved design plans and open questions only. A plan
   moves out of this file (with a pointer left in `EPICS.md`) the moment its work ships.
 - **[`specs/activity-log.md`](./specs/activity-log.md)** — the one still-relevant behavioral spec
   (Activity Log's epic is fully built now — see `EPICS.md` — this doc remains useful as the

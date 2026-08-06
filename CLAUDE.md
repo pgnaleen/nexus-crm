@@ -362,7 +362,7 @@ access lost (verified via direct DB query; full detail and the resource list in
 
 **Not yet migrated:** `DEAL_STAGES_MANAGE` — a dead wildcard (zero controllers ever checked it)
 superseded by `MAIN_STAGE_*`/`SUB_STAGE_*`'s own granular permissions. Tracked as its own task in
-`docs/project/PLANS.md` (Task 4), since it needs no
+`docs/project/plans/PLANS.md` (Task 4), since it needs no
 migration (nothing to move access to) — just deletion, once picked up.
 
 ## RBAC Routes vs. System-Internal (Picker) Routes

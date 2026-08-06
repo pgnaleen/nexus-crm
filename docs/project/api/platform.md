@@ -144,7 +144,7 @@ per section serves every widget in it. `dashboard/page.tsx` only calls a bundle'
 missing a section's permission never even triggers the guaranteed-403 call.
 
 **Deliberately still dummy** (no query, no product decision made yet — see `docs/project/EPICS.md`'s
-Epic 2 notes and `docs/project/PLANS.md`): `TargetRevenueGaugeWidget` (no quota/target table
+Epic 2 notes and `docs/project/plans/PLANS.md`): `TargetRevenueGaugeWidget` (no quota/target table
 anywhere in the schema), the Pipeline Coverage stat card (same missing denominator),
 `WinLossReasonsChartWidget` (no win/loss reason field on Deal), `TeamPerformanceRadarWidget` (only
 "deals closed" is derivable — response time/follow-ups/upsells/satisfaction have no backing

@@ -44,7 +44,7 @@ condensed (severity: 🔴 critical · 🟠 high · 🟡 medium · ⚪ low):
   fail on type errors.
 - 🟠 `docker-compose.yml`'s local-`postgres` removal exists only on the deploy server, uncommitted —
   a fresh clone/redeploy hits the same port conflict that caused the 2026-07-22 outage again. See
-  `PLANS.md`'s production deployment plan.
+  `plans/PLANS.md`'s production deployment plan.
 - 🟡 Rotate the three secrets (`DB_PASSWORD`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`) that were
   printed into a chat transcript during the 2026-07-22 incident diagnosis.
 - 🟡 Testing track has never started — Step 0 tooling setup not done, 0 sections tested
@@ -60,7 +60,7 @@ condensed (severity: 🔴 critical · 🟠 high · 🟡 medium · ⚪ low):
   `DbBackupService` write zero audit rows; `CompaniesService`/`ContactsService` write none of their
   own (only the relationship services do). `AuthService`'s half of this is now closed (Epic 7).
 - ⚪ Delete the dead `DEAL_STAGES_MANAGE` permission wildcard — zero controllers check it. See
-  `PLANS.md`'s funnel/deal-management plan (Task 4).
+  `plans/PLANS.md`'s funnel/deal-management plan (Task 4).
 - ⚪ Per-action row labels in the Roles permissions dialog still show the raw resource-prefix
   suffix instead of a friendly label (`RolePermissionsDialog.tsx`).
 - **Dashboard, next phase (2026-08-04 analysis, not yet turned into stories):** two Business-Analyst

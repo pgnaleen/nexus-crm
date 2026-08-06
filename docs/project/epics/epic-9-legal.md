@@ -248,7 +248,7 @@ general-purpose Contract update DTO.
 ## The Camunda question (design note under Story 1.8)
 
 Story 1.8 ships its own small, self-contained approval-stage config rather than waiting on or
-duplicating [`../plan-camunda-approval-workflows.md`](../plan-camunda-approval-workflows.md) — a
+duplicating [`../plans/plan-camunda-approval-workflows.md`](../plans/plan-camunda-approval-workflows.md) — a
 separate, already-pending proposal (blocked on unconfirmed licensing, not yet past its own Phase
 0/1) for a general configurable approval engine, whose own roadmap only reaches "reuse for
 contracts" at **Phase 5**, gated behind four earlier phases of an unrelated initiative. Blocking
@@ -354,7 +354,7 @@ gantt
   CLM's function, and document upload (not authoring) is already covered by Story 1.7. Pick this
   up only if a specific client need for in-app authoring/redlining is confirmed.
 - **Full Camunda-based approval engine swap** — tracked entirely in
-  [`../plan-camunda-approval-workflows.md`](../plan-camunda-approval-workflows.md), still pending
+  [`../plans/plan-camunda-approval-workflows.md`](../plans/plan-camunda-approval-workflows.md), still pending
   Phase 0/1 sign-off for its own first use case (Deal approval). Story 1.8 above is intentionally
   the minimum self-contained placeholder, not a parallel workflow system — identical framing to
   Finance Epic 8's own Story 1.8 note.

@@ -33,7 +33,7 @@ older entries to [`../archive/bugs-archive.md`](../archive/bugs-archive.md).
   (`linkExistingCompanyToType`/`linkExistingContactToType`).
 - ✅ Deep debug logging retrofit to every backend endpoint — 100% complete (2026-07-22).
 - ✅ Permission model `_MANAGE` migration — done for all ten flagged resources; only the dead
-  `DEAL_STAGES_MANAGE` wildcard remains (tracked in `../PLANS.md`'s funnel/deal-management plan).
+  `DEAL_STAGES_MANAGE` wildcard remains (tracked in `../plans/PLANS.md`'s funnel/deal-management plan).
 - ✅ Resource display-name map added to the Roles permissions dialog (`RESOURCE_DISPLAY_NAME`).
 - ⛔ **Enforce `createdBy` NOT NULL at the DB level** — attempted and correctly abandoned, not
   deferred: the CHECK constraint broke login for seeded rows and was reverted. Do not retry without

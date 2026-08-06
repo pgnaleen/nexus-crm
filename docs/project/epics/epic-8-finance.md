@@ -26,6 +26,8 @@ graph TD
     CA --> COA["Chart of Accounts /<br/>Configuration"]
     CA --> GL[General Ledger]
     CA --> JE[Journal Entries]
+    CA --> FA[Fixed Assets]
+    CA --> TAX["Tax Management"]
 
     FO --> AR[Accounts Receivable]
     FO --> AP[Accounts Payable]
@@ -41,15 +43,15 @@ graph TD
     classDef stub fill:#9e9e9e,color:#fff,stroke:#616161,stroke-width:1px;
 
     class COA,EXP,BUD,HC,REP built
-    class GL,JE,AR,AP,BANK,FC stub
+    class GL,JE,AR,AP,BANK,FC,FA,TAX stub
 ```
 
-🟢 **green = built this epic** (5 tabs) · ⚪ **grey = stub placeholder, future epic** (6 tabs)
+🟢 **green = built this epic** (5 tabs) · ⚪ **grey = stub placeholder, future epic** (8 tabs)
 
 ```mermaid
 pie title Finance tabs — built this epic vs. future epics
     "Built this epic (5)" : 5
-    "Stub / future epics (6)" : 6
+    "Stub / future epics (8)" : 8
 ```
 
 ## Sidebar structure this epic establishes
@@ -59,7 +61,9 @@ Finance
 ├── Core Accounting
 │   ├── Chart of Accounts / Configuration   (built this epic)
 │   ├── General Ledger                      (stub only — future epic)
-│   └── Journal Entries                     (stub only — future epic)
+│   ├── Journal Entries                     (stub only — future epic)
+│   ├── Fixed Assets                        (stub only — future epic; new, no old-system equivalent)
+│   └── Tax Management                      (stub only — future epic; new, no old-system equivalent)
 ├── Financial Operations
 │   ├── Accounts Receivable                 (stub only — future epic)
 │   ├── Accounts Payable                    (stub only — future epic)
@@ -162,7 +166,7 @@ erDiagram
 - [ ] 1.8 Lightweight approval status on Budget periods — add a `draft / submitted / approved`
   status + actor + timestamp to budget periods. **Deliberately not a real workflow engine** — this
   is the seed field that a future story wires up to the Camunda-based approval engine from
-  [`../plan-camunda-approval-workflows.md`](../plan-camunda-approval-workflows.md) once that
+  [`../plans/plan-camunda-approval-workflows.md`](../plans/plan-camunda-approval-workflows.md) once that
   prototype (currently scoped for Deal approval) proves out.
 - [ ] 1.9 Pre-built Finance role templates — two starter roles seeded through ORELIA's existing
   Roles admin section (not a new "template" mechanism): **Finance Manager** (all
@@ -215,7 +219,7 @@ flowchart LR
 ```
 
 What it becomes once the Camunda approval-engine prototype proves out (from
-[`../plan-camunda-approval-workflows.md`](../plan-camunda-approval-workflows.md)) and Core
+[`../plans/plan-camunda-approval-workflows.md`](../plans/plan-camunda-approval-workflows.md)) and Core
 Accounting exists — **neither of these is part of this epic**, shown only to make clear where 1.8
 plugs in later:
 
@@ -304,10 +308,17 @@ What "sensitive" means in scope/granularity terms — the three real options:
 - **General Ledger + Journal Entries** (Core Accounting) — real double-entry posting engine. Every
   other finance module eventually posts into this; sequencing it after Budgeting/Expense Management
   are proven live, not before.
+- **Fixed Assets** (Core Accounting) — asset register + depreciation schedules. Grouped with
+  General Ledger/Journal Entries rather than Financial Operations or Financial Management because
+  depreciation is a ledger-posting concern, not a cash-flow or planning one. Sequenced after General
+  Ledger exists, since a depreciation entry has nowhere to post until then.
+- **Tax Management** (Core Accounting) — tax configuration and provisioning/filings. Same grouping
+  rationale and sequencing dependency as Fixed Assets above — tax postings need a ledger to post
+  into.
 - **Accounts Receivable / Accounts Payable / Banking** (Financial Operations) — net-new subledgers;
   AR later connects to Deals (Won deal → Customer Invoice) once it exists.
 - **Forecasting** (Financial Management) — net-new, no old-system equivalent.
 - **Full configurable approval workflows** — tracked entirely in
-  [`../plan-camunda-approval-workflows.md`](../plan-camunda-approval-workflows.md), which is still
+  [`../plans/plan-camunda-approval-workflows.md`](../plans/plan-camunda-approval-workflows.md), which is still
   pending Phase 0/1 sign-off for its first use case (Deal approval). Story 1.8 above is intentionally
   the minimum placeholder, not a parallel workflow system.
